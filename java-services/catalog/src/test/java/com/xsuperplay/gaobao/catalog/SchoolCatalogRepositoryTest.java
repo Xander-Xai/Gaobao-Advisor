@@ -15,7 +15,7 @@ class SchoolCatalogRepositoryTest {
 
     @BeforeEach
     void setUp() {
-        var ds = new DriverManagerDataSource("jdbc:h2:mem:gaobao_catalog;MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
+        var ds = new DriverManagerDataSource("jdbc:h2:mem:gaobao_catalog;MODE=MySQL;DB_CLOSE_DELAY=-1;NON_KEYWORDS=YEAR", "sa", "");
         var jdbc = new JdbcTemplate(ds);
         jdbc.execute("DROP TABLE IF EXISTS admission_scores");
         jdbc.execute("DROP TABLE IF EXISTS enrollment_plans");
