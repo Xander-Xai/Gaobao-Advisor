@@ -196,6 +196,129 @@ def verify_catalog_api_parity():
     print("Java and Python catalog contracts agree across 8 live MySQL queries and school detail: PASS")
 
 
+
+def verify_reader_privileges():
+    """Test live database grants with the actual Catalog credentials."""
+    settings = {}
+    for line in open(".env.full", encoding="utf-8"):
+        if "=" in line and not line.startswith("#"):
+            key, value = line.rstrip("\n").split("=", 1)
+            if key in ("CATALOG_READ_PASSWORD", "MYSQL_DATABASE"):
+                settings[key] = value
+    password = settings["CATALOG_READ_PASSWORD"]
+    database = settings["MYSQL_DATABASE"]
+
+    def sql(statement: str):
+        return subprocess.run(
+            COMPOSE
+            + [
+                "exec",
+                "-T",
+                "-e",
+                f"MYSQL_PWD={password}",
+                "mysql",
+                "mysql",
+                "--protocol=tcp",
+                "-h",
+                "127.0.0.1",
+                "-u",
+                "gaobao_reader",
+                "-D",
+                database,
+                "--batch",
+                "--skip-column-names",
+                "-e",
+                statement,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    grants = sql("SHOW GRANTS FOR CURRENT_USER()")
+    assert grants.returncode == 0, grants.stderr
+    select_grants = [line for line in grants.stdout.splitlines() if "GRANT SELECT" in line]
+    assert len(select_grants) == 3, grants.stdout
+    for table in ("schools", "admission_scores", "enrollment_plans"):
+        assert any(f"`{database}`.`{table}`" in line for line in select_grants), grants.stdout
+    allowed = sql("SELECT COUNT(*) FROM schools")
+    assert allowed.returncode == 0, allowed.stderr
+    for denied_statement in (
+        "SELECT COUNT(*) FROM conversations",
+        "UPDATE schools SET city = city WHERE id = -1",
+        "CREATE TABLE __gaobao_reader_must_not_create (id INT)",
+    ):
+        denied = sql(denied_statement)
+        assert denied.returncode != 0, (denied_statement, denied.stdout)
+        assert "denied" in denied.stderr.lower() or "1142" in denied.stderr, denied.stderr
+    print("MySQL Catalog dedicated account: 3 SELECT-only table grants; private read/write/DDL denied: PASS")
+
+
+def verify_nginx_replica_ha():
+    """Prove actual Nginx fan-out, node failure, and DNS rediscovery."""
+    ps = subprocess.run(COMPOSE + ["ps", "-q", "java-gateway"], capture_output=True, text=True, check=True)
+    ids = [cid.strip() for cid in ps.stdout.splitlines() if cid.strip()]
+    assert len(ids) == 2, ids
+    urls = gateway_urls()
+    addrs = {url.removeprefix("http://").removesuffix(":8080") for url in urls}
+    assert len(addrs) == 2, urls
+    marker = "ha" + str(time.time_ns())
+    base = "http://127.0.0.1"
+
+    def send(label: str, count: int):
+        for i in range(count):
+            url = f"{base}/api/v1/health?ha_probe={marker}-{label}-{i}"
+            code, _, body = http(url, timeout=8)
+            assert code == 200, (label, i, code, body[:200])
+            time.sleep(0.10)
+
+    def seen(label: str):
+        logs = subprocess.check_output(COMPOSE + ["logs", "--no-color", "nginx"], text=True)
+        observed = set()
+        for line in logs.splitlines():
+            if f"ha_probe={marker}-{label}-" not in line:
+                continue
+            if "status=200" not in line:
+                raise AssertionError(f"Non-200 Nginx request: {line}")
+            if "upstream=" not in line:
+                raise AssertionError(f"No upstream audit field: {line}")
+            upstream = line.split("upstream=", 1)[1].split(" ", 1)[0]
+            for part in upstream.split(","):
+                part = part.strip()
+                if part.endswith(":8080"):
+                    observed.add(part.removesuffix(":8080"))
+        return observed
+
+    send("both", 30)
+    assert seen("both") == addrs, (seen("both"), addrs)
+    stopped_id = ids[0]
+    stopped = next(url.removeprefix("http://").removesuffix(":8080") for cid, url in zip(ids, urls, strict=True) if cid == stopped_id)
+    survivor = next(addr for addr in addrs if addr != stopped)
+    try:
+        subprocess.run(["docker", "stop", stopped_id], check=True, capture_output=True)
+        # The backend set must change from Docker DNS; do NOT reload Nginx.
+        time.sleep(7)
+        send("one", 20)
+        assert seen("one") == {survivor}, (seen("one"), survivor)
+    finally:
+        subprocess.run(["docker", "start", stopped_id], check=True, capture_output=True)
+
+    for _ in range(20):
+        try:
+            require_status(urls[0] + "/actuator/health/readiness", 200, attempts=1)
+            break
+        except AssertionError:
+            time.sleep(1)
+    else:
+        raise AssertionError("Stopped gateway did not recover")
+
+    time.sleep(5)
+    send("restored", 30)
+    assert seen("restored") == addrs, (seen("restored"), addrs)
+    print("Nginx actual two-replica fan-out, single gateway stop, and DNS recovery without reload: PASS")
+
+
+
 def verify_distributed_rate_limit():
     urls = gateway_urls()
     for base in urls:
@@ -293,12 +416,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "stage",
-        choices=["sse", "parity", "distributed", "redis-down", "redis-restored", "mysql-down", "mysql-restored"],
+        choices=["sse", "parity", "reader", "distributed", "ha", "redis-down", "redis-restored", "mysql-down", "mysql-restored"],
     )
     args = parser.parse_args()
     {
         "sse": verify_session_sse,
         "parity": verify_catalog_api_parity,
+        "reader": verify_reader_privileges,
+        "ha": verify_nginx_replica_ha,
         "distributed": verify_distributed_rate_limit,
         "redis-down": verify_redis_down,
         "redis-restored": verify_restored,
