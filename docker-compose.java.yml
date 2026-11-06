@@ -3,6 +3,14 @@
 # docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml \
 #   -f docker-compose.java.yml --profile full --profile java up --build -d
 services:
+  # The Java overlay exposes only Nginx :80 on the host; prevent the
+  # original demo :8000 API and :3080 frontend ports from bypassing the proxy.
+  # Docker Compose v2.24+ supports !reset; the default non-Java stack is intact.
+  api:
+    ports: !reset []
+  frontend:
+    ports: !reset []
+
   java-catalog:
     profiles: ["java"]
     build:
