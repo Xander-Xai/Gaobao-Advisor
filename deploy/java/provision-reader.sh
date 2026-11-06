@@ -26,7 +26,7 @@ export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"
 mysql --protocol=tcp -hmysql -uroot --batch <<SQL
 CREATE USER IF NOT EXISTS 'gaobao_reader'@'%' IDENTIFIED BY '$CATALOG_READ_PASSWORD';
 ALTER USER 'gaobao_reader'@'%' IDENTIFIED BY '$CATALOG_READ_PASSWORD';
-REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'gaobao_reader'@'%';
+REVOKE IF EXISTS ALL PRIVILEGES, GRANT OPTION FROM 'gaobao_reader'@'%';
 GRANT SELECT ON `$MYSQL_DATABASE`.`schools` TO 'gaobao_reader'@'%';
 GRANT SELECT ON `$MYSQL_DATABASE`.`admission_scores` TO 'gaobao_reader'@'%';
 GRANT SELECT ON `$MYSQL_DATABASE`.`enrollment_plans` TO 'gaobao_reader'@'%';
