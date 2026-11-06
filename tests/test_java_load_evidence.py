@@ -107,25 +107,19 @@ class LoadEvidenceTests(unittest.TestCase):
             self.assertEqual(report["result_status"], "ALL_FAILED")
             self.assertEqual(report["error_rate_pct"], 100.0)
 
-    def test_informational_not_allowed_for_catalog(self):
-        with (
-            patch.object(suite, "_run") as execute,
-            patch(
-                "sys.argv",
-                [
-                    "run_suite.py",
-                    "--scenario",
-                    "catalog",
-                    "--tiers",
-                    "5",
-                    "--informational",
-                ],
-            ),
-        ):
-            with self.assertRaises(SystemExit) as error:
-                suite.main()
-        self.assertEqual(error.exception.code, 2)
-        execute.assert_not_called()
+    def test_explicit_observational_catalog_records_zero_without_ci_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            with (
+                patch.object(suite.subprocess, "run", side_effect=_locust_result(0, 0)),
+                patch.object(suite, "_monitor", return_value=None),
+            ):
+                result = suite._run(
+                    "catalog", 50, 8, "dual-gateway", "http://localhost", output, informational=True
+                )
+            self.assertEqual(result["result_status"], "NO_COMPLETED_REQUESTS")
+            self.assertIsNone(result["error_rate_pct"])
+            self.assertTrue((output / "dual-gateway-catalog-50u.json").exists())
 
 
 if __name__ == "__main__":
