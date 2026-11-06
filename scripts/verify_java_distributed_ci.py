@@ -282,10 +282,11 @@ def verify_nginx_replica_ha():
             if "upstream=" not in line:
                 raise AssertionError(f"No upstream audit field: {line}")
             upstream = line.split("upstream=", 1)[1].split(" ", 1)[0]
-            for part in upstream.split(","):
-                part = part.strip()
-                if part.endswith(":8080"):
-                    observed.add(part.removesuffix(":8080"))
+            # Nginx may retry a failed peer; the final upstream answered 200.
+            # Earlier comma-separated peers are attempts, not successful routing.
+            last_peer = upstream.split(",")[-1].strip()
+            assert last_peer.endswith(":8080"), (label, last_peer, line)
+            observed.add(last_peer.removesuffix(":8080"))
         return observed
 
     send("both", 30)
@@ -306,18 +307,23 @@ def verify_nginx_replica_ha():
     finally:
         subprocess.run(["docker", "start", stopped_id], check=True, capture_output=True)
 
-    for _ in range(20):
+    restored_urls = []
+    for _ in range(30):
         try:
-            require_status(urls[0] + "/actuator/health/readiness", 200, attempts=1)
+            restored_urls = gateway_urls()
+            # The restarted container can be assigned a new Docker network IP.
+            for gateway in restored_urls:
+                require_status(gateway + "/actuator/health/readiness", 200, attempts=1)
             break
-        except AssertionError:
+        except (AssertionError, subprocess.CalledProcessError):
             time.sleep(1)
     else:
-        raise AssertionError("Stopped gateway did not recover")
+        raise AssertionError("Both gateway replicas did not recover")
 
+    recovered_addrs = {url.removeprefix("http://").removesuffix(":8080") for url in restored_urls}
     time.sleep(5)
     send("restored", 30)
-    assert seen("restored") == addrs, (seen("restored"), addrs)
+    assert seen("restored") == recovered_addrs, (seen("restored"), recovered_addrs)
     print("Nginx actual two-replica fan-out, single gateway stop, and DNS recovery without reload: PASS")
 
 
