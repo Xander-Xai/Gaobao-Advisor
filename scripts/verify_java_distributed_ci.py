@@ -12,7 +12,6 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 COMPOSE = [
@@ -184,11 +183,29 @@ def verify_mysql_down():
     print("MySQL outage: catalog readiness + public query fail closed: PASS")
 
 
+def verify_mysql_restored():
+    p = subprocess.run(
+        COMPOSE + ["ps", "-q", "java-catalog"],
+        capture_output=True, text=True, check=True,
+    )
+    cid = p.stdout.strip()
+    assert cid, "Catalog container missing after MySQL restart"
+    ip = subprocess.check_output(
+        ["docker", "inspect", "--format",
+         "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", cid],
+        text=True,
+    ).strip()
+    require_status(f"http://{ip}:8081/actuator/health/readiness", 200, attempts=70)
+    require_status("http://127.0.0.1/api/v1/data/overview", 200, attempts=45)
+    require_status("http://127.0.0.1/api/v1/catalog/schools?limit=1", 200, attempts=45)
+    print("MySQL restart: Python and Java catalog recover: PASS")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "stage",
-        choices=["sse", "distributed", "redis-down", "redis-restored", "mysql-down"],
+        choices=["sse", "distributed", "redis-down", "redis-restored", "mysql-down", "mysql-restored"],
     )
     args = parser.parse_args()
     {
@@ -197,6 +214,7 @@ def main():
         "redis-down": verify_redis_down,
         "redis-restored": verify_restored,
         "mysql-down": verify_mysql_down,
+        "mysql-restored": verify_mysql_restored,
     }[args.stage]()
 
 
