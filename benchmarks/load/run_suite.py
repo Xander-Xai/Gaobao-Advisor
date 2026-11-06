@@ -100,7 +100,7 @@ def _monitor(stop: threading.Event, samples: list[dict]) -> None:
         stop.wait(2)
 
 
-def _run(scenario: str, users: int, duration: int, label: str, host: str, directory: Path) -> dict:
+def _run(scenario: str, users: int, duration: int, label: str, host: str, directory: Path, informational: bool = False) -> dict:
     prefix = directory / f"{label}-{scenario}-{users}u"
     stop = threading.Event()
     samples: list[dict] = []
@@ -142,21 +142,26 @@ def _run(scenario: str, users: int, duration: int, label: str, host: str, direct
     if total is None:
         raise AssertionError(f"Missing Locust aggregate row: {records}")
     count = int(_number(total.get("Request Count")))
-    if not count:
-        raise AssertionError(f"No completed requests in {scenario}")
     failed = int(_number(total.get("Failure Count")))
+    status = (
+        "NO_COMPLETED_REQUESTS" if count == 0 else
+        "ALL_FAILED" if failed == count else
+        "MEASURED_WITH_ERRORS" if failed else "MEASURED"
+    )
     entries = [entry for sample in samples for entry in sample["containers"]]
     metric = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "commit_sha": os.getenv("GITHUB_SHA", "local"),
         "scenario": scenario,
+        "informational": informational,
+        "result_status": status,
         "deployment": label,
         "users": users,
         "configured_duration_s": duration,
         "wall_seconds": round(time.monotonic() - started, 2),
         "request_count": count,
         "failure_count": failed,
-        "error_rate_pct": round(100 * failed / count, 2),
+        "error_rate_pct": round(100 * failed / count, 2) if count else None,
         "rps": round(_number(total.get("Requests/s")), 2),
         "p50_ms": _number(total.get("50%")),
         "p95_ms": _number(total.get("95%")),
@@ -172,11 +177,21 @@ def _run(scenario: str, users: int, duration: int, label: str, host: str, direct
     print(
         f"{label}/{scenario} users={users} requests={count} RPS={metric['rps']} "
         f"p50/p95/p99={metric['p50_ms']}/{metric['p95_ms']}/{metric['p99_ms']}ms "
-        f"failed={failed}({metric['error_rate_pct']}%) "
+        f"failed={failed}({metric['error_rate_pct']}%) status={status} "
         f"CPU-peak={metric['peak_container_cpu_pct']}% "
         f"mem-peak={metric['peak_container_memory_mib']}MiB",
         flush=True,
     )
+    if not count:
+        print(
+            f"WARNING: {scenario} has zero completed requests; error rate and latency are "
+            "not measurable. A short test window can end before client timeouts finish.",
+            flush=True,
+        )
+        if not informational:
+            raise AssertionError(f"No completed requests in {scenario}")
+    elif informational and failed == count:
+        print(f"WARNING: {scenario} completed requests all failed", flush=True)
     return metric
 
 
@@ -188,7 +203,11 @@ def main() -> None:
     parser.add_argument("--duration", type=int, default=10)
     parser.add_argument("--host", default="http://127.0.0.1")
     parser.add_argument("--output", default="benchmarks/load/results")
+    parser.add_argument("--informational", action="store_true",
+                        help="Record an overloaded python-overview sample without failing functional CI")
     opts = parser.parse_args()
+    if opts.informational and opts.scenario != "python-overview":
+        parser.error("--informational may only be used with python-overview")
     if not re.fullmatch(r"[a-zA-Z0-9-]{1,50}", opts.label):
         parser.error("--label must be alphanumeric/hyphens")
     if not 5 <= opts.duration <= 600:
@@ -198,7 +217,10 @@ def main() -> None:
         parser.error("users must be between 1 and 500")
     output = Path(opts.output)
     output.mkdir(parents=True, exist_ok=True)
-    metrics = [_run(opts.scenario, n, opts.duration, opts.label, opts.host, output) for n in tiers]
+    metrics = [
+        _run(opts.scenario, n, opts.duration, opts.label, opts.host, output, opts.informational)
+        for n in tiers
+    ]
     (output / f"{opts.label}-{opts.scenario}-summary.json").write_text(
         json.dumps(metrics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
