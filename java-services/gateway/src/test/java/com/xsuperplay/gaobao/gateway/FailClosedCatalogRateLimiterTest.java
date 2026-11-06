@@ -17,6 +17,7 @@ import reactor.core.publisher.Mono;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
 
 class FailClosedCatalogRateLimiterTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -84,6 +85,25 @@ class FailClosedCatalogRateLimiterTest {
                 .filter(exchange, chain(called)).block();
         assertFalse(called.get());
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, exchange.getResponse().getStatusCode());
+    }
+
+
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void allReplicasUseTheSameBucketDespiteSpoofedForwardedAddresses() {
+        var redis = mockRedis(Flux.just(1L));
+        var factory = new FailClosedCatalogRateLimiterGatewayFilterFactory(redis, 20, 40);
+        var filter = factory.apply(new FailClosedCatalogRateLimiterGatewayFilterFactory.Config());
+        for (String ip : List.of("1.2.3.4", "8.8.8.8")) {
+            var exchange = MockServerWebExchange.from(
+                    MockServerHttpRequest.get("/api/v1/catalog/schools")
+                            .header("X-Forwarded-For", ip));
+            filter.filter(exchange, chain(new AtomicBoolean())).block();
+        }
+        var keyCaptor = ArgumentCaptor.forClass((Class) List.class);
+        verify(redis, times(2)).execute(any(RedisScript.class), keyCaptor.capture(), anyList());
+        assertEquals(List.of("gaobao:catalog:public:v2"), keyCaptor.getAllValues().get(0));
+        assertEquals(keyCaptor.getAllValues().get(0), keyCaptor.getAllValues().get(1));
     }
 
     @Test
