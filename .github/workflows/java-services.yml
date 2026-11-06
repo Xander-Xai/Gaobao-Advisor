@@ -1,18 +1,25 @@
 name: Java Services
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'java-services/**'
       - 'docker-compose.java.yml'
       - 'deploy/java/**'
+      - 'scripts/verify_java_*'
       - '.github/workflows/java-services.yml'
   pull_request:
     paths:
       - 'java-services/**'
       - 'docker-compose.java.yml'
       - 'deploy/java/**'
+      - 'scripts/verify_java_*'
       - '.github/workflows/java-services.yml'
+
+concurrency:
+  group: java-services-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
