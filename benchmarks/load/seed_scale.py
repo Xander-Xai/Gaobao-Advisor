@@ -26,10 +26,7 @@ def seed_synthetic_load(schools: int) -> dict:
         if len(major_ids) < 2:
             raise RuntimeError("Expected at least two synthetic demo majors")
 
-        existing = {
-            row[0]
-            for row in db.query(School.name).filter(School.name.like(f"{NAME_PREFIX}%")).all()
-        }
+        existing = {row[0] for row in db.query(School.name).filter(School.name.like(f"{NAME_PREFIX}%")).all()}
         new_schools = []
         for index in range(1, schools + 1):
             name = f"{NAME_PREFIX}{index:05d}（合成）"
