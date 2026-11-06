@@ -8,6 +8,10 @@ on:
       - 'docker-compose.java.yml'
       - 'deploy/java/**'
       - 'scripts/verify_java_*'
+      - 'scripts/setup_full_env.py'
+      - 'server/main.py'
+      - 'server/middleware/ratelimit.py'
+      - 'benchmarks/load/**'
       - '.github/workflows/java-services.yml'
   pull_request:
     paths:
