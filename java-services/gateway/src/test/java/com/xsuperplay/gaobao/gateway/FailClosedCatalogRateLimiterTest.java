@@ -17,7 +17,6 @@ import reactor.core.publisher.Mono;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import org.mockito.ArgumentCaptor;
 
 class FailClosedCatalogRateLimiterTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -100,10 +99,8 @@ class FailClosedCatalogRateLimiterTest {
                             .header("X-Forwarded-For", ip));
             filter.filter(exchange, chain(new AtomicBoolean())).block();
         }
-        var keyCaptor = ArgumentCaptor.forClass((Class) List.class);
-        verify(redis, times(2)).execute(any(RedisScript.class), keyCaptor.capture(), anyList());
-        assertEquals(List.of("gaobao:catalog:public:v2"), keyCaptor.getAllValues().get(0));
-        assertEquals(keyCaptor.getAllValues().get(0), keyCaptor.getAllValues().get(1));
+        verify(redis, times(2)).execute(
+                any(RedisScript.class), eq(List.of("gaobao:catalog:public:v2")), anyList());
     }
 
     @Test
