@@ -3,6 +3,7 @@ package com.xsuperplay.gaobao.catalog;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -119,7 +120,8 @@ public class SchoolCatalogRepository {
     }
 
     private static Map<String, Object> normalize(Map<String, Object> raw) {
-        var row = new LinkedHashMap<>(raw);
+        var row = new LinkedHashMap<String, Object>();
+        raw.forEach((key, value) -> row.put(key.toLowerCase(Locale.ROOT), value));
         for (String name : List.of("is_985", "is_211", "is_double_first_class")) {
             Object value = row.get(name);
             row.put(name, value instanceof Number number && number.intValue() != 0);
