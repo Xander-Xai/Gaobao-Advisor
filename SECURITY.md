@@ -9,13 +9,20 @@ repository. If that is unavailable, contact the maintainer privately first.
 Please do not include real personal data, working credentials, or exploit
 payloads against any third-party system in a report.
 
-## Known open incident
+## Historical exposure — risk accepted, not purged
 
-Issue #58 tracks a historical public Git object containing a removed 72 MiB
-admissions/user-message database. The current tree is clean, but the object is
-still served for a historical commit SHA. History rewrite/force-push is
-intentionally blocked pending explicit owner authorisation and GitHub Support
-coordination; do not treat the current-tree cleanup as a purge.
+[Issue #58](https://github.com/Xander-Xai/gaobao-advisor/issues/58) was **closed
+as not planned / accepted risk** by the owner on 2026-10-31. This is **not** a
+remediation or proof that historical data is licensed or devoid of personal
+information. A removed ~72 MiB admissions/user-message database remains
+reachable through an older public Git object, even though the current tracked
+tree only ships marked synthetic demonstration data. The historical object and
+associated PR references were **not purged**.
+
+The owner assessed available forensic evidence and accepted this residual risk.
+Reassess the exposure if a personal-data report, credential, licensing complaint,
+or other relevant evidence arises. Do not present issue closure as deletion or
+independent privacy/licensing clearance.
 
 ## Threat model of this demo
 
