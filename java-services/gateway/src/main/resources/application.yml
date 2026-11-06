@@ -1,0 +1,43 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gaobao-gateway
+  data:
+    redis:
+      url: ${REDIS_URL:redis://localhost:6379/0}
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: java-catalog
+              order: -10
+              uri: ${JAVA_CATALOG_URI:http://localhost:8081}
+              predicates:
+                - Path=/api/v1/catalog/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@catalogGlobalKeyResolver}"
+                    redis-rate-limiter.replenishRate: ${CATALOG_RATE_PER_SECOND:20}
+                    redis-rate-limiter.burstCapacity: ${CATALOG_RATE_BURST:40}
+                    redis-rate-limiter.requestedTokens: 1
+            - id: python-ai
+              order: 0
+              uri: ${PYTHON_API_URI:http://localhost:8000}
+              predicates:
+                - Path=/api/**
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: gaobao-gateway
