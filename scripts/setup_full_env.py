@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{out} already contains CATALOG_READ_PASSWORD")
             return 0
         with out.open("a", encoding="utf-8") as output:
-            output.write(f"CATALOG_READ_PASSWORD={secrets.token_hex(24)}\\n")
+            output.write(f"CATALOG_READ_PASSWORD={secrets.token_hex(24)}\n")
         os.chmod(out, stat.S_IRUSR | stat.S_IWUSR)
         print(f"extended {out} with a Java Catalog read-only secret (mode 0600)")
         return 0
