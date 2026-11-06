@@ -17,7 +17,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-CLASSES = {"catalog": "CatalogUser", "python": "PythonCatalogUser", "chat": "NoKeyChatUser"}
+CLASSES = {
+    "catalog": "CatalogUser",
+    "python": "PythonCatalogUser",
+    "python-overview": "PythonOverviewUser",
+    "chat": "NoKeyChatUser",
+}
 COMPOSE = [
     "docker",
     "compose",
