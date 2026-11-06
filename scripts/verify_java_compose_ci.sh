@@ -27,6 +27,16 @@ cleanup() {
 trap cleanup EXIT
 
 "${compose[@]}" config --quiet
+"${compose[@]}" config --format json >/tmp/gaobao-java-compose.json
+python3 - <<'PY'
+import json
+with open("/tmp/gaobao-java-compose.json", encoding="utf-8") as f:
+    cfg = json.load(f)
+for name in ("api", "frontend"):
+    assert not cfg["services"][name].get("ports"), f"{name} bypasses gateway on host"
+assert cfg["services"]["nginx"].get("ports"), "Nginx has no public port"
+print("Java overlay host port isolation: PASS")
+PY
 "${compose[@]}" up --build --detach
 
 # Public paths must pass through Nginx -> Java gateway.
@@ -76,3 +86,27 @@ else:
     raise AssertionError("expected 404 for unknown school")
 print("Java + MySQL/Redis + Python public API smoke: PASS")
 PY
+
+# SSE and HMAC/session ownership across the real Nginx -> Java -> Python hop.
+python3 scripts/verify_java_distributed_ci.py sse
+
+# Scale the same live cluster to two gateways with a deliberately tiny shared
+# Redis budget, making cross-replica 429 behavior observable.
+export CATALOG_RATE_PER_SECOND=1
+export CATALOG_RATE_BURST=4
+"${compose[@]}" up --no-deps --detach --scale java-gateway=2 --force-recreate java-gateway
+"${compose[@]}" restart nginx
+python3 scripts/verify_java_distributed_ci.py distributed
+
+# A Redis or MySQL failure must not produce a successful catalog response.
+"${compose[@]}" stop redis
+python3 scripts/verify_java_distributed_ci.py redis-down
+"${compose[@]}" start redis
+python3 scripts/verify_java_distributed_ci.py redis-restored
+
+sleep 6
+"${compose[@]}" stop mysql
+python3 scripts/verify_java_distributed_ci.py mysql-down
+"${compose[@]}" start mysql
+python3 scripts/verify_java_distributed_ci.py mysql-restored
+
