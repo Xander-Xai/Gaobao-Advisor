@@ -23,6 +23,17 @@ record why the larger decisions were made.
 The default deployment uses SQLite and no LLM key. The optional full profile
 adds MySQL 8.4, Redis 7, and a separate worker.
 
+An additional **opt-in Java overlay** in PR #89 adds Java 21/Spring Boot
+Gateway and a read-only MySQL school catalog. In this mode Nginx sends
+`/api/*` to Java Gateway: `/api/v1/catalog/*` uses the JDBC catalog plus
+Redis Lua fail-closed global throttling; the existing Python API (including
+Chat SSE, auth, graph and admin) remains authoritative for other routes.
+`/ws/*` is still proxied directly to Python. The Java overlay removes
+Python API and frontend host port exposure from its Compose stack.
+See [Java microservices](../java-microservices.md) for tests and operational
+boundaries. The base mode and Java overlay are separate deploy profiles.
+
+
 ```mermaid
 flowchart LR
     Browser["Browser<br/>Vue 3 SPA"] -->|HTTP / SSE| Nginx["Nginx<br/>demo reverse proxy"]
