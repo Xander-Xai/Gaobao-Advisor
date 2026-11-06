@@ -114,9 +114,7 @@ class LoadEvidenceTests(unittest.TestCase):
                 patch.object(suite.subprocess, "run", side_effect=_locust_result(0, 0)),
                 patch.object(suite, "_monitor", return_value=None),
             ):
-                result = suite._run(
-                    "catalog", 50, 8, "dual-gateway", "http://localhost", output, informational=True
-                )
+                result = suite._run("catalog", 50, 8, "dual-gateway", "http://localhost", output, informational=True)
             self.assertEqual(result["result_status"], "NO_COMPLETED_REQUESTS")
             self.assertIsNone(result["error_rate_pct"])
             self.assertTrue((output / "dual-gateway-catalog-50u.json").exists())
