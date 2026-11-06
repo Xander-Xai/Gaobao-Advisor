@@ -196,7 +196,6 @@ def verify_catalog_api_parity():
     print("Java and Python catalog contracts agree across 8 live MySQL queries and school detail: PASS")
 
 
-
 def verify_reader_privileges():
     """Test live database grants with the actual Catalog credentials."""
     settings = {}
@@ -292,7 +291,11 @@ def verify_nginx_replica_ha():
     send("both", 30)
     assert seen("both") == addrs, (seen("both"), addrs)
     stopped_id = ids[0]
-    stopped = next(url.removeprefix("http://").removesuffix(":8080") for cid, url in zip(ids, urls, strict=True) if cid == stopped_id)
+    stopped = next(
+        url.removeprefix("http://").removesuffix(":8080")
+        for cid, url in zip(ids, urls, strict=True)
+        if cid == stopped_id
+    )
     survivor = next(addr for addr in addrs if addr != stopped)
     try:
         subprocess.run(["docker", "stop", stopped_id], check=True, capture_output=True)
@@ -316,7 +319,6 @@ def verify_nginx_replica_ha():
     send("restored", 30)
     assert seen("restored") == addrs, (seen("restored"), addrs)
     print("Nginx actual two-replica fan-out, single gateway stop, and DNS recovery without reload: PASS")
-
 
 
 def verify_distributed_rate_limit():
@@ -416,7 +418,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "stage",
-        choices=["sse", "parity", "reader", "distributed", "ha", "redis-down", "redis-restored", "mysql-down", "mysql-restored"],
+        choices=[
+            "sse",
+            "parity",
+            "reader",
+            "distributed",
+            "ha",
+            "redis-down",
+            "redis-restored",
+            "mysql-down",
+            "mysql-restored",
+        ],
     )
     args = parser.parse_args()
     {
