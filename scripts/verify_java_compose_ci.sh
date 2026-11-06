@@ -19,7 +19,7 @@ cleanup() {
   local rc=$?
   if ((rc != 0)); then
     "${compose[@]}" ps || true
-    "${compose[@]}" logs --tail=120 java-catalog java-gateway api mysql redis nginx || true
+    "${compose[@]}" logs --tail=120 catalog-db-init java-catalog java-gateway api mysql redis nginx || true
   fi
   "${compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
   exit "$rc"
