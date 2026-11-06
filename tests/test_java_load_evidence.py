@@ -94,6 +94,19 @@ class LoadEvidenceTests(unittest.TestCase):
             self.assertEqual(result["result_status"], "ALL_FAILED")
             self.assertEqual(result["error_rate_pct"], 100.0)
 
+    def test_all_failed_required_scenario_is_a_real_ci_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            with (
+                patch.object(suite.subprocess, "run", side_effect=_locust_result(4, 4)),
+                patch.object(suite, "_monitor", return_value=None),
+            ):
+                with self.assertRaisesRegex(AssertionError, "All completed requests failed"):
+                    suite._run("chat", 5, 8, "dual-gateway", "http://localhost", output)
+            report = json.loads((output / "dual-gateway-chat-5u.json").read_text())
+            self.assertEqual(report["result_status"], "ALL_FAILED")
+            self.assertEqual(report["error_rate_pct"], 100.0)
+
     def test_informational_not_allowed_for_catalog(self):
         with (
             patch.object(suite, "_run") as execute,
