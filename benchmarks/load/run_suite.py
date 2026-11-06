@@ -201,6 +201,8 @@ def _run(
             print(f"WARNING: {scenario} completed requests all failed", flush=True)
         else:
             raise AssertionError(f"All completed requests failed in {scenario}")
+    elif informational and failed:
+        print(f"WARNING: {scenario} has {failed}/{count} failed completed requests", flush=True)
     return metric
 
 
@@ -215,11 +217,9 @@ def main() -> None:
     parser.add_argument(
         "--informational",
         action="store_true",
-        help="Record an overloaded python-overview sample without failing functional CI",
+        help="Record observational load data without treating it as functional acceptance",
     )
     opts = parser.parse_args()
-    if opts.informational and opts.scenario != "python-overview":
-        parser.error("--informational may only be used with python-overview")
     if not re.fullmatch(r"[a-zA-Z0-9-]{1,50}", opts.label):
         parser.error("--label must be alphanumeric/hyphens")
     if not 5 <= opts.duration <= 600:
