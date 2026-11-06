@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from uuid import uuid4
 
 from locust import HttpUser, constant_pacing, task
 
@@ -82,7 +83,9 @@ class NoKeyChatUser(HttpUser):
         with self.client.post(
             "/api/v1/chat",
             name="python/ai-chat/no-key-sse",
-            json={"message": "你好", "scene": "gaokao"},
+            # ChatRequest requires a session_id; an anonymous request gets a new
+            # server-owned ID regardless of this untrusted client value.
+            json={"session_id": f"load-{uuid4().hex}", "message": "你好", "scene": "gaokao"},
             timeout=40,
             catch_response=True,
         ) as response:
