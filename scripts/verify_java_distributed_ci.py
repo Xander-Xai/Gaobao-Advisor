@@ -4,6 +4,7 @@
 Must run only after scripts/verify_java_compose_ci.sh has started the stack.
 No synthetic results are used as evidence of real admissions accuracy.
 """
+
 from __future__ import annotations
 
 import argparse
