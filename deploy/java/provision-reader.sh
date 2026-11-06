@@ -27,9 +27,9 @@ mysql --protocol=tcp -hmysql -uroot --batch <<SQL
 CREATE USER IF NOT EXISTS 'gaobao_reader'@'%' IDENTIFIED BY '$CATALOG_READ_PASSWORD';
 ALTER USER 'gaobao_reader'@'%' IDENTIFIED BY '$CATALOG_READ_PASSWORD';
 REVOKE IF EXISTS ALL PRIVILEGES, GRANT OPTION FROM 'gaobao_reader'@'%';
-GRANT SELECT ON `$MYSQL_DATABASE`.`schools` TO 'gaobao_reader'@'%';
-GRANT SELECT ON `$MYSQL_DATABASE`.`admission_scores` TO 'gaobao_reader'@'%';
-GRANT SELECT ON `$MYSQL_DATABASE`.`enrollment_plans` TO 'gaobao_reader'@'%';
+GRANT SELECT ON $MYSQL_DATABASE.schools TO 'gaobao_reader'@'%';
+GRANT SELECT ON $MYSQL_DATABASE.admission_scores TO 'gaobao_reader'@'%';
+GRANT SELECT ON $MYSQL_DATABASE.enrollment_plans TO 'gaobao_reader'@'%';
 SQL
 unset MYSQL_PWD
 echo "Java Catalog least-privilege grants installed (three SELECT-only tables)"
