@@ -20,12 +20,7 @@ spring:
               predicates:
                 - Path=/api/v1/catalog/**
               filters:
-                - name: RequestRateLimiter
-                  args:
-                    key-resolver: "#{@catalogGlobalKeyResolver}"
-                    redis-rate-limiter.replenishRate: ${CATALOG_RATE_PER_SECOND:20}
-                    redis-rate-limiter.burstCapacity: ${CATALOG_RATE_BURST:40}
-                    redis-rate-limiter.requestedTokens: 1
+                - name: FailClosedCatalogRateLimiter
             - id: python-ai
               order: 0
               uri: ${PYTHON_API_URI:http://localhost:8000}
