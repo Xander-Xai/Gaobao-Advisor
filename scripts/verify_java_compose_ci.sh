@@ -101,6 +101,9 @@ python3 scripts/verify_java_distributed_ci.py reader
 # Real Locust load profiles; all artifacts use SYNTHETIC_DEMO and a no-key AI path.
 # The one->two comparison is a topology experiment, not a guaranteed speedup.
 if [[ "${RUN_LOAD_BENCHMARK:-1}" == "1" ]]; then
+  # Amplify only the synthetic CI MySQL dataset; never import real records.
+  "${compose[@]}" exec -T api python -m benchmarks.load.seed_scale --schools 500 --confirm-synthetic-only
+  python3 scripts/verify_java_distributed_ci.py parity
   python3 benchmarks/load/run_suite.py --scenario catalog --tiers 50 --duration 8 --label single-gateway
   "${compose[@]}" up --no-deps --detach --scale java-gateway=2 java-gateway
   sleep 5
