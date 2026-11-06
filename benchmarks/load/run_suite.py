@@ -196,8 +196,11 @@ def _run(
         )
         if not informational:
             raise AssertionError(f"No completed requests in {scenario}")
-    elif informational and failed == count:
-        print(f"WARNING: {scenario} completed requests all failed", flush=True)
+    elif failed == count:
+        if informational:
+            print(f"WARNING: {scenario} completed requests all failed", flush=True)
+        else:
+            raise AssertionError(f"All completed requests failed in {scenario}")
     return metric
 
 
