@@ -91,6 +91,8 @@ PY
 python3 scripts/verify_java_distributed_ci.py sse
 # Compare Java read model with existing Python response semantics on live MySQL.
 python3 scripts/verify_java_distributed_ci.py parity
+# SQL-level read-only proof: allowed table SELECTs and denied private table/write/DDL.
+python3 scripts/verify_java_distributed_ci.py reader
 
 # Scale the same live cluster to two gateways with a deliberately tiny shared
 # Redis budget, making cross-replica 429 behavior observable.
@@ -99,6 +101,9 @@ export CATALOG_RATE_BURST=4
 "${compose[@]}" up --no-deps --detach --scale java-gateway=2 --force-recreate java-gateway
 "${compose[@]}" restart nginx
 python3 scripts/verify_java_distributed_ci.py distributed
+# Verify Nginx actually fans out to 2 backends, fails over after node stop,
+# and re-discovers its IP without Nginx restart (dynamic upstream DNS).
+python3 scripts/verify_java_distributed_ci.py ha
 
 # A Redis or MySQL failure must not produce a successful catalog response.
 "${compose[@]}" stop redis
