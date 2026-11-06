@@ -11,6 +11,26 @@ services:
   frontend:
     ports: !reset []
 
+  # One-shot least-privilege bootstrap, repeated on each deployment so existing
+  # persistent MySQL volumes are supported. The root password is never sent to
+  # the Catalog service.
+  catalog-db-init:
+    image: mysql:8.4
+    profiles: ["java"]
+    restart: "no"
+    entrypoint: ["/bin/sh", "/provision-reader.sh"]
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-gaobao}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}"
+      CATALOG_READ_PASSWORD: "${CATALOG_READ_PASSWORD:?run python scripts/setup_full_env.py --add-java-reader}"
+    volumes:
+      - ./deploy/java/provision-reader.sh:/provision-reader.sh:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
   java-catalog:
     profiles: ["java"]
     build:
@@ -19,9 +39,11 @@ services:
     restart: unless-stopped
     environment:
       CATALOG_JDBC_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-gaobao}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC"
-      CATALOG_DB_USER: "${MYSQL_USER:-gaobao}"
-      CATALOG_DB_PASSWORD: "${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env.full}"
+      CATALOG_DB_USER: "gaobao_reader"
+      CATALOG_DB_PASSWORD: "${CATALOG_READ_PASSWORD:?run python scripts/setup_full_env.py --add-java-reader}"
     depends_on:
+      catalog-db-init:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       api:
@@ -60,6 +82,8 @@ services:
       start_period: 25s
 
   nginx:
+    # Nginx >=1.27.3 supports dynamic DNS "resolve" in OSS upstreams.
+    image: nginx:1.31.8-alpine3.24
     volumes:
       - ./deploy/java/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:

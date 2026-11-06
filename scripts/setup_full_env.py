@@ -27,9 +27,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--username", default="operator")
     parser.add_argument("--role", default="operator", choices=["viewer", "operator", "admin"])
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--add-java-reader", action="store_true", help="Safely extend an existing .env.full")
     args = parser.parse_args(argv)
 
     out = Path(args.out)
+    if args.add_java_reader:
+        if not out.is_file():
+            print(f"{out} missing; generate it first", file=sys.stderr)
+            return 2
+        original = out.read_text(encoding="utf-8")
+        if any(line.startswith("CATALOG_READ_PASSWORD=") for line in original.splitlines()):
+            print(f"{out} already contains CATALOG_READ_PASSWORD")
+            return 0
+        with out.open("a", encoding="utf-8") as output:
+            output.write(f"CATALOG_READ_PASSWORD={secrets.token_hex(24)}\\n")
+        os.chmod(out, stat.S_IRUSR | stat.S_IWUSR)
+        print(f"extended {out} with a Java Catalog read-only secret (mode 0600)")
+        return 0
+
     if out.exists() and not args.force:
         print(f"{out} already exists; use --force to overwrite", file=sys.stderr)
         return 2
@@ -40,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     session_secret = secrets.token_hex(32)
     mysql_password = secrets.token_urlsafe(24)
     mysql_root = secrets.token_urlsafe(24)
+    catalog_password = secrets.token_hex(24)
     users = [{"username": args.username, "password_hash": admin_hash, "role": args.role}]
 
     lines = [
@@ -48,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         "MYSQL_USER=gaobao",
         f"MYSQL_PASSWORD={mysql_password}",
         f"MYSQL_ROOT_PASSWORD={mysql_root}",
+        f"CATALOG_READ_PASSWORD={catalog_password}",
         f"DATABASE_URL=mysql+pymysql://gaobao:{mysql_password}@mysql:3306/gaobao?charset=utf8mb4",
         "REDIS_URL=redis://redis:6379/0",
         "AUTO_MIGRATE=true",
