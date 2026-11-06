@@ -109,6 +109,7 @@ if [[ "${RUN_LOAD_BENCHMARK:-1}" == "1" ]]; then
   sleep 5
   python3 benchmarks/load/run_suite.py --scenario catalog --tiers 50,100,200 --duration 8 --label dual-gateway
   python3 benchmarks/load/run_suite.py --scenario python --tiers 50,100,200 --duration 8 --label dual-gateway
+  python3 benchmarks/load/run_suite.py --scenario python-overview --tiers 50 --duration 8 --label dual-gateway
   python3 benchmarks/load/run_suite.py --scenario chat --tiers 5,10 --duration 8 --label dual-gateway
 fi
 

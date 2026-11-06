@@ -13,7 +13,8 @@ Java 目录、Python 数据接口与无 Key AI SSE 分开报告。未配置真�
 |---|---|---|---|
 | single-gateway / catalog | GET /api/v1/catalog/schools?limit=10 | 50 | SYNTHETIC_DEMO |
 | dual-gateway / catalog | 同上 | 50、100、200 | SYNTHETIC_DEMO |
-| dual-gateway / python | GET /api/v1/data/overview | 50、100、200 | SYNTHETIC_DEMO |
+| dual-gateway / python | GET /api/v1/data/schools?limit=10 | 50、100、200 | SYNTHETIC_DEMO |
+| dual-gateway / python-overview | GET /api/v1/data/overview | 50 | SYNTHETIC_DEMO |
 | dual-gateway / chat | POST /api/v1/chat，读取完整 SSE done | 5、10 | 无 LLM Key |
 
 全部通过 Nginx 入口，固定在同一个 GitHub-hosted Ubuntu + Docker Compose 机器上执行；
@@ -30,6 +31,7 @@ Locust 使用每用户约 1 秒一次请求（chat 2 秒），记录请求失败
 ~~~bash
 python benchmarks/load/run_suite.py --scenario catalog --tiers 50,100,200 --duration 10 --label dual-gateway
 python benchmarks/load/run_suite.py --scenario python --tiers 50,100,200 --duration 10 --label dual-gateway
+python benchmarks/load/run_suite.py --scenario python-overview --tiers 50 --duration 10 --label dual-gateway
 python benchmarks/load/run_suite.py --scenario chat --tiers 5,10 --duration 10 --label dual-gateway
 ~~~
 
@@ -55,3 +57,9 @@ CI 会将这些文件作为 `java-python-load-evidence` artifact 附在实际 Ac
    长时稳定性、TLS、数据库专用权限以及跨主机故障演练。
 
 不允许将合成数据的性能或容错验证包装成真实考生的推荐效果或 SLA。
+
+## 第一次压力测试识别出的瓶颈（未掩盖失败）
+
+GitHub Actions run [42176296935](https://github.com/Xander-Xai/gaobao-advisor/actions/runs/42176296935) 使用 500 所额外虚构院校、12,000 条录取数据和 6,000 条计划数据，在 8 秒短时采样中得到 Java Catalog 双网关 200 用户 210.24 RPS / P95 720 ms / 0% 错误；Python **重聚合** `/api/v1/data/overview` 在 100 用户时退化为 9.27 RPS、P95 10,000 ms、错误率 85.29%，200 用户档位未采集到有效完成请求，严格验收任务因此 FAIL。
+
+为区别接口复杂度，后续正式压测将 Python **分页列表** `/api/v1/data/schools?limit=10` 对照 Java 目录查询（50/100/200 用户），并把昂贵的概览聚合接口单独以 50 用户保留为负载剖析样本，绝不将分页成绩代替聚合成绩。上面的故障证据仍作为工程瓶颈保留。后续建议针对概览做 SQL profile、缓存策略/索引或异步预聚合，再进行有验证的前后对比。

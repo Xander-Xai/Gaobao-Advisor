@@ -77,7 +77,7 @@ Catalog 只执行 SELECT，Hikari 连接设为 readOnly。Java overlay 现在先
 CI 在真实 Compose 服务上安装固定版本 Locust，执行以下工作负载（此处仅合成数据，不接入付费模型）：
 
 - `CatalogUser`：Java Catalog /api/v1/catalog/schools，单网关与双网关均进行 50 用户对照；双网关还执行 100/200 用户。
-- `PythonCatalogUser`：Python /api/v1/data/overview，双网关 50/100/200 用户。
+- `PythonCatalogUser`：Python 分页列表 /api/v1/data/schools?limit=10，双网关 50/100/200 用户；Python 重聚合 overview 独立 50 用户样本，记录高负载瓶颈，不与分页数据混淆。
 - `NoKeyChatUser`：Python /api/v1/chat SSE，双网关 5/10 用户，仅验证无真实 LLM Key 的模板/工作流路径。
 - 收集 Locust CSV、p50/p95/p99、RPS、错误率、Docker stats CPU/内存采样，留存为 Actions artifact；结果不预设“优化后一定更快”，不声称已验证真实 LLM 的 P95。
 
