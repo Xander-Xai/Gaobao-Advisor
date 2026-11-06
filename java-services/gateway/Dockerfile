@@ -1,0 +1,15 @@
+FROM maven:3.9.11-eclipse-temurin-21 AS build
+WORKDIR /build
+COPY java-services/pom.xml pom.xml
+COPY java-services/gateway/pom.xml gateway/pom.xml
+COPY java-services/catalog/pom.xml catalog/pom.xml
+COPY java-services/gateway/src gateway/src
+RUN mvn -B -ntp -pl gateway -am -DskipTests package
+
+FROM eclipse-temurin:21-jre-alpine
+RUN addgroup -S app && adduser -S -G app app
+WORKDIR /app
+COPY --from=build /build/gateway/target/gateway-0.1.0-SNAPSHOT.jar app.jar
+USER app
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

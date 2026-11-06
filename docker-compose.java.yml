@@ -1,0 +1,59 @@
+# Optional Java microservices overlay, used alongside the existing full profile.
+# python scripts/setup_full_env.py
+# docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml \
+#   -f docker-compose.java.yml --profile full --profile java up --build -d
+services:
+  java-catalog:
+    profiles: ["java"]
+    build:
+      context: .
+      dockerfile: java-services/catalog/Dockerfile
+    restart: unless-stopped
+    environment:
+      CATALOG_JDBC_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-gaobao}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC"
+      CATALOG_DB_USER: "${MYSQL_USER:-gaobao}"
+      CATALOG_DB_PASSWORD: "${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env.full}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+
+  java-gateway:
+    profiles: ["java"]
+    build:
+      context: .
+      dockerfile: java-services/gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+      JAVA_CATALOG_URI: "http://java-catalog:8081"
+      PYTHON_API_URI: "http://api:8000"
+      CATALOG_RATE_PER_SECOND: "${CATALOG_RATE_PER_SECOND:-20}"
+      CATALOG_RATE_BURST: "${CATALOG_RATE_BURST:-40}"
+    depends_on:
+      java-catalog:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+
+  nginx:
+    volumes:
+      - ./deploy/java/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      java-gateway:
+        condition: service_healthy
