@@ -164,7 +164,7 @@ def verify_catalog_api_parity():
         for key in ("total", "count", "has_more", "next_cursor"):
             assert java[key] == python[key], (params, key, java[key], python[key])
         assert len(java["items"]) == len(python["items"]), params
-        for java_row, python_row in zip(java["items"], python["items"]):
+        for java_row, python_row in zip(java["items"], python["items"], strict=True):
             for field in fields:
                 assert java_row[field] == python_row[field], (
                     params, field, java_row.get(field), python_row.get(field)
