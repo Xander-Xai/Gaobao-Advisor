@@ -21,9 +21,7 @@ SPEC.loader.exec_module(suite)
 def _locust_result(requests: int, failures: int):
     def run(args, **_kwargs):
         prefix = Path(args[args.index("--csv") + 1])
-        with (prefix.parent / f"{prefix.name}_stats.csv").open(
-            "w", newline="", encoding="utf-8"
-        ) as file:
+        with (prefix.parent / f"{prefix.name}_stats.csv").open("w", newline="", encoding="utf-8") as file:
             writer = csv.DictWriter(
                 file,
                 fieldnames=[
@@ -62,16 +60,13 @@ class LoadEvidenceTests(unittest.TestCase):
                 patch.object(suite, "_monitor", return_value=None),
             ):
                 result = suite._run(
-                    "python-overview", 50, 8, "dual-gateway", "http://localhost",
-                    output, informational=True
+                    "python-overview", 50, 8, "dual-gateway", "http://localhost", output, informational=True
                 )
             self.assertEqual(result["result_status"], "NO_COMPLETED_REQUESTS")
             self.assertEqual(result["request_count"], 0)
             self.assertIsNone(result["error_rate_pct"])
             self.assertTrue(result["informational"])
-            report = json.loads(
-                (output / "dual-gateway-python-overview-50u.json").read_text()
-            )
+            report = json.loads((output / "dual-gateway-python-overview-50u.json").read_text())
             self.assertEqual(report["result_status"], "NO_COMPLETED_REQUESTS")
 
     def test_zero_completions_still_fail_required_scenarios_but_keep_evidence(self):
@@ -92,8 +87,7 @@ class LoadEvidenceTests(unittest.TestCase):
                 patch.object(suite, "_monitor", return_value=None),
             ):
                 result = suite._run(
-                    "python-overview", 50, 8, "dual-gateway", "http://localhost",
-                    Path(temp), informational=True
+                    "python-overview", 50, 8, "dual-gateway", "http://localhost", Path(temp), informational=True
                 )
             self.assertEqual(result["result_status"], "ALL_FAILED")
             self.assertEqual(result["error_rate_pct"], 100.0)
@@ -104,7 +98,11 @@ class LoadEvidenceTests(unittest.TestCase):
             patch(
                 "sys.argv",
                 [
-                    "run_suite.py", "--scenario", "catalog", "--tiers", "5",
+                    "run_suite.py",
+                    "--scenario",
+                    "catalog",
+                    "--tiers",
+                    "5",
                     "--informational",
                 ],
             ),
