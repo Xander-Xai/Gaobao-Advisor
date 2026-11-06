@@ -13,6 +13,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlencode
 
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 COMPOSE = [
@@ -124,6 +125,70 @@ def verify_session_sse():
     print("SSE, server-issued session ownership and Authorization passthrough: PASS")
 
 
+
+def verify_catalog_api_parity():
+    """Compare Java and Python read models against the SAME live MySQL data."""
+    root = "http://127.0.0.1"
+    fields = (
+        "id", "name", "province", "city", "level", "school_type",
+        "ranking", "is_985", "is_211", "is_double_first_class",
+        "special_type", "data_source_note", "score_count", "plan_count",
+        "latest_year", "latest_min_score",
+    )
+
+    def get_json(route: str, params: dict | None = None):
+        url = root + route
+        if params:
+            url += "?" + urlencode(params)
+        code, _, body = http(url)
+        assert code == 200, (route, params, code, body[:200])
+        return json.loads(body)
+
+    first = get_json("/api/v1/data/schools", {"limit": 3})
+    assert first["items"], "Python seed contains no schools"
+    school = first["items"][0]
+
+    queries = [
+        {"limit": 3},
+        {"limit": 3, "cursor": first["next_cursor"]},
+        {"limit": 10, "q": school["name"][:3]},
+        {"limit": 20, "province": school["province"]},
+        {"limit": 20, "level": school["level"]},
+        {"limit": 20, "school_type": school["school_type"]},
+        {"limit": 20, "q": "%"},
+        {"limit": 20, "q": "' OR 1=1 --"},
+    ]
+    for params in queries:
+        python = get_json("/api/v1/data/schools", params)
+        java = get_json("/api/v1/catalog/schools", params)
+        for key in ("total", "count", "has_more", "next_cursor"):
+            assert java[key] == python[key], (params, key, java[key], python[key])
+        assert len(java["items"]) == len(python["items"]), params
+        for java_row, python_row in zip(java["items"], python["items"]):
+            for field in fields:
+                assert java_row[field] == python_row[field], (
+                    params, field, java_row.get(field), python_row.get(field)
+                )
+            assert java_row["is_synthetic"] is (
+                java_row["special_type"] == "SYNTHETIC_DEMO_DATA"
+            ), java_row
+
+    py_detail = get_json("/api/v1/data/schools/" + str(school["id"]))
+    java_detail = get_json("/api/v1/catalog/schools/" + str(school["id"]))
+    for field in fields:
+        assert java_detail[field] == py_detail[field], (field, java_detail.get(field), py_detail.get(field))
+    assert java_detail["is_synthetic"] is True
+
+    for cursor in ("-1", "not-a-number", "9999999999999999999"):
+        params = {"limit": 3, "cursor": cursor}
+        query = "?" + urlencode(params)
+        for route in ("/api/v1/data/schools", "/api/v1/catalog/schools"):
+            code, _, _ = http(root + route + query)
+            assert code == 400, (route, cursor, code)
+
+    print("Java and Python catalog contracts agree across 8 live MySQL queries and school detail: PASS")
+
+
 def verify_distributed_rate_limit():
     urls = gateway_urls()
     for base in urls:
@@ -221,11 +286,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "stage",
-        choices=["sse", "distributed", "redis-down", "redis-restored", "mysql-down", "mysql-restored"],
+        choices=["sse", "parity", "distributed", "redis-down", "redis-restored", "mysql-down", "mysql-restored"],
     )
     args = parser.parse_args()
     {
         "sse": verify_session_sse,
+        "parity": verify_catalog_api_parity,
         "distributed": verify_distributed_rate_limit,
         "redis-down": verify_redis_down,
         "redis-restored": verify_restored,
