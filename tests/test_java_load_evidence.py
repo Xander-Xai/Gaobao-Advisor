@@ -65,6 +65,8 @@ class LoadEvidenceTests(unittest.TestCase):
             self.assertEqual(result["result_status"], "NO_COMPLETED_REQUESTS")
             self.assertEqual(result["request_count"], 0)
             self.assertIsNone(result["error_rate_pct"])
+            for percentile in ("p50_ms", "p95_ms", "p99_ms"):
+                self.assertIsNone(result[percentile])
             self.assertTrue(result["informational"])
             report = json.loads((output / "dual-gateway-python-overview-50u.json").read_text())
             self.assertEqual(report["result_status"], "NO_COMPLETED_REQUESTS")
