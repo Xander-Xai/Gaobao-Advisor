@@ -31,7 +31,7 @@ Locust 使用每用户约 1 秒一次请求（chat 2 秒），记录请求失败
 ~~~bash
 python benchmarks/load/run_suite.py --scenario catalog --tiers 50,100,200 --duration 10 --label dual-gateway
 python benchmarks/load/run_suite.py --scenario python --tiers 50,100,200 --duration 10 --label dual-gateway
-python benchmarks/load/run_suite.py --scenario python-overview --tiers 50 --duration 10 --label dual-gateway
+python benchmarks/load/run_suite.py --scenario python-overview --tiers 50 --duration 10 --label dual-gateway --informational
 python benchmarks/load/run_suite.py --scenario chat --tiers 5,10 --duration 10 --label dual-gateway
 ~~~
 
@@ -39,6 +39,10 @@ python benchmarks/load/run_suite.py --scenario chat --tiers 5,10 --duration 10 -
 `*_stats.csv`、`*_stats_history.csv`、`*_failures.csv` 和
 `.json`（总请求、失败、错误率、RPS、p50/p95/p99、Docker CPU/内存样本）。
 CI 会将这些文件作为 `java-python-load-evidence` artifact 附在实际 Actions run 上。
+**CI 验收口径（Issue #90）：** `python-overview` 是**诊断性负载观测**，不是功能放行门槛；只有该场景允许显式 `--informational`。功能正确性仍由真实 Compose 环境中的 `/api/v1/data/overview` HTTP 200 和合成数据标记校验，及其后的 SSE、目录契约、跨实例限流和 Redis/MySQL 故障注入负责验证；其他负载场景仍须产生已完成请求。该例外**不代表概览接口性能通过**。
+
+当 Locust 返回 0 个已完成请求时，保留 CSV 和 JSON，记录 `result_status=NO_COMPLETED_REQUESTS`、`request_count=0`、`error_rate_pct=null`，避免把没有样本错误地标成 0% 或 100% 错误率。所有已完成请求均失败时标记 `ALL_FAILED`、错误率 100%。异常数据即使不使功能 CI 失败，也必须在性能评审中明确展示、继续优化。当前短时采样为 8 秒，而单请求超时为 10 秒；因此零完成样本不能单独证明后端的最大吞吐或真实用户 SLA。
+
 `peak_container_cpu_pct` 是采样到的**单个容器峰值**，不是机器的 CPU 总利用率；
 `peak_container_memory_mib` 同理。Docker stats 为低频观测，不能代替火焰图。
 
