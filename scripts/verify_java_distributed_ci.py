@@ -125,15 +125,26 @@ def verify_session_sse():
     print("SSE, server-issued session ownership and Authorization passthrough: PASS")
 
 
-
 def verify_catalog_api_parity():
     """Compare Java and Python read models against the SAME live MySQL data."""
     root = "http://127.0.0.1"
     fields = (
-        "id", "name", "province", "city", "level", "school_type",
-        "ranking", "is_985", "is_211", "is_double_first_class",
-        "special_type", "data_source_note", "score_count", "plan_count",
-        "latest_year", "latest_min_score",
+        "id",
+        "name",
+        "province",
+        "city",
+        "level",
+        "school_type",
+        "ranking",
+        "is_985",
+        "is_211",
+        "is_double_first_class",
+        "special_type",
+        "data_source_note",
+        "score_count",
+        "plan_count",
+        "latest_year",
+        "latest_min_score",
     )
 
     def get_json(route: str, params: dict | None = None):
@@ -166,12 +177,8 @@ def verify_catalog_api_parity():
         assert len(java["items"]) == len(python["items"]), params
         for java_row, python_row in zip(java["items"], python["items"], strict=True):
             for field in fields:
-                assert java_row[field] == python_row[field], (
-                    params, field, java_row.get(field), python_row.get(field)
-                )
-            assert java_row["is_synthetic"] is (
-                java_row["special_type"] == "SYNTHETIC_DEMO_DATA"
-            ), java_row
+                assert java_row[field] == python_row[field], (params, field, java_row.get(field), python_row.get(field))
+            assert java_row["is_synthetic"] is (java_row["special_type"] == "SYNTHETIC_DEMO_DATA"), java_row
 
     py_detail = get_json("/api/v1/data/schools/" + str(school["id"]))
     java_detail = get_json("/api/v1/catalog/schools/" + str(school["id"]))
