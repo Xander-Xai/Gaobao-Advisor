@@ -89,6 +89,8 @@ PY
 
 # SSE and HMAC/session ownership across the real Nginx -> Java -> Python hop.
 python3 scripts/verify_java_distributed_ci.py sse
+# Compare Java read model with existing Python response semantics on live MySQL.
+python3 scripts/verify_java_distributed_ci.py parity
 
 # Scale the same live cluster to two gateways with a deliberately tiny shared
 # Redis budget, making cross-replica 429 behavior observable.
