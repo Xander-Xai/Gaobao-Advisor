@@ -15,10 +15,22 @@ import urllib.request
 
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 COMPOSE = [
-    "docker", "compose", "--project-name", "gaobao-java-smoke",
-    "--env-file", ".env.full", "-f", "docker-compose.yml",
-    "-f", "docker-compose.full.yml", "-f", "docker-compose.java.yml",
-    "--profile", "full", "--profile", "java",
+    "docker",
+    "compose",
+    "--project-name",
+    "gaobao-java-smoke",
+    "--env-file",
+    ".env.full",
+    "-f",
+    "docker-compose.yml",
+    "-f",
+    "docker-compose.full.yml",
+    "-f",
+    "docker-compose.java.yml",
+    "--profile",
+    "full",
+    "--profile",
+    "java",
 ]
 
 
@@ -42,15 +54,16 @@ def http(url: str, *, data: dict | None = None, token: str | None = None, timeou
 def gateway_urls() -> list[str]:
     p = subprocess.run(
         COMPOSE + ["ps", "-q", "java-gateway"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     ids = [x.strip() for x in p.stdout.splitlines() if x.strip()]
     assert len(ids) == 2, f"Expected two gateway replicas, found {len(ids)}"
     urls = []
     for cid in ids:
         ip = subprocess.check_output(
-            ["docker", "inspect", "--format",
-             "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", cid],
+            ["docker", "inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", cid],
             text=True,
         ).strip()
         assert ip, f"No Docker network IP for {cid}"
@@ -168,13 +181,14 @@ def verify_mysql_down():
     # Catalog's own readiness must fail, not just the Nginx reverse proxy.
     p = subprocess.run(
         COMPOSE + ["ps", "-q", "java-catalog"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     cid = p.stdout.strip()
     assert cid, "Catalog container missing"
     ip = subprocess.check_output(
-        ["docker", "inspect", "--format",
-         "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", cid],
+        ["docker", "inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", cid],
         text=True,
     ).strip()
     require_status(f"http://{ip}:8081/actuator/health/readiness", 503, attempts=25)
@@ -186,13 +200,14 @@ def verify_mysql_down():
 def verify_mysql_restored():
     p = subprocess.run(
         COMPOSE + ["ps", "-q", "java-catalog"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     cid = p.stdout.strip()
     assert cid, "Catalog container missing after MySQL restart"
     ip = subprocess.check_output(
-        ["docker", "inspect", "--format",
-         "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", cid],
+        ["docker", "inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", cid],
         text=True,
     ).strip()
     require_status(f"http://{ip}:8081/actuator/health/readiness", 200, attempts=70)
