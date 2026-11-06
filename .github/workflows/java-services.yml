@@ -34,3 +34,17 @@ jobs:
             java-services/catalog/pom.xml
       - name: Maven verification
         run: mvn -B -ntp -f java-services/pom.xml verify
+
+  java-compose-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install environment generator dependencies
+        run: python -m pip install -e .
+      - name: Build Java, MySQL, Redis, Python and validate HTTP routes
+        run: bash scripts/verify_java_compose_ci.sh
