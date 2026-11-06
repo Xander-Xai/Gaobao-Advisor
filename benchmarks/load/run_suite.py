@@ -100,7 +100,9 @@ def _monitor(stop: threading.Event, samples: list[dict]) -> None:
         stop.wait(2)
 
 
-def _run(scenario: str, users: int, duration: int, label: str, host: str, directory: Path, informational: bool = False) -> dict:
+def _run(
+    scenario: str, users: int, duration: int, label: str, host: str, directory: Path, informational: bool = False
+) -> dict:
     prefix = directory / f"{label}-{scenario}-{users}u"
     stop = threading.Event()
     samples: list[dict] = []
@@ -144,9 +146,13 @@ def _run(scenario: str, users: int, duration: int, label: str, host: str, direct
     count = int(_number(total.get("Request Count")))
     failed = int(_number(total.get("Failure Count")))
     status = (
-        "NO_COMPLETED_REQUESTS" if count == 0 else
-        "ALL_FAILED" if failed == count else
-        "MEASURED_WITH_ERRORS" if failed else "MEASURED"
+        "NO_COMPLETED_REQUESTS"
+        if count == 0
+        else "ALL_FAILED"
+        if failed == count
+        else "MEASURED_WITH_ERRORS"
+        if failed
+        else "MEASURED"
     )
     entries = [entry for sample in samples for entry in sample["containers"]]
     metric = {
@@ -203,8 +209,11 @@ def main() -> None:
     parser.add_argument("--duration", type=int, default=10)
     parser.add_argument("--host", default="http://127.0.0.1")
     parser.add_argument("--output", default="benchmarks/load/results")
-    parser.add_argument("--informational", action="store_true",
-                        help="Record an overloaded python-overview sample without failing functional CI")
+    parser.add_argument(
+        "--informational",
+        action="store_true",
+        help="Record an overloaded python-overview sample without failing functional CI",
+    )
     opts = parser.parse_args()
     if opts.informational and opts.scenario != "python-overview":
         parser.error("--informational may only be used with python-overview")
@@ -217,10 +226,7 @@ def main() -> None:
         parser.error("users must be between 1 and 500")
     output = Path(opts.output)
     output.mkdir(parents=True, exist_ok=True)
-    metrics = [
-        _run(opts.scenario, n, opts.duration, opts.label, opts.host, output, opts.informational)
-        for n in tiers
-    ]
+    metrics = [_run(opts.scenario, n, opts.duration, opts.label, opts.host, output, opts.informational) for n in tiers]
     (output / f"{opts.label}-{opts.scenario}-summary.json").write_text(
         json.dumps(metrics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
