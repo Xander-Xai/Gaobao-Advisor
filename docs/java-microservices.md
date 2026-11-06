@@ -20,6 +20,8 @@
 
 ~~~bash
 python scripts/setup_full_env.py
+# If .env.full was created by an earlier revision, extend it in place:
+python scripts/setup_full_env.py --add-java-reader
 docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml -f docker-compose.java.yml --profile full --profile java config
 docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml -f docker-compose.java.yml --profile full --profile java up --build -d
 ~~~
@@ -51,9 +53,13 @@ JUnit/H2（MySQL 模式）测试覆盖参数化 SQL、分页、cursor、来源�
 
 ## 分布式机制及边界
 
+启用 Java 叠加时，Nginx >=1.27.3 的共享 upstream zone 与 `resolve` 使用 Docker DNS 动态发现 java-gateway 副本。
+`docker compose ... up --scale java-gateway=2 -d` 可在单宿主机将两个 Java 进程接入入口。
+CI 会通过 Nginx 访问日志证实两个后端都收到了请求、停止其中一个后请求继续成功，并在不重启 Nginx 的情况下重新发现恢复的副本。仅验证单主机容器级故障切换，不等于多可用区高可用。
+
 Spring Cloud Gateway 使用 Docker DNS 定位服务。自定义 `FailClosedCatalogRateLimiterGatewayFilterFactory` 不使用 Spring Cloud 默认 RedisRateLimiter 的故障放行路径，而是通过 Redis Lua（`TIME` + 原子读改写）执行令牌桶，Redis 故障/脚本失败/超时均返回 HTTP 503。Redis 令牌桶以 `gaobao:catalog:public:v2` 作为**所有匿名目录流量共享的全局 Key**：默认每秒恢复 20 Token，最多突发 40，耗尽返回 HTTP 429。此设计刻意不信任客户端可伪造的代理 IP 头；不是按用户的额度，会让不同用户互相影响。Redis 故障不能静默放行。实际副本均衡需要用压测证据验证；没有引入 Nacos/Eureka，不声称提供跨可用区高可用、分布式事务或生产 SLA。
 
-Catalog 只执行 SELECT，Hikari 连接设为 readOnly。为兼容现有 full 环境，演示 Compose 仍使用原 MySQL 账号；这**不是**数据库级最小权限。生产部署需由管理员新建只拥有 schools、admission_scores、enrollment_plans 三张表 SELECT 权限的专用账号，并通过受保护环境变量注入，不得把数据库密码提交到 git。Redis/MySQL 不应映射到公网。生产还需 TLS、Redis 认证、审计、链路追踪和故障演练。
+Catalog 只执行 SELECT，Hikari 连接设为 readOnly。Java overlay 现在先运行一次性 `catalog-db-init`，通过单独的根凭据完成 `gaobao_reader` 授权并在完成后退出；业务 Catalog 只收到自己的 `CATALOG_READ_PASSWORD`，它不是 Python API 使用的写入账号。授权仅覆盖 `schools`、`admission_scores`、`enrollment_plans` 三张表的 SELECT 权限。CI 使用真实 MySQL 账号验证了三表可读、会话表不可读、UPDATE 与 CREATE TABLE 均被拒绝。新增或重建已有 `.env.full` 时使用 `python scripts/setup_full_env.py --add-java-reader`，不会重写已有数据库密码。不要将该演示网络视为公网生产网络。Redis/MySQL 不应映射到公网。生产还需 TLS、Redis 认证、审计、链路追踪和故障演练。
 
 ## 已取得的演示环境验收证据（2026-11-06）
 
@@ -65,6 +71,19 @@ Catalog 只执行 SELECT，Hikari 连接设为 readOnly。为兼容现有 full �
 - [完整故障测试与日志](https://github.com/Xander-Xai/gaobao-advisor/actions/runs/42167546309)、[原项目回归 CI](https://github.com/Xander-Xai/gaobao-advisor/actions/runs/42167551859)、[Java/Python/TS CodeQL](https://github.com/Xander-Xai/gaobao-advisor/actions/runs/42167551947)。
 
 详细范围及尚未达到的生产门槛见 [2026-11-06 验收报告](audits/2026-11-06-java-distributed-acceptance.md)。
+
+## 可复现的性能验证
+
+CI 在真实 Compose 服务上安装固定版本 Locust，执行以下工作负载（此处仅合成数据，不接入付费模型）：
+
+- `CatalogUser`：Java Catalog /api/v1/catalog/schools，单网关与双网关均进行 50 用户对照；双网关还执行 100/200 用户。
+- `PythonCatalogUser`：Python /api/v1/data/overview，双网关 50/100/200 用户。
+- `NoKeyChatUser`：Python /api/v1/chat SSE，双网关 5/10 用户，仅验证无真实 LLM Key 的模板/工作流路径。
+- 收集 Locust CSV、p50/p95/p99、RPS、错误率、Docker stats CPU/内存采样，留存为 Actions artifact；结果不预设“优化后一定更快”，不声称已验证真实 LLM 的 P95。
+
+在已启动的 compose 上运行：`python benchmarks/load/run_suite.py --scenario catalog --tiers 50,100,200 --duration 10 --label dual-gateway`。
+
+详细方法和容量风险解释见 [Java/Python 压测方法](performance/java-python-load.md)。
 
 ## 生产验收门槛（尚未完成）
 

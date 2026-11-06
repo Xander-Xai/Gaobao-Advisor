@@ -93,3 +93,11 @@ def test_untrusted_peer_ignores_forwarded_header(monkeypatch):
         }
     )
     assert resolve_client_ip(request) == "203.0.113.9"
+
+
+def test_rejects_invalid_public_api_rate_limit_config():
+    import pytest
+
+    for rate, capacity in ((0, 1), (1, 0), (-1, 10), (10001, 10), (1, 10001)):
+        with pytest.raises(ValueError):
+            TokenBucketLimiter(rate=rate, capacity=capacity)
