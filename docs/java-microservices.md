@@ -35,7 +35,7 @@ curl -i 'http://localhost/api/v1/health'
 
 Java 新接口返回 items、total、count、next_cursor、has_more；查询参数为 q、province、level、school_type、limit（1—200）与 cursor。院校条目保留 special_type、data_source_note、is_synthetic，合成数据不得用于真实志愿决策。原 /api/v1/data/*、/api/v1/chat、管理员鉴权等逻辑仍由 Python 提供。
 
-默认 docker compose up 不启用 Java。停机保留数据卷：
+默认 docker compose up 不启用 Java。注意：基础 Compose 仍将 Python API 的 8000 端口发布给宿主机，演示模式不能将 Java Gateway 当作唯一安全入口；生产网络必须取消该端口的公网暴露，并在入口层完成 TLS/认证。停机保留数据卷：
 
 ~~~bash
 docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml -f docker-compose.java.yml --profile full --profile java down
