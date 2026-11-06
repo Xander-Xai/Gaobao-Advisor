@@ -8,8 +8,12 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 
 python scripts/setup_full_env.py --force >/dev/null
-export CATALOG_RATE_PER_SECOND=20
-export CATALOG_RATE_BURST=40
+# Test-only limits allow measuring backend capacity rather than rate limiter 429.
+# The Compose overlay defaults remain 20/s and 40 burst for local demo.
+export PUBLIC_API_RATE_PER_SECOND=3000
+export PUBLIC_API_RATE_BURST=3000
+export CATALOG_RATE_PER_SECOND=3000
+export CATALOG_RATE_BURST=3000
 
 compose=(docker compose --project-name gaobao-java-smoke --env-file .env.full
   -f docker-compose.yml -f docker-compose.full.yml -f docker-compose.java.yml
@@ -93,6 +97,17 @@ python3 scripts/verify_java_distributed_ci.py sse
 python3 scripts/verify_java_distributed_ci.py parity
 # SQL-level read-only proof: allowed table SELECTs and denied private table/write/DDL.
 python3 scripts/verify_java_distributed_ci.py reader
+
+# Real Locust load profiles; all artifacts use SYNTHETIC_DEMO and a no-key AI path.
+# The one->two comparison is a topology experiment, not a guaranteed speedup.
+if [[ "${RUN_LOAD_BENCHMARK:-1}" == "1" ]]; then
+  python3 benchmarks/load/run_suite.py --scenario catalog --tiers 50 --duration 8 --label single-gateway
+  "${compose[@]}" up --no-deps --detach --scale java-gateway=2 java-gateway
+  sleep 5
+  python3 benchmarks/load/run_suite.py --scenario catalog --tiers 50,100,200 --duration 8 --label dual-gateway
+  python3 benchmarks/load/run_suite.py --scenario python --tiers 50,100,200 --duration 8 --label dual-gateway
+  python3 benchmarks/load/run_suite.py --scenario chat --tiers 5,10 --duration 8 --label dual-gateway
+fi
 
 # Scale the same live cluster to two gateways with a deliberately tiny shared
 # Redis budget, making cross-replica 429 behavior observable.
