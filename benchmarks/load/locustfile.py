@@ -32,6 +32,30 @@ class PythonCatalogUser(HttpUser):
     wait_time = constant_pacing(1.0)
 
     @task
+    def schools(self):
+        # Equivalent bounded, paginated read workload to the Java Catalog API.
+        with self.client.get(
+            "/api/v1/data/schools?limit=10",
+            name="python/data/schools",
+            timeout=10,
+            catch_response=True,
+        ) as response:
+            if response.status_code != 200:
+                response.failure(f"expected 200, got {response.status_code}")
+                return
+            try:
+                data = response.json()
+                assert data["items"] and data["count"] == len(data["items"])
+            except (ValueError, KeyError, AssertionError) as error:
+                response.failure(f"invalid Python response: {error}")
+
+
+class PythonOverviewUser(HttpUser):
+    """Expensive aggregate endpoint measured separately at a modest 50 users."""
+
+    wait_time = constant_pacing(1.0)
+
+    @task
     def overview(self):
         with self.client.get(
             "/api/v1/data/overview",
@@ -45,9 +69,9 @@ class PythonCatalogUser(HttpUser):
             try:
                 data = response.json()
                 assert data["data_profile"] == "SYNTHETIC_DEMO"
-                assert data["counts"]["schools"] > 0
+                assert data["counts"]["schools"] >= 500
             except (ValueError, KeyError, AssertionError) as error:
-                response.failure(f"invalid Python response: {error}")
+                response.failure(f"invalid overview response: {error}")
 
 
 class NoKeyChatUser(HttpUser):
