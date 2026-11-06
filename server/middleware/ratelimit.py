@@ -18,6 +18,8 @@ class TokenBucketLimiter:
     """Per-IP token bucket rate limiter with TTL-based eviction."""
 
     def __init__(self, rate: float = 20, capacity: int = 40):
+        if not 0 < rate <= 10000 or not 0 < capacity <= 10000:
+            raise ValueError("Public API rate/burst must be positive and <= 10000")
         self.rate = rate
         self.capacity = capacity
         self._buckets: dict[str, tuple[float, float]] = {}

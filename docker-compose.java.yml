@@ -8,6 +8,9 @@ services:
   # Docker Compose v2.24+ supports !reset; the default non-Java stack is intact.
   api:
     ports: !reset []
+    environment:
+      PUBLIC_API_RATE_PER_SECOND: "${PUBLIC_API_RATE_PER_SECOND:-20}"
+      PUBLIC_API_RATE_BURST: "${PUBLIC_API_RATE_BURST:-40}"
   frontend:
     ports: !reset []
 
