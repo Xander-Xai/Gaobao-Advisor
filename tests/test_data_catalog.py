@@ -148,6 +148,19 @@ class TestOverview:
         assert body["snapshot"]["is_synthetic"] is True
         assert "SYNTHETIC_DEMO" in body["notice"]
 
+    def test_overview_batched_counts_match_grouped_years(self, data_client):
+        """Issue #91 regression: batched scalar-subquery COUNTs must stay
+        consistent with the per-year GROUP BY query and distinct-school
+        aggregates on the same fixture.
+        """
+        response = data_client.get("/api/v1/data/overview")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["years"] == [item["year"] for item in body["scores_by_year"]]
+        assert body["counts"]["admission_scores"] == sum(item["count"] for item in body["scores_by_year"])
+        assert body["schools_with_scores"] >= body["schools_with_plans"] - body["counts"]["schools"]
+        assert body["counts"]["schools"] == 8
+
     def test_filter_options_come_from_database(self, data_client):
         response = data_client.get("/api/v1/data/filters")
         assert response.status_code == 200

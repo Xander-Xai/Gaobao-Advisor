@@ -71,3 +71,35 @@ CI 会将这些文件作为 `java-python-load-evidence` artifact 附在实际 Ac
 GitHub Actions run [42176296935](https://github.com/Xander-Xai/gaobao-advisor/actions/runs/42176296935) 使用 500 所额外虚构院校、12,000 条录取数据和 6,000 条计划数据，在 8 秒短时采样中得到 Java Catalog 双网关 200 用户 210.24 RPS / P95 720 ms / 0% 错误；Python **重聚合** `/api/v1/data/overview` 在 100 用户时退化为 9.27 RPS、P95 10,000 ms、错误率 85.29%，200 用户档位未采集到有效完成请求，严格验收任务因此 FAIL。
 
 为区别接口复杂度，后续正式压测将 Python **分页列表** `/api/v1/data/schools?limit=10` 对照 Java 目录查询（50/100/200 用户），并把昂贵的概览聚合接口单独以 50 用户保留为负载剖析样本，绝不将分页成绩代替聚合成绩。上面的故障证据仍作为工程瓶颈保留。后续建议针对概览做 SQL profile、缓存策略/索引或异步预聚合，再进行有验证的前后对比。
+
+## Issue #91 优化记录（perf/overview-aggregation，OPEN）
+
+**根因（证据）：** `GET /api/v1/data/overview` 原实现每请求发出约 16 次顺序
+SQL 查询（6 次 COUNT + 4 次 DISTINCT + 年份×2 + 2 次 DISTINCT COUNT + profile +
+snapshot）。同步顺序压测显示进程内线程并发下每次往返被显著放大。
+
+**优化：** 6 个 COUNT + 2 个 DISTINCT COUNT 合批为单个标量子查询语句；
+`GROUP BY year` 一次返回 `years` 与 `scores_by_year`。往返次数 16 → 9，响应
+字段/类型/排序完全不变。已用 `EXPLAIN QUERY PLAN` 确认三条聚合均走覆盖索引
+（`ix_adm_lookup` / `sqlite_autoindex_enrollment_plans_1` / `ix_adm_year`），无新增
+索引需求；未新增迁移，SQLite/MySQL 兼容。
+
+**前后对照（同 fixture：500 院校/3,000 录取行/1,000 计划行；15s 窗口>10s 客户端
+超时；同进程多线程，单机合成数据）：**
+
+| 并发 | 优化前 median | 优化后 median | 优化前 p95 | 优化后 p95 |
+|---|---|---|---|---|
+| 1 | 4.93ms | 3.69ms | 5.65ms | 5.26ms |
+| 5 | 80.25ms | 34.32ms | 123.22ms | 48.19ms |
+| 10 | 189.46ms | 84.50ms | 266.35ms | 115.69ms |
+| 20 | 266.58ms | 120.38ms | 395.26ms | 155.89ms |
+| 50 | 239.64ms | 124.28ms | 332.27ms | 179.45ms |
+
+50 并发下 median -48%、p95 -46%、吞吐 62 → ~101-109 req/s（+65%）。单机线程
+压测含 GIL 争用，不同轮次有 ±10% 抖动；指标仅为合成数据相对对照，已有
+`tests/test_data_catalog.py::TestOverview::test_overview_batched_counts_match_grouped_years`
+守护批量计数与 `scores_by_year` 一致性。
+
+**边界：** 这是单点聚合查询优化，不能消除 SQLite 单进程连接池/CI 共享 Runner
+波动，不能宣称生产容量或 SLA 达标。Issue #91 在优化 PR 合并且复测后才关闭；
+真实网络/多进程与 MySQL 环境需独立复验。
