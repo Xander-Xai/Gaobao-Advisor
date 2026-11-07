@@ -9,13 +9,15 @@ repository. If that is unavailable, contact the maintainer privately first.
 Please do not include real personal data, working credentials, or exploit
 payloads against any third-party system in a report.
 
-## Known open incident
+## Accepted risk (closed)
 
 Issue #58 tracks a historical public Git object containing a removed 72 MiB
 admissions/user-message database. The current tree is clean, but the object is
-still served for a historical commit SHA. History rewrite/force-push is
-intentionally blocked pending explicit owner authorisation and GitHub Support
-coordination; do not treat the current-tree cleanup as a purge.
+still served for a historical commit SHA. Issue #58 was closed on 2026-10-31 as
+**CLOSED / NOT_PLANNED / ACCEPTED_RISK** by owner disposition: administrative
+risk acceptance, not remediation. History rewrite/force-push remains
+intentionally not taken; do not treat the current-tree cleanup or the closure
+as a purge, safety verification, or licensing determination.
 
 ## Threat model of this demo
 

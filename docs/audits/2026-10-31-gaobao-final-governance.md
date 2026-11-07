@@ -1,4 +1,6 @@
-> **Public-product addendum (2026-10-31):** the public README, data explorer and architecture release is recorded in [2026-10-31-public-product-release.md](2026-10-31-public-product-release.md). Issue #58 remains OPEN / ACCEPTED_RISK; the historical object is not claimed as purged or licensed.
+> **Public-product addendum (2026-10-31):** the public README, data explorer and architecture release is recorded in [2026-10-31-public-product-release.md](2026-10-31-public-product-release.md). Issue #58 remains OPEN / ACCEPTED_RISK at this snapshot; the historical object is not claimed as purged or licensed.
+>
+> **Status update (2026-11-07):** Issue #58 was closed on GitHub as **CLOSED / NOT_PLANNED / ACCEPTED_RISK** by owner disposition (2026-10-31 13:50 UTC); historical objects/PR refs were not purged and redistribution authorization is not established — closure is administrative risk acceptance, not remediation.
 
 # gaobao-advisor 最终治理与可靠性验收报告
 
