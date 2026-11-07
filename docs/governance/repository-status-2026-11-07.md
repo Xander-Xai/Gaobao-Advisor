@@ -54,9 +54,17 @@ Python 权威处理；`/ws/**` 直连 Python。Java overlay 取消 Python API（
 - Issue #90：已关闭，CI 门槛与负载观测职责分离（informational 档位 + 零样本
   语义 + chat `session_id` 修复），证据链一致；关闭理由有效（#90 closedAt
   2026-11-06T19:43:08Z，最终 head `616d71c`）。
-- Issue #91（OPEN，P2）：Python overview 聚合性能债务。保持开放，需独立、
-  可复现、延长窗口 + 受控热身/资源的基线与根因分析后，再定索引/缓存/预聚合
-  与性能门槛；本轮无优化 PR，不凭单次短测关闭。
+- Issue #91（CLOSED 2026-11-07，完成）：overview 16→9 次往返批量聚合优化（PR #93
+  已合并，`benchmarks/overview_perf_bench.py` 可复现；30s×3 轮前后对照 median
+  -45%/RPS +75%，回归测试通过）。多进程 / MySQL 复验不在本轮范围内。
+
+## 5b. PR #89 冲突状态（2026-11-07 晚些时）
+
+- 候选合并已普通 Fast-forward 至原分支（`fc019b0`，含 master `6a7af10`），
+  GitHub 显示 MERGEABLE。仍为 Draft / Owner HOLD，未合并。
+- 最新 Java Services 的 `java-compose-smoke` 因短窗 NO_COMPLETED_REQUESTS 工件
+  两次失败（同一 run 内 python 200 用户 1140 请求/0 失败），属 Runner 争用方差，
+  与本次合并无关；功能检查 14/15 全绿。详情见 PR #89 评论。
 
 ## 6. 分支
 
