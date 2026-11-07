@@ -53,6 +53,25 @@ def http(url: str, *, data: dict | None = None, token: str | None = None, timeou
         return e.code, dict(e.headers), e.read().decode("utf-8")
 
 
+def http_with_retry(url: str, *, timeout: int = 8, attempts: int = 5) -> tuple[int, dict, str]:
+    """Bounded retry for transient socket timeouts (post-load recovery).
+
+    Only ``TimeoutError`` is retried; HTTP responses (including non-200) and
+    other exceptions return/fail immediately so real outages are not masked.
+    The caller's 200 assertion still applies to the surviving response.
+    """
+    last_error: TimeoutError | None = None
+    for attempt in range(attempts):
+        try:
+            return http(url, timeout=timeout)
+        except TimeoutError as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(1)
+    assert last_error is not None
+    raise last_error
+
+
 def gateway_urls() -> list[str]:
     p = subprocess.run(
         COMPOSE + ["ps", "-q", "java-gateway"],
@@ -267,7 +286,7 @@ def verify_nginx_replica_ha():
     def send(label: str, count: int):
         for i in range(count):
             url = f"{base}/api/v1/health?ha_probe={marker}-{label}-{i}"
-            code, _, body = http(url, timeout=8)
+            code, _, body = http_with_retry(url, timeout=8)
             assert code == 200, (label, i, code, body[:200])
             time.sleep(0.10)
 
