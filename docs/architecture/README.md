@@ -23,10 +23,10 @@ record why the larger decisions were made.
 The default deployment uses SQLite and no LLM key. The optional full profile
 adds MySQL 8.4, Redis 7, and a separate worker.
 
-> **Feature-branch opt-in (not in `master`, 2026-11-07):** PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89)
-> (`feat/java-distributed-services` @ `616d71c`, Draft / Owner HOLD) adds an optional
-> Java 21 / Spring Boot 4.0.9 / Spring Cloud 2025.1.4 overlay: Nginx keeps `/ws/**`
-> on Python, sends `/api/v1/catalog/**` to a Java Gateway + read-only MySQL Catalog
+> **Opt-in Java overlay (merged in #89, squash `7c87686`):** PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89)
+> adds an optional Java 21 / Spring Boot 4.0.9 / Spring Cloud 2025.1.4 overlay to
+> the default deployment: Nginx keeps `/ws/**` on Python, sends
+> `/api/v1/catalog/**` to a Java Gateway + read-only MySQL Catalog
 > (Redis Lua fail-closed global throttling, HTTP 429 on exhaustion, 503 on Redis
 > outage), and leaves all other `/api/**` — chat SSE, auth, graph, admin — on the
 > existing Python FastAPI. The overlay removes Python API/frontend host ports.

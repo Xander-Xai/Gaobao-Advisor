@@ -214,14 +214,14 @@ docker compose --env-file .env.full \
 
 ### 可选（未合并）：Java 网关与 Catalog 微服务
 
-PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89) 在功能分支 `feat/java-distributed-services`
-（head `616d71c`）中提供 **opt-in Java overlay**：Java 21 / Spring Boot 4.0.9 /
+PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89) （Squash `7c87686`，
+已并入 `master`）提供 **opt-in Java overlay**：Java 21 / Spring Boot 4.0.9 /
 Spring Cloud 2025.1.4 网关 + 只读 MySQL Catalog。启用后 Nginx 将
 `/api/v1/catalog/**` 路由到 Java Catalog，其余 `/api/**`（含 Chat SSE）仍走
-Python FastAPI，`/ws/**` 直连 Python。
+Python FastAPI，`/ws/**` 直连 Python。默认部署仍为 Python/SQLite，Java 为可选
+profile，不改变默认行为。
 
-**该能力不在 `master` 中，PR 处于 Draft / Owner HOLD，不得据此宣称 `master`
-已具备。** 详见 [docs/java-microservices.md](docs/java-microservices.md) 与
+详见 [docs/java-microservices.md](docs/java-microservices.md) 与
 [2026-11-06-java-distributed-acceptance.md](docs/audits/2026-11-06-java-distributed-acceptance.md)。
 
 ---
@@ -232,7 +232,7 @@ Python FastAPI，`/ws/**` 直连 Python。
 |---|---|
 | Code Complete（`master`） | 已交付：Python/FastAPI + LangGraph + Vue 3 +.SQLite/MySQL 可选 profile |
 | 自动化测试（`master` CI） | PASS：Python 3.10/3.11、前端、Compose E2E、CodeQL、Secret Scan（见 Actions） |
-| 功能分支验收（PR #89） | 演示/Compose 故障注入 PASS；16/16 检查绿（CI `42280782634`、CodeQL `42280782558`、Java Services `42280782661`），但仅为合成数据短时观测 |
+| 功能分支验收（PR #89） | 已合入 `master`（`7c87686`）；合并后主 CI、CodeQL、Java Services 全绿，但仅为合成数据短时观测 |
 | 性能基准 | **未达标**：`python-overview` 聚合接口在合成负载下曾出现零完成/高失败；短时 CI 样本不等于容量或 SLA，见 Issue [#91](https://github.com/Xander-Xai/gaobao-advisor/issues/91)（OPEN） |
 | 公网生产 | **NO-GO**：无 TLS、真实数据授权、专用 SELECT-only 凭据、跨主机 HA、容量/SLA 与隐私审批 |
 
