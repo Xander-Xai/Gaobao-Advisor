@@ -111,6 +111,7 @@ constraint-dependencies = [
     "urllib3==2.8.0",
     "anyio==4.14.2",
     "langsmith==0.8.18",
+    "pytest>=9.0.3",
 ]
 
 [tool.ruff]
