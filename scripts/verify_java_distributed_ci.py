@@ -283,6 +283,14 @@ def verify_nginx_replica_ha():
     marker = "ha" + str(time.time_ns())
     base = "http://127.0.0.1"
 
+    # Load phases leave the Python API briefly unresponsive; gate HA probes on
+    # full-stack readiness instead of failing on post-load recovery latency.
+    # The 200 assertion still applies afterwards, so a genuinely dead stack
+    # still fails this verification after the bounded wait.
+    require_status(base + "/api/v1/health", 200, attempts=60)
+    for gateway in urls:
+        require_status(gateway + "/actuator/health/readiness", 200, attempts=30)
+
     def send(label: str, count: int):
         for i in range(count):
             url = f"{base}/api/v1/health?ha_probe={marker}-{label}-{i}"
