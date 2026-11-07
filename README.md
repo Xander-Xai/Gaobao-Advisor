@@ -193,6 +193,15 @@ uvicorn server.main:app --reload
 
 模型输出仍会附加合成数据声明；RAG 语料缺失时不会用模型答案掩盖检索故障。
 
+### 可选：Java 微服务与分布式网关
+
+Java 21 + Spring Boot 4 + Spring Cloud Gateway 的增量架构已提供独立可选部署：
+- Java Gateway：面向 Python API 与 Java 目录服务的路由，Redis 全局令牌桶限流；
+- Java Catalog：读取已有 MySQL 招生表，提供只读、可分页院校检索；
+- 保留原有 Python LangGraph/RAG、SSE、账号鉴权与 Redis Outbox Worker。
+
+使用三份 Compose 文件叠加启用，不改变默认路径。网关的目录限流采用**原子 Redis Lua + fail-closed（Redis 故障返回 503）**，已通过双副本/故障注入联调。启动、接口与局限见 **[Java 微服务运行手册](docs/java-microservices.md)**，审计证据见 **[分布式验收报告](docs/audits/2026-11-06-java-distributed-acceptance.md)**。
+
 ### 可选：MySQL + Redis + Worker
 
 ```bash

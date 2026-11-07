@@ -1,0 +1,94 @@
+# Optional Java microservices overlay, used alongside the existing full profile.
+# python scripts/setup_full_env.py
+# docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml \
+#   -f docker-compose.java.yml --profile full --profile java up --build -d
+services:
+  # The Java overlay exposes only Nginx :80 on the host; prevent the
+  # original demo :8000 API and :3080 frontend ports from bypassing the proxy.
+  # Docker Compose v2.24+ supports !reset; the default non-Java stack is intact.
+  api:
+    ports: !reset []
+    environment:
+      PUBLIC_API_RATE_PER_SECOND: "${PUBLIC_API_RATE_PER_SECOND:-20}"
+      PUBLIC_API_RATE_BURST: "${PUBLIC_API_RATE_BURST:-40}"
+  frontend:
+    ports: !reset []
+
+  # One-shot least-privilege bootstrap, repeated on each deployment so existing
+  # persistent MySQL volumes are supported. The root password is never sent to
+  # the Catalog service.
+  catalog-db-init:
+    image: mysql:8.4
+    profiles: ["java"]
+    restart: "no"
+    entrypoint: ["/bin/sh", "/provision-reader.sh"]
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-gaobao}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}"
+      CATALOG_READ_PASSWORD: "${CATALOG_READ_PASSWORD:?run python scripts/setup_full_env.py --add-java-reader}"
+    volumes:
+      - ./deploy/java/provision-reader.sh:/provision-reader.sh:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  java-catalog:
+    profiles: ["java"]
+    build:
+      context: .
+      dockerfile: java-services/catalog/Dockerfile
+    restart: unless-stopped
+    environment:
+      CATALOG_JDBC_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-gaobao}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC"
+      CATALOG_DB_USER: "gaobao_reader"
+      CATALOG_DB_PASSWORD: "${CATALOG_READ_PASSWORD:?run python scripts/setup_full_env.py --add-java-reader}"
+    depends_on:
+      catalog-db-init:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+
+  java-gateway:
+    profiles: ["java"]
+    build:
+      context: .
+      dockerfile: java-services/gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+      JAVA_CATALOG_URI: "http://java-catalog:8081"
+      PYTHON_API_URI: "http://api:8000"
+      CATALOG_RATE_PER_SECOND: "${CATALOG_RATE_PER_SECOND:-20}"
+      CATALOG_RATE_BURST: "${CATALOG_RATE_BURST:-40}"
+    depends_on:
+      java-catalog:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+
+  nginx:
+    # Nginx >=1.27.3 supports dynamic DNS "resolve" in OSS upstreams.
+    image: nginx:1.31.8-alpine3.24
+    volumes:
+      - ./deploy/java/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      java-gateway:
+        condition: service_healthy

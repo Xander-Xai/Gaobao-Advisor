@@ -78,3 +78,6 @@ data/reports/
 # Security quarantine / forensic work must stay outside the repository.
 gaobao-security-quarantine/
 security-quarantine/
+
+# Benchmark result CSV/JSON files are CI artifacts, not source data.
+benchmarks/load/results/

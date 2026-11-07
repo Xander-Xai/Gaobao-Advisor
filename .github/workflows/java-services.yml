@@ -1,0 +1,70 @@
+name: Java Services
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'java-services/**'
+      - 'docker-compose.java.yml'
+      - 'deploy/java/**'
+      - 'scripts/verify_java_*'
+      - 'scripts/setup_full_env.py'
+      - 'server/main.py'
+      - 'server/middleware/ratelimit.py'
+      - 'benchmarks/load/**'
+      - '.github/workflows/java-services.yml'
+  pull_request:
+    paths:
+      - 'java-services/**'
+      - 'docker-compose.java.yml'
+      - 'deploy/java/**'
+      - 'scripts/verify_java_*'
+      - '.github/workflows/java-services.yml'
+
+concurrency:
+  group: java-services-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  java-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            java-services/pom.xml
+            java-services/gateway/pom.xml
+            java-services/catalog/pom.xml
+      - name: Maven verification
+        run: mvn -B -ntp -f java-services/pom.xml verify
+
+  java-compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install environment generator dependencies
+        run: python -m pip install -e .
+      - name: Install pinned Locust load driver
+        run: python -m pip install locust==2.43.4
+      - name: Build Java, MySQL, Redis, Python and validate HTTP routes
+        run: bash scripts/verify_java_compose_ci.sh
+      - name: Upload raw Locust CSV, JSON and Docker resource samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-python-load-evidence
+          path: benchmarks/load/results/
+          if-no-files-found: ignore
+          retention-days: 14
