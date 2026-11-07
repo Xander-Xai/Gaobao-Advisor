@@ -1,4 +1,4 @@
-> **状态（2026-11-07 复核）：** 本文对应 PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89) 的功能分支 `feat/java-distributed-services`（head `616d71c`），**尚未合并入 `master`**。`master` 默认部署（Python/FastAPI + SQLite）不受影响；本文描述的能力仅在启用 Java overlay 且完成独立 owner 审批后才算可用。Draft / Owner HOLD 继续有效，公网生产仍为 **NO-GO**。
+> **状态（2026-11-07，合并后更新）：** Java 微服务（PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89)，Squash `7c87686`）已合入 `master`。`master` 默认部署仍为 Python/FastAPI + SQLite，Java 为可选 overlay。公网生产仍为 **NO-GO**。
 
 # Java 微服务增量扩展
 

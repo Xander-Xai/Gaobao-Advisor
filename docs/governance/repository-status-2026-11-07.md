@@ -110,3 +110,13 @@ GitHub 曾报 19 条 Open Alerts（2 Critical/5 High/Medium/Low）。经锁文�
 - Open Issues：0；Open PR：仅 #89。
 - 历史分支 `release/unified-public-gaobao`（245 独有提交）保留待 Owner 决策，
   无 worktree/PR 引用。
+
+## 合并后更新（2026-11-07，PR #89 `7c87686`）
+
+本文件主体为合并前快照，陈述的 Draft / 未合并状态已过期。当前真实状态：
+
+- PR #89 已合并（Squash `7c87686`），`master` 包含 Java 微服务（可选 overlay）。
+  合并后 CI / CodeQL / Java Services 全绿；Open PR 0、Open Issues 0、
+  Dependabot 0。
+- 演示/Compose 技术验收 PASS；生产仍 NO-GO（TLS、真实数据授权、专用凭据、
+  跨主机 HA、容量 SLO）。
