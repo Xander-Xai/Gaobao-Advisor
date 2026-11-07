@@ -77,3 +77,24 @@ Python 权威处理；`/ws/**` 直连 Python。Java overlay 取消 Python API（
 强调工程实践：LangGraph 状态机、RAG fail-closed、会话安全、MySQL/Redis
 Worker 队列、Java 网关分布式限流与故障注入验收。不得虚构生产用户、招生
 准确率、性能 SLA 或真实推荐效果；数据边界见 `README.md` 与 `DATA_LICENSE.md`。
+
+## Dependabot 治理（2026-11-07）
+
+GitHub 曾报 19 条 Open Alerts（2 Critical/5 High/Medium/Low）。经锁文件核查：
+
+- **已修复（17 条，已合并 `f4bb57a` + `c6b287b`）：**
+  langgraph 1.2.14、langgraph-sdk 0.4.6、certifi 2026.10.18、urllib3 2.8.0、
+  anyio 4.14.2、langsmith 0.8.18、pytest 9.2.0（`pyproject.toml` 新增
+  `[tool.uv] constraint-dependencies` 防浮动）、vite/@vitest/mocker patched。
+- **残余（2 条，moderate，dev-only）：** `glob`（GHSA-3g3m-2fjr-6pw4）、
+  `minimatch`（GHSA-g3hv-75wg-m249），经 `js-beautify` → `@vue/test-utils`
+  测试链引入，当前 js-beautify 1.15.x 仍依赖 glob 10.x，无非破坏性修复版本；
+  需 `npm audit fix --force` 破坏性升级，不在本轮采用。非运行期/互联网暴露。
+
+## PR #89 最终审查（2026-11-07）
+
+- 合并 master 安全修复（普通 merge，`55d8841`），16/16 CI 全绿，
+  MERGEABLE。仍为 Draft / Owner HOLD，未合并。
+- 技术验收：演示/Compose 故障注入 PASS；代码合并门槛满足；
+  生产门槛（TLS、真实数据、专用凭据、跨主机 HA、SLO）未满足，代码合并不
+  代表允许部署生产。
