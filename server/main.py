@@ -97,7 +97,13 @@ app.add_middleware(SecurityMiddleware)
 app.add_middleware(CSPMiddleware)
 
 # ── Rate Limiting Middleware ──────────────────────────────
-app.add_middleware(RateLimitMiddleware)
+# Defaults remain unchanged. Elevated quotas are explicit test-only configuration
+# for measuring backend capacity without the 20 req/s demo limiter.
+app.add_middleware(
+    RateLimitMiddleware,
+    rate=float(os.getenv("PUBLIC_API_RATE_PER_SECOND", "20")),
+    capacity=int(os.getenv("PUBLIC_API_RATE_BURST", "40")),
+)
 
 # ── Prometheus Metrics Middleware ─────────────────────────
 app.middleware("http")(metrics_middleware)
