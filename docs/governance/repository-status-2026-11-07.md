@@ -98,3 +98,15 @@ GitHub 曾报 19 条 Open Alerts（2 Critical/5 High/Medium/Low）。经锁文�
 - 技术验收：演示/Compose 故障注入 PASS；代码合并门槛满足；
   生产门槛（TLS、真实数据、专用凭据、跨主机 HA、SLO）未满足，代码合并不
   代表允许部署生产。
+
+## 最终状态（2026-11-07 收尾）
+
+- Dependabot：19 条全部修复（`f4bb57a` + `c6b287b` + `ff02ded`，最终 0 open）。glob/
+  minimatch 用 npm overrides 钉 patched，非破坏性。
+- PR #89（`558370f`）：已同步 master 安全修复 + HA 探针就绪门（60 次有界等待）+
+  探针重试；**16/16 全绿，MERGEABLE CLEAN**。仍 Draft / Owner HOLD，未合并。
+  技术验收（演示/Compose）通过；生产 NO-GO（TLS/真实数据/专用凭据/跨主机 HA）
+  另议，代码合并不等于可生产部署。
+- Open Issues：0；Open PR：仅 #89。
+- 历史分支 `release/unified-public-gaobao`（245 独有提交）保留待 Owner 决策，
+  无 worktree/PR 引用。
