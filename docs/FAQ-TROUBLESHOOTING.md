@@ -747,7 +747,7 @@ curl -f http://localhost:8000/api/v1/health
 
 1. 从知识库重建：
 ```bash
-docker exec -it gaokao-api-prod python scripts/import_data.py
+docker exec -it gaokao-api-prod python scripts/import_baidu_gaokao.py --resume
 ```
 
 2. 从爬虫重新抓取：

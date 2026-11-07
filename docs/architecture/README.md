@@ -274,11 +274,22 @@ flowchart TB
         W["worker"] --> M
         W --> R
     end
+    subgraph Java["Optional Java overlay (--profile java)"]
+        N3["nginx :80"] --> GW["java-gateway :8080"]
+        GW --> CAT["java-catalog :8081<br/>read-only SELECT"]
+        GW --> A3["api :8000 (Python)"]
+        CAT --> M3[("MySQL 8.4")]
+        GW --> R3[("Redis 7<br/>rate-limit bucket")]
+    end
 ```
 
 MySQL and Redis are not published to the host in the full profile; services use
 the Compose network. Production TLS configuration is separate from the HTTP-only
 demo proxy.
+
+In the Java overlay Nginx exposes only port 80 on the host: the Compose
+`!reset []` directive removes the Python API `8000` and frontend `3080`
+host mappings so the gateway cannot be bypassed.
 
 ## 8. Source map
 
@@ -297,6 +308,8 @@ demo proxy.
 | Demo dataset generator | `scripts/seed_demo_data.py` |
 | Data explorer UI | `frontend/src/views/DataView.vue`, `components/data/` |
 | Tests / CI | `tests/`, `frontend/src/**/__tests__/`, `.github/workflows/` |
+| Java gateway / catalog | `java-services/gateway/`, `java-services/catalog/`, `deploy/java/nginx.conf` |
+| Distributed load benchmarks | `benchmarks/load/`, `benchmarks/overview_perf_bench.py` |
 
 ## 9. Public API surface
 
@@ -319,6 +332,11 @@ demo proxy.
 | `/api/v1/admin/*` | — | RBAC operations workbench | Admin Bearer |
 
 The full generated schema is available at `/docs` when the API is running.
+
+With the Java overlay enabled, the gateway additionally serves
+`GET /api/v1/catalog/schools` and `GET /api/v1/catalog/schools/{id}` (read-only
+MySQL catalog, Redis-rate-limited). Every other path is still served by the
+Python application.
 
 ## 10. Key decisions and ADR index
 
@@ -344,3 +362,7 @@ The full generated schema is available at `/docs` when the API is running.
   sessions are capability tokens, not an account system.
 * Public data endpoints are rate-limited by the application middleware, but the
   demo does not claim a production-grade anti-abuse or SLA posture.
+* The Java overlay was accepted on Compose-level fault-injection evidence with
+  synthetic data only. TLS, real-data authorization, dedicated credentials,
+  cross-host HA and capacity/SLO remain open, so merging it is not approval to
+  serve production traffic.

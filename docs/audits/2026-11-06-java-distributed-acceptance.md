@@ -4,7 +4,7 @@
 
 ## 审计范围与结论
 
-- 对象：`Xander-Xai/gaobao-advisor`，PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89) 中的 `feat/java-distributed-services` 分支；**未合并 `master`**。
+- 对象：`Xander-Xai/gaobao-advisor`，PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89) 中的 `feat/java-distributed-services` 分支；**审计时点（2026-11-06）尚未合并 `master`**（后于 2026-11-07 以 Squash `7c87686` 合入）。
 - 结论：**演示/Compose 环境功能与故障注入 PASS；公网生产 NO-GO**。
 - 已核验对象：Java 21 + Spring Boot Gateway、只读 Catalog、跨实例 Redis Lua 限流、Nginx 路由、Python SSE 与鉴权兼容、MySQL/Redis 健康检查和恢复。
 - 未核验：真实省份官方招生数据准确性、可用区/跨宿主机容灾、高并发容量与生产 SLA、端到端 TLS、真实用户隐私流程、渗透测试、专用 SQL 最小权限凭据。

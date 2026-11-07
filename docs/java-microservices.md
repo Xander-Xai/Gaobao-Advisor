@@ -2,7 +2,7 @@
 
 # Java 微服务增量扩展
 
-状态：功能分支中的演示级扩展。Java 单元测试、MySQL/Redis/Python 容器联调、两个网关共享限流、Redis/MySQL 故障恢复已在 GitHub Actions 实测通过；不等于真实数据验证、跨主机高可用或公网生产验收。默认 Python/SQLite 部署不变。
+状态：**已合入 `master` 的可选 overlay**（PR #89，Squash `7c87686`）。Java 单元测试、MySQL/Redis/Python 容器联调、两个网关共享限流、Redis/MySQL 故障恢复已在 GitHub Actions 实测通过；不等于真实数据验证、跨主机高可用或公网生产验收。默认 Python/SQLite 部署不变。
 
 ## 架构
 
@@ -18,7 +18,7 @@
 
 ## 启动
 
-需要 Docker Compose v2；首先运行以下命令生成本地密码：
+需要 Docker Compose v2（`!reset []` 需要 v2.24+）；首先运行以下命令生成本地密码：
 
 ~~~bash
 python scripts/setup_full_env.py
@@ -47,11 +47,15 @@ docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full
 
 ## 测试
 
+本地 Java 单元测试：
+
 ~~~bash
 mvn -f java-services/pom.xml -B -ntp verify
 ~~~
 
-JUnit/H2（MySQL 模式）测试覆盖参数化 SQL、分页、cursor、来源标记；网关测试验证限流 Key 不受 X-Forwarded-For 欺骗。上述单测不能替代 MySQL/Redis/Docker 的真实联调。必须人工测试 Chat SSE 事件、鉴权透传、两个网关副本的共享限流、数据库和 Redis 故障与健康检查。
+CI 门禁：`.github/workflows/java-services.yml`（`java-unit-tests` + `java-compose-smoke`）在 Java/overlay/benchmark 相关文件变更时运行；`java-compose-smoke` 在真实 Compose 上执行 SSE/HMAC 透传、Java/Python 目录契约、MySQL SELECT-only、Nginx 双副本故障切换、Redis/MySQL 故障注入与恢复，并上传 `java-python-load-evidence` artifact。CodeQL 覆盖 `java-kotlin`。
+
+JUnit/H2（MySQL 模式）测试覆盖参数化 SQL、分页、cursor、来源标记；网关测试验证限流 Key 不受 X-Forwarded-For 欺骗。上述单测不能替代 MySQL/Redis/Docker 的真实联调；Chat SSE 事件、鉴权透传、两个网关副本的共享限流、数据库和 Redis 故障与健康检查由 CI 的 `java-compose-smoke` 阶段自动覆盖。
 
 ## 分布式机制及边界
 
@@ -63,7 +67,9 @@ Spring Cloud Gateway 使用 Docker DNS 定位服务。自定义 `FailClosedCatal
 
 Catalog 只执行 SELECT，Hikari 连接设为 readOnly。Java overlay 现在先运行一次性 `catalog-db-init`，通过单独的根凭据完成 `gaobao_reader` 授权并在完成后退出；业务 Catalog 只收到自己的 `CATALOG_READ_PASSWORD`，它不是 Python API 使用的写入账号。授权仅覆盖 `schools`、`admission_scores`、`enrollment_plans` 三张表的 SELECT 权限。CI 使用真实 MySQL 账号验证了三表可读、会话表不可读、UPDATE 与 CREATE TABLE 均被拒绝。新增或重建已有 `.env.full` 时使用 `python scripts/setup_full_env.py --add-java-reader`，不会重写已有数据库密码。不要将该演示网络视为公网生产网络。Redis/MySQL 不应映射到公网。生产还需 TLS、Redis 认证、审计、链路追踪和故障演练。
 
-## 已取得的演示环境验收证据（2026-11-06）
+## 已取得的演示环境验收证据
+
+2026-11-06（合并前，功能分支）：
 
 - Java Maven 单元测试通过（移除旧 KeyResolver 后再次以当前分支 CI 为准）；Java + Python + MySQL + Redis 容器联调通过。
 - 真实 SSE 会话 ID 和 HMAC Bearer 鉴权跨 Nginx -> Java -> Python 透传通过。
@@ -74,6 +80,8 @@ Catalog 只执行 SELECT，Hikari 连接设为 readOnly。Java overlay 现在先
 
 详细范围及尚未达到的生产门槛见 [2026-11-06 验收报告](audits/2026-11-06-java-distributed-acceptance.md)。
 
+合并后复验（2026-11-07，head `558370f`，Squash `7c87686`）：`java-unit-tests` 与 `java-compose-smoke` 均 PASS，主 CI 与 CodeQL（Python / JavaScript-TypeScript / Java-Kotlin）全绿（[CI 42372475136](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/42372475136)、[CodeQL 42372475181](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/42372475181)、[Java Services 42372475149](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/42372475149)）。合并后主分支再跑一次 Java Services（[run 42376544386](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/42376544386)）亦 PASS。
+
 ## 可复现的性能验证
 
 CI 在真实 Compose 服务上安装固定版本 Locust，执行以下工作负载（此处仅合成数据，不接入付费模型）：
@@ -83,17 +91,30 @@ CI 在真实 Compose 服务上安装固定版本 Locust，执行以下工作负�
 - `NoKeyChatUser`：Python /api/v1/chat SSE，双网关 5/10 用户，仅验证无真实 LLM Key 的模板/工作流路径。
 - 收集 Locust CSV、p50/p95/p99、RPS、错误率、Docker stats CPU/内存采样，留存为 Actions artifact；结果不预设“优化后一定更快”，不声称已验证真实 LLM 的 P95。
 
-在已启动的 compose 上运行：`python benchmarks/load/run_suite.py --scenario catalog --tiers 50,100,200 --duration 10 --label dual-gateway`。
+在已启动的 compose 上运行（`--informational` 表示诊断性负载档位，零完成请求按无样本记录而非失败；CI 中所有负载档位都使用该模式）：
+
+`python benchmarks/load/run_suite.py --scenario catalog --tiers 50,100,200 --duration 10 --label dual-gateway --informational`
+
+CI 实际使用的档位与时长见 `scripts/verify_java_compose_ci.sh`（catalog/python 50–200 用户 8s、python-overview 50 用户 8s、chat 5/10 用户 8s）。
 
 详细方法和容量风险解释见 [Java/Python 压测方法](performance/java-python-load.md)。
 
-## 生产验收门槛（尚未完成）
+## 生产验收门槛
+
+已在演示/Compose 环境验收（合成数据）：
 
 - Maven、Compose config、Java 服务 readiness 全通过
 - 老 Python API 与 SSE 未回归
 - 分页、SQL 注入、错误码和数据 provenance 已核对
 - 两个网关实例共享 Redis 限流且确实返回 429
 - Redis/MySQL 不可用时有明确失败/降级表现
-- 数据来源、隐私、密钥、最小权限、负载测试和 TLS 验证完毕
+
+仍未完成（生产上线前置条件，代码合并不等于放行）：
+
+- TLS/WAF、访问控制与网络隔离
+- 真实招生数据授权、隐私与安全审查
+- 专用凭据与密钥轮换、Redis ACL/TLS
+- 跨主机/可用区 HA 与入口层容量、P95/SLO
+- Java 依赖 SCA/SBOM 与镜像持续扫描
 
 现有队列恢复边界详见 docs/superpowers/adr/ADR-008-mysql-redis-worker.md 和 ADR-009-redis-delivery-selection.md。

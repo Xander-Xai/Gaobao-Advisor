@@ -41,7 +41,7 @@ python benchmarks/load/run_suite.py --scenario chat --tiers 5,10 --duration 10 -
 `*_stats.csv`、`*_stats_history.csv`、`*_failures.csv` 和
 `.json`（总请求、失败、错误率、RPS、p50/p95/p99、Docker CPU/内存样本）。
 CI 会将这些文件作为 `java-python-load-evidence` artifact 附在实际 Actions run 上。
-**CI 验收口径（Issue #90）：** 所有 Locust 负载档位都属于**诊断性观测**，CI 调用时明确使用 `--informational`，不把 8 秒采样下的“零完成”误判成功能回归。功能硬门槛仍由真实 Compose 中的 HTTP 200 / 合成数据标记、SSE（含 `done` 与会话鉴权）、Java/Python 目录契约、最小权限、跨网关限流、Nginx HA、Redis/MySQL 故障注入承担。无 `--informational` 的手动运行仍对零完成或 100% 失败保持非零退出码。**观测 CI 绿灯不等于负载容量、错误率、p95 或生产 SLA 达标**；负载缺陷必须从 artifact 独立评估并跟踪 #91。
+**CI 验收口径（Issue #90）：** 所有 Locust 负载档位都属于**诊断性观测**，CI 调用时明确使用 `--informational`，不把 8 秒采样下的“零完成”误判成功能回归。功能硬门槛仍由真实 Compose 中的 HTTP 200 / 合成数据标记、SSE（含 `done` 与会话鉴权）、Java/Python 目录契约、最小权限、跨网关限流、Nginx HA、Redis/MySQL 故障注入承担。无 `--informational` 的手动运行仍对零完成或 100% 失败保持非零退出码。**观测 CI 绿灯不等于负载容量、错误率、p95 或生产 SLA 达标**；负载缺陷必须从 artifact 独立评估（#91 已由 PR #93 关闭，其余负载观察项仍随每次 run 的 artifact 复评）。
 
 无 Key 聊天负载必须发送满足 `ChatRequest` 契约的 `session_id`。匿名请求中的该值不具备鉴权能力，服务端会重新生成 session ID；压测仅断言 HTTP 200、SSE Content-Type 和 `done` 事件，不把这一流程称为已认证会话复用测试。
 
@@ -72,7 +72,7 @@ GitHub Actions run [42176296935](https://github.com/Xander-Xai/gaobao-advisor/ac
 
 为区别接口复杂度，后续正式压测将 Python **分页列表** `/api/v1/data/schools?limit=10` 对照 Java 目录查询（50/100/200 用户），并把昂贵的概览聚合接口单独以 50 用户保留为负载剖析样本，绝不将分页成绩代替聚合成绩。上面的故障证据仍作为工程瓶颈保留。后续建议针对概览做 SQL profile、缓存策略/索引或异步预聚合，再进行有验证的前后对比。
 
-## Issue #91 优化记录（perf/overview-aggregation，OPEN）
+## Issue #91 优化记录（perf/overview-aggregation，已合并 PR #93）
 
 **根因（证据）：** `GET /api/v1/data/overview` 原实现每请求发出约 16 次顺序
 SQL 查询（6 次 COUNT + 4 次 DISTINCT + 年份×2 + 2 次 DISTINCT COUNT + profile +
@@ -101,8 +101,8 @@ snapshot）。同步顺序压测显示进程内线程并发下每次往返被显
 守护批量计数与 `scores_by_year` 一致性。
 
 **边界：** 这是单点聚合查询优化，不能消除 SQLite 单进程连接池/CI 共享 Runner
-波动，不能宣称生产容量或 SLA 达标。Issue #91 在优化 PR 合并且复测后才关闭；
-真实网络/多进程与 MySQL 环境需独立复验。
+波动，不能宣称生产容量或 SLA 达标。Issue #91 已随 PR #93（`6a7af10`）合并而
+关闭；真实网络/多进程与 MySQL 环境仍需独立复验。
 
 ### 复现脚本（仓库内，Issue #91）
 

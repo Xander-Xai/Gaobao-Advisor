@@ -5,8 +5,9 @@
 > **未做生产级容量、并发或 SLA 验证**。因此本文中「达到生产就绪标准 / 建议立即上线 /
 > 可用性 99.5% / 用户量与延迟预估」等描述**不代表当前状态**，仅为该次记录的当时假设。
 > 部署请以 `README.md` 与仓库内实际存在的 `docker-compose.yml` / `docker-compose.prod.yml` 为准。
-> 已知过时/缺失引用：`tests/locustfile.py`、`data/vector_index/` 当前不存在；
-> 实际测试指标见 `README.md`「最近一次本地验证」小节（以最新一次运行输出为准）。
+> 已知过时/缺失引用：`data/vector_index/` 当前不存在；负载测试脚本现位于
+> `benchmarks/load/locustfile.py`（经 `benchmarks/load/run_suite.py` 驱动）；
+> 实际测试指标见 `docs/performance/java-python-load.md`。
 
 > 本清单基于 2026-06-16 验收报告更新，包含所有 P1 问题的解决方案。
 
@@ -297,7 +298,7 @@ print(cache.get_stats())
 ```bash
 # 使用 locust 进行压力测试
 pip install locust
-locust -f tests/locustfile.py --users 100 --spawn-rate 10 --run-time 60s
+locust -f benchmarks/load/locustfile.py --users 100 --spawn-rate 10 --run-time 60s
 
 # 预期结果:
 # - Requests/sec: > 40

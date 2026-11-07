@@ -31,11 +31,23 @@ ruff check . && ruff format --check .
 cd frontend && npm ci && npx vitest run && npx vite build
 ```
 
+The optional Java services have their own build and unit tests:
+
+```bash
+mvn -f java-services/pom.xml -B -ntp verify
+```
+
 The runtime dependency set is `requirements.txt` / `requirements.lock`; it must
 have **zero known vulnerabilities** and CI enforces it with `pip-audit`. Do not
 add a dependency to it without running `make audit-deps` — and check
 [`docs/dependency-exceptions.md`](docs/dependency-exceptions.md) first, because
 some packages are deliberately kept out of the runtime (see the policy there).
+
+The development dependency set is locked in `uv.lock` and pinned by
+`[tool.uv] constraint-dependencies` in `pyproject.toml`; the frontend pins the
+same way with `npm overrides`. Those floors keep a plain re-resolution from
+returning a package to an advisory range — change them deliberately, then
+re-run the audit and the tests.
 
 The optional legacy Streamlit operations dashboard has its own dependency file
 and is never installed by default:
@@ -46,4 +58,13 @@ make run                    # streamlit run legacy/admin.py
 ```
 
 CI runs on Python 3.10 and 3.11, plus a frontend gate, a secret scan, a
-no-key container smoke test and a redistribution gate.
+no-key container smoke test and a redistribution gate. The `Java Services`
+workflow (`java-unit-tests` + `java-compose-smoke`) runs when Java, overlay or
+benchmark files change, and CodeQL additionally analyses `java-kotlin`.
+
+The reproducible load benchmark lives in the repository and is not a claim about
+production capacity:
+
+```bash
+python benchmarks/overview_perf_bench.py --seconds 30 --rounds 3
+```

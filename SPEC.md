@@ -18,7 +18,7 @@ The source retains an import path for user-supplied or licensed data, and the pr
 ### Service Layer
 - **FastAPI server** (`server/main.py`) — primary HTTP entry point with async support, CORS, rate limiting, security middleware, and Sentry monitoring
 - **LangGraph workflow** (`server/graph/graph.py`) — 17-node state machine for multi-turn conversation flow with conditional branching (profile completeness check), offline reasoning-context assembly + streaming token emission
-- **SQLite database** (`db/database.py`) — embedded persistence with WAL mode; 14 tables covering schools, majors, admission scores, enrollment plans, graduate programs, career trends, conversations, feedback, and yi-fen-yi-duan
+- **SQLite database** (`db/database.py`) — embedded persistence with WAL mode; 20 tables covering schools, majors, admission scores, enrollment plans, subject rankings, graduate programs, career trends, conversations, feedback, quality jobs, admin audit and yi-fen-yi-duan
 - **Hybrid RAG** (`server/services/rag.py`) — BM25 keyword + optional dense retrieval over the bundled **SYNTHETIC_DEMO** corpus (`knowledge/synthetic_demo/`, 8 groups, 31 chunks); enabled by default, no key required, with citations and fail-closed error states. See README "RAG 能力" and `docs/rag-demo.md` for current behaviour.
 - **Voice pipeline** (`server/services/voice.py`) — WebSocket-based ASR -> Graph -> TTS loop using DashScope API for phone-like interaction
 - **Quality modules** (`quality/`) — 7 modules: AI-era risk detection, anti-pattern checking, cross-validation, emotion detection, decision heuristics, model selector, and contextual knowledge loader
@@ -31,7 +31,7 @@ The source retains an import path for user-supplied or licensed data, and the pr
 
 ### Data Pipeline
 - **Data importers** (`scrapers/`) — Baidu Gaokao parallel scrapers with checkpoint-based continuation for 30 provinces
-- **Database schema** — 14 tables (school, major, admission_score, enrollment_plan, subject_ranking, graduate_program, graduate_score, career_trend, yi_fen_yi_duan, conversation, conversation_message, feedback, highlight, quality_score)
+- **Database schema** — 20 tables (school, major, admission_score, enrollment_plan, subject_ranking, graduate_program, graduate_score, career_trend, yi_fen_yi_duan, dataset_snapshot, conversation, conversation_message, feedback, highlight, quality_score, data_quality_job, data_quality_issue, quality_task_outbox, admin_token_revocation, operation_audit_log)
 
 ## Key Design Decisions
 
@@ -131,7 +131,7 @@ nginx (:80)
 
 ## Testing Strategy
 
-- **pytest** with httpx ASGI transport for integration tests (74 `test_*.py` files, **939 collected / 938 passed / 1 skipped**)
+- **pytest** with httpx ASGI transport for integration tests (85 `test_*.py` files, **1234 collected**; the last local run was 1200 passed / 34 skipped, coverage 81.92% — the skipped ones require a live MySQL/Redis and run in CI)
 - Key test suites:
   - `tests/test_agent_core.py` — core agent logic
   - `tests/test_chat_sse.py` — SSE streaming chat
