@@ -212,7 +212,7 @@ docker compose --env-file .env.full \
 
 该 profile 启动 FastAPI（MySQL + Alembic）、MySQL 8.4、Redis 7、Quality Worker、前端与 Nginx。MySQL/Redis 不发布宿主机端口。
 
-### 可选（未合并）：Java 网关与 Catalog 微服务
+### 可选：Java 网关与 Catalog 微服务
 
 PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89) （Squash `7c87686`，
 已并入 `master`）提供 **opt-in Java overlay**：Java 21 / Spring Boot 4.0.9 /
@@ -233,7 +233,7 @@ profile，不改变默认行为。
 | Code Complete（`master`） | 已交付：Python/FastAPI + LangGraph + Vue 3 +.SQLite/MySQL 可选 profile |
 | 自动化测试（`master` CI） | PASS：Python 3.10/3.11、前端、Compose E2E、CodeQL、Secret Scan（见 Actions） |
 | 功能分支验收（PR #89） | 已合入 `master`（`7c87686`）；合并后主 CI、CodeQL、Java Services 全绿，但仅为合成数据短时观测 |
-| 性能基准 | **未达标**：`python-overview` 聚合接口在合成负载下曾出现零完成/高失败；短时 CI 样本不等于容量或 SLA，见 Issue [#91](https://github.com/Xander-Xai/gaobao-advisor/issues/91)（OPEN） |
+| 性能基准 | **部分达标**：`python-overview` 聚合已优化（16→9 次往返，PR #93），仓库内基准 `benchmarks/overview_perf_bench.py` 同配置 50 并发 median -45%、RPS +75%；短时合成数据结果不等于容量或 SLA，见 [性能文档](docs/performance/java-python-load.md) |
 | 公网生产 | **NO-GO**：无 TLS、真实数据授权、专用 SELECT-only 凭据、跨主机 HA、容量/SLA 与隐私审批 |
 
 **区分：** `Code Complete ≠ Acceptance PASS ≠ Production Ready`。CI 绿只能证明
@@ -369,8 +369,8 @@ GitHub Actions 在 push / PR 上运行：
 - **实时性**：不提供官方实时招生数据；第三方抓取与联网搜索默认关闭。
 - **检索**：默认 BM25；Dense 检索需要显式配置 provider。合成语料规模小，不构成生产级 RAG 质量证明。
 - **身份**：匿名会话使用 HMAC 能力令牌，无账号体系、密码找回或跨设备同步。
-- **架构**：单 LangGraph 状态图，不是多智能体系统；MySQL/Redis/Worker 为可选 profile，不承诺生产 SLA。
-- **生产部署**：仓库包含容器与 Compose 配置，但未声明可直接承载公网生产流量。
+- **架构**：单 LangGraph 状态图，不是多智能体系统；MySQL/Redis/Worker 与 Java 网关/Catalog 均为可选 profile，不承诺生产 SLA。
+- **生产部署**：仓库包含容器与 Compose 配置，但未声明可直接承载公网生产流量。Java overlay 仅在合成数据的 Compose 故障注入下验收：TLS、真实数据授权、专用凭据轮换、跨主机 HA 与容量/SLO 仍未满足（见 [docs/java-microservices.md](docs/java-microservices.md)）。
 
 安全边界与漏洞报告方式见 **[SECURITY.md](SECURITY.md)**；隐私说明见 **[PRIVACY.md](PRIVACY.md)**。
 

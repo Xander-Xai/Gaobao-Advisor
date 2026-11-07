@@ -1,5 +1,9 @@
 # Repository governance audit — 2026-10-31
 
+> **Current state pointer:** the authoritative repository state is
+> [`docs/governance/repository-status-2026-11-07.md`](repository-status-2026-11-07.md).
+> This file is the 2026-10-31 historical ledger and is not updated for later changes.
+>
 > **Final addendum (2026-10-31, end of day):** the authoritative final report is
 > [`docs/audits/2026-10-31-gaobao-final-governance.md`](../audits/2026-10-31-gaobao-final-governance.md).
 > Current state: `master` code baseline `0c7ff79` (Issue #58 report follows), **0 Open

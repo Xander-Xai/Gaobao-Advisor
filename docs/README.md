@@ -16,12 +16,18 @@ Product-facing documentation:
 Engineering evidence:
 
 - [ADRs](superpowers/adr/) — architecture decision records.
-- [Performance](performance/) — MySQL/worker benchmarks and Redis delivery
-  comparison.
+- [Java microservices](java-microservices.md) — optional Java Gateway + read-only
+  Catalog overlay: startup, CI gates, distributed rate limiting, deployment
+  boundaries.
+- [Performance](performance/) — MySQL/worker benchmarks, Redis delivery
+  comparison, and the Java/Python load methodology.
 - [Security notes](security/) — admin auth, sensitive-data handling, test
   isolation.
 - [Governance ledger](governance/repository-audit.md) — historical state and
   action log.
+- [Repository status](governance/repository-status-2026-11-07.md) — current
+  architecture/acceptance snapshot and the PR/Issue/branch decisions taken on
+  2026-11-07.
 - [Audits](audits/) — redacted governance/security reports.
 
 Default demo data is synthetic. Do not add real admissions databases, private
