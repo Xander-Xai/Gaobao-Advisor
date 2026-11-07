@@ -68,16 +68,16 @@ def _snapshot_dict(snapshot: DatasetSnapshot | None) -> dict[str, Any] | None:
 
 
 def get_overview(session: Session) -> dict[str, Any]:
-    """Return coverage, provenance and per-year score counts."""
+    """Return coverage, provenance and per-year score counts.
+
+    Aggregate counts are batched into a single scalar-subquery statement and
+    the per-year GROUP BY query supplies both ``years`` and ``scores_by_year``,
+    reducing sequential round-trips (16 → 9) without changing the response
+    contract (same keys, types and ordering). This mitigates concurrency
+    contention where each request previously held a DB session across ~16
+    sequential queries; see Issue #91 for measured before/after.
+    """
     data_profile = detect_data_profile(session)
-    years = [
-        int(year)
-        for year in session.execute(
-            select(AdmissionScore.year).where(AdmissionScore.year.isnot(None)).distinct().order_by(AdmissionScore.year)
-        )
-        .scalars()
-        .all()
-    ]
     scores_by_year = [
         {"year": int(year), "count": int(count)}
         for year, count in session.execute(
@@ -87,13 +87,26 @@ def get_overview(session: Session) -> dict[str, Any]:
             .order_by(AdmissionScore.year)
         ).all()
     ]
+    years = [row["year"] for row in scores_by_year]
+    counts_row = session.execute(
+        select(
+            select(func.count(School.id)).scalar_subquery().label("schools"),
+            select(func.count(Major.id)).scalar_subquery().label("majors"),
+            select(func.count(AdmissionScore.id)).scalar_subquery().label("admission_scores"),
+            select(func.count(EnrollmentPlan.id)).scalar_subquery().label("enrollment_plans"),
+            select(func.count(SubjectRanking.id)).scalar_subquery().label("subject_rankings"),
+            select(func.count(YiFenYiDuan.id)).scalar_subquery().label("score_rank_rows"),
+            select(func.count(func.distinct(AdmissionScore.school_id))).scalar_subquery().label("schools_with_scores"),
+            select(func.count(func.distinct(EnrollmentPlan.school_id))).scalar_subquery().label("schools_with_plans"),
+        )
+    ).one()
     counts = {
-        "schools": int(session.query(School).count()),
-        "majors": int(session.query(Major).count()),
-        "admission_scores": int(session.query(AdmissionScore).count()),
-        "enrollment_plans": int(session.query(EnrollmentPlan).count()),
-        "subject_rankings": int(session.query(SubjectRanking).count()),
-        "score_rank_rows": int(session.query(YiFenYiDuan).count()),
+        "schools": int(counts_row.schools),
+        "majors": int(counts_row.majors),
+        "admission_scores": int(counts_row.admission_scores),
+        "enrollment_plans": int(counts_row.enrollment_plans),
+        "subject_rankings": int(counts_row.subject_rankings),
+        "score_rank_rows": int(counts_row.score_rank_rows),
     }
     snapshot = session.query(DatasetSnapshot).order_by(DatasetSnapshot.id.desc()).first()
     return {
@@ -108,12 +121,8 @@ def get_overview(session: Session) -> dict[str, Any]:
         "school_types": _distinct_strings(session, School.school_type),
         "subject_types": _distinct_strings(session, AdmissionScore.subject_type),
         "scores_by_year": scores_by_year,
-        "schools_with_scores": int(
-            session.execute(select(func.count(func.distinct(AdmissionScore.school_id)))).scalar_one()
-        ),
-        "schools_with_plans": int(
-            session.execute(select(func.count(func.distinct(EnrollmentPlan.school_id)))).scalar_one()
-        ),
+        "schools_with_scores": int(counts_row.schools_with_scores),
+        "schools_with_plans": int(counts_row.schools_with_plans),
         "latest_admission_year": years[-1] if years else None,
         "snapshot": _snapshot_dict(snapshot),
     }
