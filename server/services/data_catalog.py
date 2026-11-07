@@ -96,12 +96,8 @@ def get_overview(session: Session) -> dict[str, Any]:
             select(func.count(EnrollmentPlan.id)).scalar_subquery().label("enrollment_plans"),
             select(func.count(SubjectRanking.id)).scalar_subquery().label("subject_rankings"),
             select(func.count(YiFenYiDuan.id)).scalar_subquery().label("score_rank_rows"),
-            select(func.count(func.distinct(AdmissionScore.school_id)))
-            .scalar_subquery()
-            .label("schools_with_scores"),
-            select(func.count(func.distinct(EnrollmentPlan.school_id)))
-            .scalar_subquery()
-            .label("schools_with_plans"),
+            select(func.count(func.distinct(AdmissionScore.school_id))).scalar_subquery().label("schools_with_scores"),
+            select(func.count(func.distinct(EnrollmentPlan.school_id))).scalar_subquery().label("schools_with_plans"),
         )
     ).one()
     counts = {
