@@ -116,8 +116,7 @@ def test_recovery_budget_and_untrusted_profile_are_rejected(tmp_path):
 def test_atomic_pending_quota_prevents_unbounded_task_creation(tmp_path):
     store = SyntheticTaskRunStore(tmp_path / "journal.db")
     records = [
-        store.create(sample(), "deterministic", "sample-operator", f"quota-request-{index:02}")
-        for index in range(8)
+        store.create(sample(), "deterministic", "sample-operator", f"quota-request-{index:02}") for index in range(8)
     ]
     assert len({row["run_id"] for row in records}) == 8
     # Idempotent replay is still permitted at the quota ceiling.
