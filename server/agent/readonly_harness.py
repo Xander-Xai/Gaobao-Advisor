@@ -107,8 +107,10 @@ class HarnessResult:
 def _valid_parameters(arguments: Any, expected: dict[str, type]) -> bool:
     if not isinstance(arguments, dict) or set(arguments) != set(expected):
         return False
-    return all(type(arguments[key]) is dtype and (not isinstance(arguments[key], str) or 0 < len(arguments[key]) <= 120)
-               for key, dtype in expected.items())
+    return all(
+        type(arguments[key]) is dtype and (not isinstance(arguments[key], str) or 0 < len(arguments[key]) <= 120)
+        for key, dtype in expected.items()
+    )
 
 
 def _usage_value(value: Any) -> int | None:
@@ -131,8 +133,10 @@ def run_readonly_agent(
         raise ValueError("Task must be a non-empty string <= 2000 characters")
     if not tools or set(tools) != {tool.name for tool in tools.values()}:
         raise ValueError("Explicit nonempty tool allowlist with matching names required")
-    if any(not tool.parameters or any(dtype not in (str, int) for dtype in tool.parameters.values())
-           for tool in tools.values()):
+    if any(
+        not tool.parameters or any(dtype not in (str, int) for dtype in tool.parameters.values())
+        for tool in tools.values()
+    ):
         raise ValueError("Only strict string/integer argument schemas are supported")
 
     schemas = {name: {arg: dtype.__name__ for arg, dtype in tool.parameters.items()} for name, tool in tools.items()}
@@ -235,17 +239,27 @@ def run_readonly_agent(
             break
         sources.update(refs)
         observation = json.dumps(result, ensure_ascii=False, sort_keys=True, default=str)
-        history.append({
-            "tool": spec.name,
-            "observation": observation[: limits.max_observation_chars],
-            "source_ids": refs,
-        })
+        history.append(
+            {
+                "tool": spec.name,
+                "observation": observation[: limits.max_observation_chars],
+                "source_ids": refs,
+            }
+        )
         while len(json.dumps(history, ensure_ascii=False)) > limits.max_context_chars and len(history) > 1:
             history.pop(0)
             evictions += 1
         peak_chars = max(peak_chars, len(json.dumps(history, ensure_ascii=False)))
-        trace.append({"step": step, "kind": "tool", "tool": spec.name, "result": "ok",
-                      "observed_source_count": len(refs), "elapsed_ms": round((time.monotonic() - start) * 1000, 2)})
+        trace.append(
+            {
+                "step": step,
+                "kind": "tool",
+                "tool": spec.name,
+                "result": "ok",
+                "observed_source_count": len(refs),
+                "elapsed_ms": round((time.monotonic() - start) * 1000, 2),
+            }
+        )
     else:
         reason = "step_budget_exhausted"
 
