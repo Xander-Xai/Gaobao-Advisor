@@ -12,7 +12,14 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from server.agent.readonly_harness import Decision, HarnessLimits, HarnessResult, Planner, ReadOnlyTool, run_readonly_agent
+from server.agent.readonly_harness import (
+    Decision,
+    HarnessLimits,
+    HarnessResult,
+    Planner,
+    ReadOnlyTool,
+    run_readonly_agent,
+)
 from server.agent.readonly_tools import _require_demo_database, synthetic_readonly_tools
 
 PROFILE = "SYNTHETIC_DEMO"
