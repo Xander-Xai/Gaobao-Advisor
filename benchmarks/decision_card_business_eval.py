@@ -185,6 +185,8 @@ def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str,
         # without negative evidence must not be reported as task success.
         if card.get("observed_negative_evidence_count", 0) < 1:
             errors.append("negative_evidence_not_observed")
+        if card.get("reason") != "explicit_abstention":
+            errors.append("runtime_failure_not_valid_abstention")
     else:
         schools = card.get("schools")
         refs = card.get("evidence_ids")
@@ -230,6 +232,8 @@ def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -
                 "safe_abstain": (
                     case["expected_status"] == "needs_review"
                     and card["status"] == "needs_review"
+                    and card["reason"] == "explicit_abstention"
+                    and card.get("observed_negative_evidence_count", 0) >= 1
                     and not card["schools"]
                     and not card["evidence_ids"]
                 ),
@@ -295,7 +299,8 @@ def main(argv: list[str] | None = None) -> int:
             timeout=20.0,
             max_retries=0,
         )
-        planner_factory = lambda profile: DecisionCardModelPlanner(client, args.model, profile)
+        def planner_factory(profile: DecisionCardProfile) -> DecisionCardModelPlanner:
+            return DecisionCardModelPlanner(client, args.model, profile)
         controller = "REAL_MODEL_NOT_SCRIPTED"
     else:
         if args.permit_external_model or args.model:
