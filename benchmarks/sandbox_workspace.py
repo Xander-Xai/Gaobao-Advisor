@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import secrets
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 _IMAGE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _WORKSPACE_MARKER = ".synthetic_workspace"
