@@ -71,3 +71,16 @@ def test_authorized_operator_reaches_actual_harness_adapter(admin_client, monkey
     assert response.status_code == 200, response.text
     assert captured == [(SCHOOL_A, SCHOOL_B, MAJOR)]
     assert response.json()["planner"] == "DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM"
+
+
+def test_operator_can_discover_reproducible_synthetic_example(admin_client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "true")
+    token = login(admin_client, "operator")
+    response = admin_client.get(
+        "/api/v1/admin/agent-experiments/example",
+        headers=auth_header(token),
+    )
+    assert response.status_code == 200
+    assert response.json()["data_profile"] == "SYNTHETIC_DEMO"
+    assert response.json()["request"] == _payload()
