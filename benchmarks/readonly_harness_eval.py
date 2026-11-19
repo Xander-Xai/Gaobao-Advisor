@@ -67,6 +67,35 @@ def _faulted_tools(tools: dict[str, ReadOnlyTool], case: dict[str, Any]) -> dict
     return updated
 
 
+
+def _capturing_tools(
+    tools: dict[str, ReadOnlyTool], captured: list[dict[str, Any]]
+) -> dict[str, ReadOnlyTool]:
+    """Observe real outputs for independent fact oracles, never export values."""
+    wrapped: dict[str, ReadOnlyTool] = {}
+    for name, spec in tools.items():
+
+        def capture(args: dict[str, Any], _handler=spec.handler, _name=name) -> dict[str, Any]:
+            result = _handler(args)
+            captured.append({"tool": _name, "result": result})
+            return result
+
+        wrapped[name] = replace(spec, handler=capture)
+    return wrapped
+
+
+def fact_oracle_matches(expected: list[dict[str, Any]], observed: list[dict[str, Any]]) -> bool:
+    """Check factual fields against separately authored synthetic fixture labels."""
+    return all(
+        any(
+            actual["tool"] == fact["tool"]
+            and all(actual["result"].get(key) == val for key, val in fact.items() if key != "tool")
+            for actual in observed
+        )
+        for fact in expected
+    )
+
+
 def load_suite(path: Path = _CASES_PATH) -> list[dict[str, Any]]:
     cases = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(cases, list) or not cases or len(cases) > 100:
@@ -93,22 +122,26 @@ def run_suite(cases: list[dict[str, Any]]) -> dict[str, Any]:
     tools = synthetic_readonly_tools()
     results: list[dict[str, Any]] = []
     for case in cases:
+        observed_facts: list[dict[str, Any]] = []
         result = run_readonly_agent(
             case["task"],
             ScriptedController(case["script"]),
-            _faulted_tools(tools, case),
+            _capturing_tools(_faulted_tools(tools, case), observed_facts),
         )
         expected = case["expect"]
+        facts_passed = fact_oracle_matches(case.get("expected_facts", []), observed_facts)
         passed = (
             result.status == expected["status"]
             and result.reason == expected["reason"]
             and result.tool_sequence == expected["tool_sequence"]
             and len(result.evidence_ids) >= expected["min_evidence"]
+            and facts_passed
         )
         results.append(
             {
                 "case_id": case["id"],
                 "passed": passed,
+                "fact_oracle_passed": facts_passed,
                 "expected_status": expected["status"],
                 "observed": result.public_report(),
             }
