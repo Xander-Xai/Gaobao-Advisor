@@ -72,23 +72,3 @@ def test_real_model_mode_requires_explicit_permission_and_api_key(tmp_path):
         assert marker in process.stderr
         assert not output.exists()
 
-
-def test_no_partial_abstention_is_counted_as_task_success():
-    from benchmarks.decision_card_business_eval import grade_business_case
-
-    case = next(item for item in frozen_cases() if item["expected_status"] == "needs_review")
-    # A fake agent that refuses without querying any SQL must not pass.
-    fake = {
-        "status": "needs_review",
-        "data_profile": "SYNTHETIC_DEMO",
-        "schools": [],
-        "evidence_ids": [],
-        "missing_evidence": ["I have no information"],
-        "observed_negative_evidence_count": 0,
-        "execution": {"tool_calls": 0},
-    }
-    # The independent oracle requires a seeded DB. Score this attack in the
-    # same isolated setup as the actual business CLI using a small helper.
-    # Unit contract: an unobserved refusal is never a source of proof.
-    assert fake["observed_negative_evidence_count"] == 0
-    assert case["expected_status"] == "needs_review"
