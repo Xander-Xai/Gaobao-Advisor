@@ -200,9 +200,7 @@ def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str,
                     break
                 if len(item.get("evidence_ids", [])) != 2:
                     errors.append("school_sources_invalid")
-            expected_all = {
-                f"synthetic:major:{hashlib.sha256(profile.major.encode()).hexdigest()[:12]}"
-            }
+            expected_all = {f"synthetic:major:{hashlib.sha256(profile.major.encode()).hexdigest()[:12]}"}
             for oracle_row in rows.values():
                 expected_all.update(oracle_row["evidence_ids"])
             if len(set(refs)) != 5 or set(refs) != expected_all:
@@ -262,7 +260,9 @@ def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -
         "total_tool_calls": sum(item["tool_calls"] for item in reports),
         "total_model_steps": sum(item["model_steps"] for item in reports),
         "provider_prompt_tokens": (
-            sum(item["prompt_tokens"] for item in reports) if all(item["prompt_tokens"] is not None for item in reports) else None
+            sum(item["prompt_tokens"] for item in reports)
+            if all(item["prompt_tokens"] is not None for item in reports)
+            else None
         ),
         "provider_completion_tokens": (
             sum(item["completion_tokens"] for item in reports)
@@ -301,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         def planner_factory(profile: DecisionCardProfile) -> DecisionCardModelPlanner:
             return DecisionCardModelPlanner(client, args.model, profile)
+
         controller = "REAL_MODEL_NOT_SCRIPTED"
     else:
         if args.permit_external_model or args.model:
