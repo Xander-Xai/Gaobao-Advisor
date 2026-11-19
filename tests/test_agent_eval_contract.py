@@ -19,15 +19,19 @@ def test_injection_trace_passes_without_leaking_content():
 
 
 def test_missing_required_node_is_a_real_failure():
-    grade = grade_case({"id": "synthetic-1", "expect": {"required_nodes": ["rag_retrieve"]}}, {"trace": []})
+    grade = grade_case(
+        {"id": "synthetic-1", "expect": {"required_nodes": ["rag_retrieve"]}},
+        {"trace": []},
+    )
     assert grade["passed"] is False
     assert grade["failure_codes"] == ["required_node_missing"]
 
 
 def test_failed_memory_is_not_mistaken_for_success():
-    grade = grade_case({"id": "synthetic-2", "expect": {"scene": "gaokao"}}, {
-        "scene": "gaokao", "trace": [{"node": "memory_update", "event": "persist_failed", "error": "credentials"}]
-    })
+    grade = grade_case(
+        {"id": "synthetic-2", "expect": {"scene": "gaokao"}},
+        {"scene": "gaokao", "trace": [{"node": "memory_update", "event": "persist_failed", "error": "credentials"}]},
+    )
     assert "memory_persistence_failed" in grade["failure_codes"]
     assert "credentials" not in repr(grade)
 
