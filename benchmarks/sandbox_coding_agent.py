@@ -46,7 +46,7 @@ _TASKS = {
     },
 }
 
-_TEST_RUNNER = '''import importlib.util
+_TEST_RUNNER = """import importlib.util
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("synthetic_solution", "/workspace/solution.py")
@@ -55,7 +55,7 @@ spec.loader.exec_module(module)
 {oracle}
 Path("/workspace/artifact.txt").write_text("synthetic tests passed")
 print("SYNTHETIC_WORKSPACE_PASS")
-'''
+"""
 
 
 class ScriptedRepairPlanner:
@@ -149,7 +149,9 @@ def run_repair(
                 actions.append("test")
                 result = run_sandbox_probe(image_id, work)
                 last_test_pass = result["passed"] and (work / "artifact.txt").is_file()
-                observations.append({"kind": "test", "passed": last_test_pass, "reason": result.get("error", "completed")})
+                observations.append(
+                    {"kind": "test", "passed": last_test_pass, "reason": result.get("error", "completed")}
+                )
                 trace.append({"step": index, "tool": "test", "result": "pass" if last_test_pass else "fail"})
             elif action.kind == "finish":
                 if last_test_pass:
@@ -183,10 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--image", required=True)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv)
-    reports = [
-        run_repair(name, args.image, ScriptedRepairPlanner(task["correct"]))
-        for name, task in _TASKS.items()
-    ]
+    reports = [run_repair(name, args.image, ScriptedRepairPlanner(task["correct"])) for name, task in _TASKS.items()]
     for row in reports:
         row["controller"] = "SCRIPTED_NOT_LLM"
     summary = {
