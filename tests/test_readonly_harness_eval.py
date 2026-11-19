@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from benchmarks.readonly_harness_eval import load_suite
+from benchmarks.readonly_harness_eval import fact_oracle_matches, load_suite
 from server.agent.readonly_tools import synthetic_readonly_tools
 
 
@@ -20,8 +20,19 @@ def test_offline_suite_has_30_independent_declared_oracles():
     cases = load_suite()
     assert len(cases) == 30
     assert len({case["id"] for case in cases}) == 30
+    assert sum(bool(case.get("expected_facts")) for case in cases) == 20
     assert sum(case["expect"]["status"] == "completed" for case in cases) == 22
     assert sum(case["expect"]["status"] == "blocked" for case in cases) == 8
+
+
+def test_independent_fact_oracle_rejects_plausible_but_wrong_school_location():
+    expected = [{"tool": "school_lookup", "school_name": "北辰示例科技大学（合成）", "province": "示例省·甲"}]
+    correct = [{"tool": "school_lookup", "result": {"school_name": "北辰示例科技大学（合成）",
+                                                   "province": "示例省·甲"}}]
+    wrong = [{"tool": "school_lookup", "result": {"school_name": "北辰示例科技大学（合成）",
+                                                 "province": "示例省·丁"}}]
+    assert fact_oracle_matches(expected, correct)
+    assert not fact_oracle_matches(expected, wrong)
 
 
 def test_duplicate_id_fails_before_agent_execution(tmp_path):
