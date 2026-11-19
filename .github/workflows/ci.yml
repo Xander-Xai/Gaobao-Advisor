@@ -43,6 +43,19 @@ jobs:
         run: python -m scripts.seed_demo_data --db data/demo.db --reset
       - name: Run tests with coverage
         run: python -m pytest tests/ --tb=short --cov-fail-under=70
+      - name: Generate synthetic Agent Harness and draft Ground Truth evidence
+        if: matrix.python-version == '3.11'
+        run: |
+          mkdir -p /tmp/gaobao-agent-evidence
+          python -m benchmarks.readonly_harness_eval --out /tmp/gaobao-agent-evidence/readonly-policy-30cases.json
+          python -m benchmarks.groundtruth_pipeline --out /tmp/gaobao-agent-evidence/groundtruth-pending-review.json
+      - name: Upload synthetic Agent Harness evidence
+        if: matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-harness-synthetic-evidence
+          path: /tmp/gaobao-agent-evidence/*.json
+          retention-days: 7
       - name: Upload coverage report
         if: matrix.python-version == '3.11'
         uses: actions/upload-artifact@v4
@@ -243,6 +256,16 @@ jobs:
           assert all(r["test_runs"] == 2 for r in report["results"]), report
           print("coding sandbox smoke passed (scripted controller; real Docker)")
           PY
+      - name: Upload restricted Docker sandbox evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-workspace-sandbox-evidence
+          path: |
+            /tmp/gaobao-harness-sandbox.json
+            /tmp/gaobao-coding-agent.json
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Start without any API key
         run: |
           docker run -d --name gb-advisor -p 8000:8000 gb-advisor:ci
