@@ -12,6 +12,7 @@ import json
 import re
 import secrets
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -103,8 +104,12 @@ def run_sandbox_probe(
         passed = completed.returncode == 0 and "SYNTHETIC_WORKSPACE_PASS" in completed.stdout
         report = {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": passed, "exit_code": completed.returncode}
         if completed.returncode == 125:
-            # Docker launch failed before the synthetic probe; do not export raw
-            # Docker stderr (it could contain host paths or private metadata).
+            # Docker launch failed before execution. Show only a short CI-only
+            # diagnostic with the synthetic scratch path and container name
+            # removed. The exported JSON stays strictly allowlisted.
+            message = completed.stderr[-500:].replace(str(workspace.resolve()), "<synthetic-scratch>")
+            message = message.replace(name, "<container>")
+            print("sandbox Docker launch diagnostic: " + message, file=sys.stderr)
             report["error"] = "docker_launch_failed"
         return report
     except subprocess.TimeoutExpired:
