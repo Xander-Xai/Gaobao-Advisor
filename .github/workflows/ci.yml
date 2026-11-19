@@ -220,6 +220,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t gb-advisor:ci .
+      - name: Verify synthetic workspace Docker sandbox
+        run: |
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+          python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/gaobao-harness-sandbox.json
+          python - <<'PY'
+          import json
+          record = json.load(open("/tmp/gaobao-harness-sandbox.json"))
+          assert record["sandbox"] == "DOCKER_RESTRICTED_SYNTHETIC", record
+          assert record["passed"] and record["scratch_artifact_created"], record
+          print("sandbox isolation smoke passed")
+          PY
       - name: Start without any API key
         run: |
           docker run -d --name gb-advisor -p 8000:8000 gb-advisor:ci
