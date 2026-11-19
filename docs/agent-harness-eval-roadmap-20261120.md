@@ -1,6 +1,6 @@
 # Gaobao-Advisor → 可评测 Agent 工程项目：实施与简历证据门禁（2026-11-20）
 
-> 状态：候选实施方案；本分支仅提交 **P0 静态 Trace 评分契约与单元测试**。不得把规划中的能力写进投递简历。默认 SYNTHETIC_DEMO，非真实高考推荐产品。
+> 状态：候选实施方案；本分支已提交 **P0 静态 Trace 评分契约、单元测试与 P1 最小 3 条合成 Graph 回放入口**；仍缺正式规模化 Eval、完整故障注入与模型 Token 指标。不得把规划中的能力写进投递简历。默认 SYNTHETIC_DEMO，非真实高考推荐产品。
 
 ## 1. 为什么不直接把 LangGraph 换成 Claude Code / Pi
 
@@ -25,8 +25,9 @@
 - 契约单测验证正常/负控制/隐私/失败/指标边界。单测不等于真实 Graph 全链路 Eval。
 - **验收**：`pytest tests/test_agent_eval_contract.py -q --override-ini addopts=''`，且目标仓 CI 全绿。实际 CI 以 PR 检查为准。
 
-### P1（待开发）：真实 Graph 离线回放 + 基线数据集
+### P1（3 条 smoke 回放入口已实现，规模化验收待开发）：真实 Graph 离线回放 + 基线数据集
 
+- 目前已提供 `python -m benchmarks.agent_eval_replay --out /tmp/gaobao-agent-eval.json`，采用临时 SQLite、拦截出站 socket、只输出白名单评分字段；**真实 Graph 回放的成功率尚未经本轮全链路运行验证**。
 - **严格隔离数据库**：固定合成种子，仅在单独 SQLite 临时路径运行，禁止连接现有 MySQL/生产库；无网络且无模型 API Key 的 CI Job。
 - 先建立最小 30 条人工验收规范（画像/SQL、知识/引用、注入/拒答、检索损坏、续聊）；每条包括输入、可验证期望、失败标签，避免合成“标准答案”未经审核就当真值。
 - 通过现有 `build_advisor_graph().invoke` 获取**真实 Trace**，使用 P0 契约自动评分，保存无敏感字段的 JSON 结果、运行配置与 commit SHA。
