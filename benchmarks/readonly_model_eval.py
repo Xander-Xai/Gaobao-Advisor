@@ -50,11 +50,13 @@ def run_model_cases(
         goal_path = set(expected["tool_sequence"]).issubset(set(result.tool_sequence))
         passed = result.status == "completed" and len(result.evidence_ids) >= expected["min_evidence"] and goal_path
         facts = grade_structured_facts(result.answer, case.get("expected_facts", []), captured)
+        verified_task_passed = passed and facts["status"] == "SCORED" and facts["passed"] is True
         reports.append(
             {
                 "case_id": case["id"],
                 "split": case.get("split", "unassigned"),
                 "goal_path_passed": passed,
+                "verified_task_passed": verified_task_passed,
                 "answer_facts": facts,
                 "observed": result.public_report(),
             }
@@ -88,6 +90,10 @@ def run_model_cases(
             for row in reports
         ],
         "goal_path_passed": sum(item["goal_path_passed"] for item in reports),
+        "verified_task_passed": sum(item["verified_task_passed"] for item in reports),
+        "verified_task_pass_rate": (
+            round(sum(item["verified_task_passed"] for item in reports) / len(reports), 4) if reports else None
+        ),
         "answer_fact_scored_cases": len(scored),
         "answer_fact_passed": sum(r["answer_facts"]["passed"] is True for r in scored),
         "answer_fact_pass_rate": (
@@ -162,8 +168,11 @@ def main(argv: list[str] | None = None) -> int:
         engine.dispose()
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"model_tool_goal_passed={report['goal_path_passed']}/{report['cases']}")
-    return 0 if report["goal_path_passed"] == report["cases"] else 1
+    print(
+        f"model_verified_task_passed={report['verified_task_passed']}/{report['cases']} "
+        f"(tool_path={report['goal_path_passed']}/{report['cases']})"
+    )
+    return 0 if report["verified_task_passed"] == report["cases"] else 1
 
 
 if __name__ == "__main__":
