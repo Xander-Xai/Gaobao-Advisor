@@ -1,0 +1,6 @@
+# One verified false-positive from an earlier synthetic test fixture only.
+# Commit 2c705491f... included a deliberately fabricated local test password.
+# The current test source no longer contains the complete literal.
+# Keep this exact commit/rule/line fingerprint so all other secret findings
+# continue to fail CI. Never add broad repository/path/key-pattern exemptions.
+2c705491f51089efbb67b958948b6f2152895846:tests/test_agent_research_real_api_e2e.py:generic-api-key:41
