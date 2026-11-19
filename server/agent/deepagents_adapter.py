@@ -49,9 +49,7 @@ def _reason_is_negative(tool: str, observation: dict[str, Any], profile: Decisio
         return True
     if tool == "plan_lookup":
         rule = observation.get("subject_requirement")
-        return rule not in {"不限", "物理必选"} or (
-            rule == "物理必选" and profile.subject_type != "物理类"
-        )
+        return rule not in {"不限", "物理必选"} or (rule == "物理必选" and profile.subject_type != "物理类")
     return False
 
 
@@ -117,12 +115,14 @@ def run_deepagents_research(
             raise ValueError("SQL result not from synthetic dataset")
         with lock:
             observations.append((tool, observation))
-            trace.append({
-                "kind": "tool",
-                "tool": tool,
-                "result": "ok",
-                "evidence_count": len(observation.get("source_ids", [])),
-            })
+            trace.append(
+                {
+                    "kind": "tool",
+                    "tool": tool,
+                    "result": "ok",
+                    "evidence_count": len(observation.get("source_ids", [])),
+                }
+            )
         # No raw SQL, user credentials, environment variables or local paths.
         return json.dumps(observation, ensure_ascii=False, sort_keys=True)
 
@@ -215,10 +215,19 @@ def run_deepagents_research(
         register_harness_profile(
             model_id,
             HarnessProfile(
-                excluded_tools=frozenset({
-                    "ls", "glob", "grep", "write_file", "edit_file", "delete",
-                    "execute", "task", "write_todos",
-                }),
+                excluded_tools=frozenset(
+                    {
+                        "ls",
+                        "glob",
+                        "grep",
+                        "write_file",
+                        "edit_file",
+                        "delete",
+                        "execute",
+                        "task",
+                        "write_todos",
+                    }
+                ),
                 general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
             ),
         )
@@ -256,21 +265,18 @@ def run_deepagents_research(
         )
         file_data = {"content": ["SYNTHETIC_SKILL"], "created_at": ""}
 
-    query = (
-        "Research this frozen, fictional profile using read-only SQL tools only: "
-        + json.dumps(
-            {
-                "school_a": profile.school_a,
-                "school_b": profile.school_b,
-                "major": profile.major,
-                "province": profile.province,
-                "subject_type": profile.subject_type,
-                "score": profile.score,
-                "year": profile.year,
-                "synthetic_demo": True,
-            },
-            ensure_ascii=False,
-        )
+    query = "Research this frozen, fictional profile using read-only SQL tools only: " + json.dumps(
+        {
+            "school_a": profile.school_a,
+            "school_b": profile.school_b,
+            "major": profile.major,
+            "province": profile.province,
+            "subject_type": profile.subject_type,
+            "score": profile.score,
+            "year": profile.year,
+            "synthetic_demo": True,
+        },
+        ensure_ascii=False,
     )
     outcome = agent.invoke(
         {
@@ -280,14 +286,9 @@ def run_deepagents_research(
         config={"configurable": {"thread_id": task_id}, "recursion_limit": 24},
     )
     messages = outcome.get("messages", []) if isinstance(outcome, dict) else []
-    used = [
-        getattr(msg, "usage_metadata", None)
-        for msg in messages
-        if getattr(msg, "type", "") == "ai"
-    ]
+    used = [getattr(msg, "usage_metadata", None) for msg in messages if getattr(msg, "type", "") == "ai"]
     known = bool(used) and all(
-        isinstance(v, dict) and type(v.get("input_tokens")) is int and type(v.get("output_tokens")) is int
-        for v in used
+        isinstance(v, dict) and type(v.get("input_tokens")) is int and type(v.get("output_tokens")) is int for v in used
     )
     input_tokens = sum(v["input_tokens"] for v in used) if known else None
     output_tokens = sum(v["output_tokens"] for v in used) if known else None
@@ -300,9 +301,7 @@ def run_deepagents_research(
     # AI chat text is *never* accepted as evidence or as approval.
     result = HarnessResult(
         status="completed" if successful else ("abstained" if abstained else "blocked"),
-        reason="evidence_bound_finish" if successful else (
-            "explicit_abstention" if abstained else "unverified_finish"
-        ),
+        reason="evidence_bound_finish" if successful else ("explicit_abstention" if abstained else "unverified_finish"),
         answer=json.dumps({"synthetic_demo": True, "sources": sources}) if successful else "",
         evidence_ids=sources,
         model_steps=len(used),
