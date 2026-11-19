@@ -51,7 +51,7 @@ def execute_approved_run(
     current = store.get(run_id)
     engine = current["engine"]
     _gate_execution(engine, permit_external_model=permit_external_model, model=model)
-    claimed, token = store.claim(run_id, lease_seconds=120)
+    claimed, token = store.claim(run_id, lease_seconds=600 if engine == "deepagents" else 120)
     profile = DecisionCardProfile(**claimed["payload"]["profile"])
     try:
         if engine == "deepagents":
