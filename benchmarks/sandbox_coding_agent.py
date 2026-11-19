@@ -60,6 +60,71 @@ print("SYNTHETIC_WORKSPACE_PASS")
 """
 
 
+_ALLOWED_EXPR_NODES = (
+    ast.BinOp,
+    ast.Add,
+    ast.Sub,
+    ast.Name,
+    ast.Load,
+    ast.Constant,
+    ast.Call,
+)
+
+
+def validate_synthetic_patch(source: str, task_id: str) -> None:
+    """Accept only a tiny arithmetic function, not arbitrary executable Python.
+
+    This is intentionally a constrained coding *exercise*, not a general
+    untrusted-repository executor. The sandbox is defense in depth.
+    """
+    if task_id not in _TASKS:
+        raise ValueError("Unsupported synthetic task")
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        raise SyntaxError("Patch syntax invalid") from exc
+    if len(tree.body) != 1 or not isinstance(tree.body[0], ast.FunctionDef):
+        raise ValueError("Patch must be one function")
+    function = tree.body[0]
+    signatures = {"addition": ("add", ("a", "b")), "clamp": ("clamp", ("value", "low", "high"))}
+    name, parameters = signatures[task_id]
+    if (
+        function.name != name
+        or function.decorator_list
+        or function.returns is not None
+        or len(function.body) != 1
+        or not isinstance(function.body[0], ast.Return)
+        or function.args.posonlyargs
+        or function.args.kwonlyargs
+        or function.args.vararg is not None
+        or function.args.kwarg is not None
+        or function.args.defaults
+        or function.args.kw_defaults
+        or tuple(arg.arg for arg in function.args.args) != parameters
+        or any(arg.annotation is not None for arg in function.args.args)
+    ):
+        raise ValueError("Patch signature or body is not allowlisted")
+    expr = function.body[0].value
+    for node in ast.walk(expr):
+        if not isinstance(node, _ALLOWED_EXPR_NODES):
+            raise ValueError("Patch contains disallowed expression")
+        if isinstance(node, ast.BinOp) and not isinstance(node.op, (ast.Add, ast.Sub)):
+            raise ValueError("Patch contains disallowed binary operation")
+        if isinstance(node, ast.Name) and node.id not in {*parameters, "min", "max"}:
+            raise ValueError("Patch references an unapproved name")
+        if isinstance(node, ast.Call):
+            if (
+                not isinstance(node.func, ast.Name)
+                or node.func.id not in {"min", "max"}
+                or len(node.args) != 2
+                or node.keywords
+            ):
+                raise ValueError("Patch attempts an unapproved function call")
+        if isinstance(node, ast.Constant) and (type(node.value) is not int or abs(node.value) > 1000):
+            raise ValueError("Patch has an unapproved constant")
+
+
+
 class ScriptedRepairPlanner:
     """Deterministic test fixture. No model is being evaluated."""
 
@@ -148,9 +213,12 @@ def run_repair(
                     reason = "invalid_patch"
                     break
                 try:
-                    ast.parse(action.content)
+                    validate_synthetic_patch(action.content, task_id)
                 except SyntaxError:
                     reason = "patch_syntax_error"
+                    break
+                except ValueError:
+                    reason = "unsafe_patch_ast"
                     break
                 new_digest = hashlib.sha256(action.content.encode("utf-8")).hexdigest()
                 if new_digest == last_patch_hash:
