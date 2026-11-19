@@ -71,4 +71,3 @@ def test_real_model_mode_requires_explicit_permission_and_api_key(tmp_path):
         assert process.returncode != 0
         assert marker in process.stderr
         assert not output.exists()
-
