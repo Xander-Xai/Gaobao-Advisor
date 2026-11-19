@@ -1,0 +1,278 @@
+"""Reproducible synthetic business-task evaluation: deterministic baseline vs opt-in LLM.
+
+Run without paid API access:
+    python -m benchmarks.decision_card_business_eval --out /tmp/gaobao-business-baseline.json
+
+Actual model evaluation requires an explicit model, key and authorization:
+    python -m benchmarks.decision_card_business_eval --mode model \
+        --model YOUR_MODEL_ID --permit-external-model --max-cases 8 \
+        --out /tmp/gaobao-business-model.json
+
+The suite is fixture-authored and independently checked against the synthetic
+database; it is NOT a reviewed ground-truth set or real-world admissions test.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import tempfile
+import time
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any
+
+from scripts.seed_demo_data import DEMO_MAJORS, DEMO_SCHOOLS, DEMO_YEAR
+from server.agent.synthetic_decision_card import DecisionCardProfile, build_synthetic_decision_card
+
+_SCHOOL_A = DEMO_SCHOOLS[0][0]
+_SCHOOL_B = DEMO_SCHOOLS[6][0]
+_SCHOOL_MISSING = DEMO_SCHOOLS[1][0]
+_MAJOR = DEMO_MAJORS[0][0]
+
+# Independently authored expectation labels: not learned from the runtime.
+_CASES: tuple[tuple[str, str, str, str, str, int, str], ...] = (
+    ("holdout-complete-a", "holdout", _SCHOOL_A, _SCHOOL_B, "示例省·甲", 550, "evidence_complete_historical_only"),
+    ("holdout-complete-b", "holdout", _SCHOOL_B, _SCHOOL_A, "示例省·乙", 560, "evidence_complete_historical_only"),
+    ("holdout-missing-plan", "holdout", _SCHOOL_A, _SCHOOL_B, "示例省·丙", 560, "needs_review"),
+    ("holdout-no-school", "holdout", _SCHOOL_A, _SCHOOL_MISSING, "示例省·甲", 550, "needs_review"),
+    ("develop-complete-a", "development", _SCHOOL_A, _SCHOOL_B, "示例省·甲", 520, "evidence_complete_historical_only"),
+    ("develop-complete-b", "development", _SCHOOL_B, _SCHOOL_A, "示例省·乙", 610, "evidence_complete_historical_only"),
+    ("develop-no-plan", "development", _SCHOOL_A, _SCHOOL_B, "示例省·丁", 520, "needs_review"),
+    ("develop-missing", "development", _SCHOOL_MISSING, _SCHOOL_B, "示例省·乙", 530, "needs_review"),
+)
+
+
+def frozen_cases() -> list[dict[str, Any]]:
+    """Cases are explicitly labeled fictional, with a stable suite digest."""
+    out: list[dict[str, Any]] = []
+    for case_id, split, school_a, school_b, province, score, expected in _CASES:
+        item = {
+            "case_id": case_id,
+            "split": split,
+            "profile": asdict(
+                DecisionCardProfile(
+                    school_a=school_a,
+                    school_b=school_b,
+                    major=_MAJOR,
+                    province=province,
+                    score=score,
+                    subject_type="物理类",
+                    year=DEMO_YEAR,
+                )
+            ),
+            "expected_status": expected,
+            "data_profile": "SYNTHETIC_DEMO",
+        }
+        out.append(item)
+    return out
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
+def independent_sql_oracle(profile: DecisionCardProfile) -> tuple[str, dict[str, dict[str, Any]]]:
+    """Verify expected case outcome and SQL fields without asking the planner."""
+    from db.database import get_session
+    from db.models import AdmissionScore, EnrollmentPlan, Major, School
+
+    db = get_session()
+    details: dict[str, dict[str, Any]] = {}
+    try:
+        major = db.query(Major).filter(Major.name == profile.major).one()
+        fully_supported = True
+        for name in (profile.school_a, profile.school_b):
+            school = db.query(School).filter(School.name == name).one()
+            admissions = (
+                db.query(AdmissionScore)
+                .filter(
+                    AdmissionScore.school_id == school.id,
+                    AdmissionScore.major_id == major.id,
+                    AdmissionScore.province == profile.province,
+                    AdmissionScore.year == profile.year,
+                )
+                .all()
+            )
+            plans = (
+                db.query(EnrollmentPlan)
+                .filter(
+                    EnrollmentPlan.school_id == school.id,
+                    EnrollmentPlan.major_id == major.id,
+                    EnrollmentPlan.province == profile.province,
+                    EnrollmentPlan.year == profile.year,
+                )
+                .all()
+            )
+            if len(admissions) != 1 or len(plans) != 1:
+                fully_supported = False
+                continue
+            a, p = admissions[0], plans[0]
+            compatible = p.subject_requirement == "不限" or (
+                p.subject_requirement == "物理必选" and profile.subject_type == "物理类"
+            )
+            valid = (
+                compatible
+                and a.subject_type == profile.subject_type
+                and type(a.min_score) is int
+                and type(a.min_rank) is int
+                and a.min_rank > 0
+                and type(p.plan_count) is int
+                and p.plan_count > 0
+            )
+            fully_supported = fully_supported and valid
+            details[name] = {
+                "historical_min_score": a.min_score,
+                "historical_min_rank": a.min_rank,
+                "plan_count": p.plan_count,
+                "plan_subject_requirement": p.subject_requirement,
+                "historical_subject_type": a.subject_type,
+                "historical_score_difference": profile.score - a.min_score if a.min_score is not None else None,
+            }
+        return ("evidence_complete_historical_only" if fully_supported else "needs_review"), details
+    finally:
+        db.close()
+
+
+def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str, Any]:
+    profile = DecisionCardProfile(**case["profile"])
+    expected, rows = independent_sql_oracle(profile)
+    if expected != case["expected_status"]:
+        raise ValueError("Fixture label disagrees with independently queried synthetic ground truth")
+    errors: list[str] = []
+    if card.get("status") != expected:
+        errors.append("outcome_mismatch")
+    if card.get("data_profile") != "SYNTHETIC_DEMO":
+        errors.append("wrong_data_profile")
+    if expected == "needs_review":
+        if card.get("schools") or card.get("evidence_ids") or not card.get("missing_evidence"):
+            errors.append("unsafe_partial_decision")
+    else:
+        schools = card.get("schools")
+        refs = card.get("evidence_ids")
+        if not isinstance(schools, list) or len(schools) != 2 or not isinstance(refs, list) or len(refs) != 5:
+            errors.append("incomplete_evidence")
+        else:
+            for item in schools:
+                true_row = rows.get(item.get("school_name"))
+                if true_row is None or any(item.get(field) != value for field, value in true_row.items()):
+                    errors.append("factual_mismatch")
+                    break
+                if len(item.get("evidence_ids", [])) != 2:
+                    errors.append("school_sources_invalid")
+            if len(set(refs)) != 5 or not all(isinstance(ref, str) and ref.startswith("synthetic:") for ref in refs):
+                errors.append("source_contract_invalid")
+    return {"passed": not errors, "failure_codes": sorted(set(errors))}
+
+
+def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -> dict[str, Any]:
+    """Same cases and oracle for baseline or a supplied planner factory."""
+    reports = []
+    for case in cases:
+        profile = DecisionCardProfile(**case["profile"])
+        planner = planner_factory(profile) if planner_factory is not None else None
+        start = time.monotonic()
+        card = build_synthetic_decision_card(
+            profile,
+            planner=planner,
+            require_provider_usage=planner_factory is not None,
+        )
+        assessment = grade_business_case(case, card)
+        observed = card["execution"]
+        reports.append(
+            {
+                "case_id": case["case_id"],
+                "split": case["split"],
+                "passed": assessment["passed"],
+                "failure_codes": assessment["failure_codes"],
+                "status": card["status"],
+                "reason": card["reason"],
+                "elapsed_ms": round((time.monotonic() - start) * 1000, 2),
+                "tool_calls": observed["tool_calls"],
+                "model_steps": observed["model_steps"],
+                "prompt_tokens": observed["prompt_tokens"],
+                "completion_tokens": observed["completion_tokens"],
+                "tool_failures": observed["tool_failures"],
+                "history_evictions": observed["history_evictions"],
+            }
+        )
+    return {
+        "dataset_profile": "SYNTHETIC_DEMO",
+        "oracle": "SEPARATE_REAL_SQL_QUERY_NOT_MODEL_SELF_RATING",
+        "human_review_complete": False,
+        "dataset_sha256": _digest(cases),
+        "cases": len(reports),
+        "passed": sum(item["passed"] for item in reports),
+        "holdout_cases": sum(item["split"] == "holdout" for item in reports),
+        "holdout_passed": sum(item["passed"] for item in reports if item["split"] == "holdout"),
+        "total_tool_calls": sum(item["tool_calls"] for item in reports),
+        "total_model_steps": sum(item["model_steps"] for item in reports),
+        "provider_prompt_tokens": (
+            sum(item["prompt_tokens"] for item in reports) if all(item["prompt_tokens"] is not None for item in reports) else None
+        ),
+        "provider_completion_tokens": (
+            sum(item["completion_tokens"] for item in reports)
+            if all(item["completion_tokens"] is not None for item in reports)
+            else None
+        ),
+        "real_admissions_accuracy": "NOT_MEASURED",
+        "results": reports,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--mode", choices=("baseline", "model"), default="baseline")
+    parser.add_argument("--model", help="Explicit OpenAI-compatible model ID")
+    parser.add_argument("--permit-external-model", action="store_true")
+    parser.add_argument("--max-cases", type=int, default=8)
+    args = parser.parse_args(argv)
+    if not 1 <= args.max_cases <= 8:
+        parser.error("--max-cases must be 1..8")
+    if args.mode == "model":
+        if not args.permit_external_model or not args.model:
+            parser.error("Model evaluation requires --model and --permit-external-model")
+        if not os.environ.get("OPENAI_API_KEY"):
+            parser.error("OPENAI_API_KEY must be configured for explicit model evaluation")
+        from openai import OpenAI
+
+        from server.agent.decision_card_model_planner import DecisionCardModelPlanner
+
+        client = OpenAI(
+            api_key=os.environ["OPENAI_API_KEY"],
+            base_url=os.environ.get("OPENAI_API_BASE") or None,
+            timeout=20.0,
+            max_retries=0,
+        )
+        planner_factory = lambda profile: DecisionCardModelPlanner(client, args.model, profile)
+        controller = "REAL_MODEL_NOT_SCRIPTED"
+    else:
+        if args.permit_external_model or args.model:
+            parser.error("Baseline mode must not specify paid-model options")
+        planner_factory = None
+        controller = "DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM"
+    cases = frozen_cases()[: args.max_cases]
+    with tempfile.TemporaryDirectory(prefix="gaobao-business-eval-") as temp:
+        path = Path(temp) / "synthetic.sqlite"
+        os.environ["DATABASE_URL"] = f"sqlite:///{path}"
+        os.environ["ENABLE_OUTBOUND_FETCH"] = "false"
+        from scripts.seed_demo_data import seed_database
+
+        seed_database(db_path=path, reset=True)
+        report = run_cases(cases, planner_factory)
+        from db.database import engine
+
+        engine.dispose()
+    report["controller"] = controller
+    report["model_id"] = args.model if controller == "REAL_MODEL_NOT_SCRIPTED" else None
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"{controller}: verified_business_tasks={report['passed']}/{report['cases']}")
+    return 0 if report["passed"] == report["cases"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
