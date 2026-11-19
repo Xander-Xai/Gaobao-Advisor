@@ -24,9 +24,7 @@ def body(engine="deterministic", key="sample-idempotency-2026"):
     }
 
 
-def test_operator_creates_and_admin_approves_but_cannot_approve_own_task(
-    admin_client, monkeypatch, tmp_path
-):
+def test_operator_creates_and_admin_approves_but_cannot_approve_own_task(admin_client, monkeypatch, tmp_path):
     monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "true")
     monkeypatch.setenv("SYNTHETIC_TASKRUN_JOURNAL", str(tmp_path / "tasks.db"))
     operator = auth_header(login(admin_client, "operator"))
@@ -51,19 +49,12 @@ def test_operator_creates_and_admin_approves_but_cannot_approve_own_task(
     assert approved.json()["approved_by"] == "admin"
     assert admin_client.get(f"{PATH}/runs/{run_id}", headers=viewer).status_code == 403
 
-    own = admin_client.post(
-        f"{PATH}/runs", json=body(key="admin-self-request-2026"), headers=administrator
-    )
+    own = admin_client.post(f"{PATH}/runs", json=body(key="admin-self-request-2026"), headers=administrator)
     assert own.status_code == 201
-    assert (
-        admin_client.post(f"{PATH}/runs/{own.json()['run_id']}/approve", headers=administrator).status_code
-        == 409
-    )
+    assert admin_client.post(f"{PATH}/runs/{own.json()['run_id']}/approve", headers=administrator).status_code == 409
 
 
-def test_model_task_is_never_executable_from_browser_even_after_approval(
-    admin_client, monkeypatch, tmp_path
-):
+def test_model_task_is_never_executable_from_browser_even_after_approval(admin_client, monkeypatch, tmp_path):
     monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "true")
     monkeypatch.setenv("SYNTHETIC_TASKRUN_JOURNAL", str(tmp_path / "tasks.db"))
     operator = auth_header(login(admin_client, "operator"))
