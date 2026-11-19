@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from server.agent.synthetic_decision_card import DecisionCardProfile, build_synthetic_decision_card
+from server.agent.taskrun_receipt_verifier import verify_taskrun_receipt
 from server.agent.taskrun_store import SyntheticTaskRunStore
 
 
@@ -58,9 +59,9 @@ def execute_approved_run(
             card = agent_runner(profile, model, task_id=run_id)
         else:
             card = build_synthetic_decision_card(profile)
-        if card.get("data_profile") != "SYNTHETIC_DEMO":
-            raise ValueError("Agent returned non-synthetic output")
-        status = "SUCCEEDED" if card.get("status") == "evidence_complete_historical_only" else "NEEDS_REVIEW"
+        # Do not trust the runner's self-reported status or source labels.
+        # Re-read the approved fictional profile against SQL outside the Agent.
+        status = verify_taskrun_receipt(profile, card)
         failure = None if status == "SUCCEEDED" else "insufficient_verified_evidence"
         return store.finish(run_id, token, status, card, failure)
     except Exception:  # noqa: BLE001 - never persist model/SQL/stack trace errors
