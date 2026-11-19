@@ -316,12 +316,8 @@ def run_deepagents_research(
         tool_sequence=[tool for tool, _ in captured],
         trace=public_trace,
     )
-    card = compose_synthetic_decision_card(
-        profile, captured, result, planner_label="DEEPAGENTS_OPT_IN_REAL_MODEL"
-    )
-    card["execution"]["model_usage_source"] = (
-        "provider_usage_metadata" if known else "NOT_MEASURED"
-    )
+    card = compose_synthetic_decision_card(profile, captured, result, planner_label="DEEPAGENTS_OPT_IN_REAL_MODEL")
+    card["execution"]["model_usage_source"] = "provider_usage_metadata" if known else "NOT_MEASURED"
     card["execution"]["sandbox"] = "VIRTUAL_STATE_BACKEND_NO_SHELL"
     card["execution"]["external_model_executed"] = agent_factory is None
     # No model-generated final content is exposed to users or logs.
