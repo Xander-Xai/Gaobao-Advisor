@@ -47,7 +47,9 @@ def propose_bounded_changes(failure_codes: list[str]) -> list[dict[str, Any]]:
 def _indexed(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
     if result.get("controller") != "REAL_MODEL_NOT_SCRIPTED":
         raise ValueError("Paired optimization requires explicitly declared real-model runs")
-    cases = result.get("cases")
+    if result.get("groundtruth_review") != "REVIEW_DECLARED":
+        raise ValueError("Optimization requires an explicit reviewed dataset declaration")
+    cases = result.get("paired_cases")
     if not isinstance(cases, list) or not cases:
         raise ValueError("Missing paired result cases")
     indexed: dict[str, dict[str, Any]] = {}
