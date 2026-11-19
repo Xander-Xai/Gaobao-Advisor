@@ -23,6 +23,8 @@ _RUN_RE = re.compile(r"^syn_[0-9a-f]{32}$")
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,96}$")
 _ALLOWED_ENGINES = frozenset({"deterministic", "deepagents"})
 _MAX_ATTEMPTS = 2
+_MAX_OUTSTANDING_PER_OWNER = 8
+_MAX_TASK_JOURNAL_ROWS = 5000
 
 
 class TaskRunConflict(RuntimeError):
@@ -176,6 +178,16 @@ class SyntheticTaskRunStore:
                         raise TaskRunConflict("Idempotency key was used with different task details")
                     conn.commit()
                     return self._public(row)
+                outstanding = conn.execute(
+                    "SELECT COUNT(*) FROM synthetic_task_runs "
+                    "WHERE owner=? AND status IN ('PENDING_APPROVAL','APPROVED','RUNNING')",
+                    (owner,),
+                ).fetchone()[0]
+                if outstanding >= _MAX_OUTSTANDING_PER_OWNER:
+                    raise TaskRunConflict("Owner outstanding TaskRun quota reached")
+                total = conn.execute("SELECT COUNT(*) FROM synthetic_task_runs").fetchone()[0]
+                if total >= _MAX_TASK_JOURNAL_ROWS:
+                    raise TaskRunConflict("Synthetic TaskRun journal storage quota reached")
                 conn.execute(
                     "INSERT INTO synthetic_task_runs "
                     "(run_id,owner,idempotency_key,payload_hash,payload_json,engine,status,created_at,updated_at) "
