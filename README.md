@@ -33,6 +33,29 @@
 | 可重复 Eval | 30 条显式合成用例（22 正常、8 负控制）与 24 个独立院校/专业事实断言 |
 | 可选真实模型探针 | `benchmarks/readonly_model_eval.py`，必须显式授权网络和 API 费用，默认 CI 不运行 |
 
+### 有业务约束的合成考生决策卡（P4，默认关闭）
+
+这项增量把此前“查两所学校属于哪个省”的简单演示升级为**需要真实合成数据库多次查询、结果交叉验证和拒答**的任务。仍然属于运营台隔离实验，不面向真实考生。
+
+**输入**：两所事先声明的虚构院校、一个虚构专业、虚构省份、合成分数、物理类/历史类与最新合成年份。**工具链**：`major_lookup`（专业门类）、`admission_lookup` ×2（录取分数/位次及历史选科类别）、`plan_lookup` ×2（招生计划/选科要求），每次都通过现有数据库真实查询，并按数据行生成来源指纹，而不是让模型编造数字。
+
+**输出**：完整证据才提供两所虚构学校的历史最低分、分差、最低位次、招生计划数、选科约束与来源 ID。缺记录、选科冲突、无效来源/字段或工具出错时返回 `needs_review`，不显示有误导性的部分比较。所有结果注明**历史分差≠录取概率**，实际考生位次、当年官方计划与政策均未核验，不能给真实“冲稳保”推荐。
+
+实验开关、operator 权限、生产禁用规则与 P3 相同。打开运营工作台 `/admin` 的「Agent 研究」标签，可点击「核验历史数据与招生约束」查看演示，结果显示真实 5 次工具查询和可信来源；也可：
+
+```bash
+# GET /api/v1/admin/agent-experiments/decision-card/example 返回冻结合成请求
+curl -sS -H "Authorization: Bearer $ADMIN_TOKEN" \
+  http://localhost:8000/api/v1/admin/agent-experiments/decision-card/example
+
+# POST 同路径去掉 /example，提交上一步 request 作为 JSON
+pytest -q tests/test_synthetic_decision_card_e2e.py --override-ini addopts=''
+```
+
+**证据门禁**：`tests/test_synthetic_decision_card_e2e.py` 使用独立子进程/临时 SQLite/实际管理员登录和 HTTP 路由，将返回的两个学校的分数、位次、计划与**独立 ORM 查询**逐字段比对，并注入缺失学校数据、选科冲突、真实学校名、非法分数和错误年份的拒绝案例。Vue 展示测试位于 `frontend/src/components/admin/__tests__/AdminDecisionCardPanel.spec.ts`。CI 状态以 PR 的最终提交为准。
+
+严格能力边界：这里使用 `DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM`，即受约束、观察结果驱动的工具选择策略；既不调用真实付费模型，也不证明具备 Claude Code/Pi/Deep Agents 自主研究、推理或 Token 优化效果。数据均为 `SYNTHETIC_DEMO`，来源哈希用于标识**合成行内容**，不代表真实世界官方来源认证。
+
 ### 面向实际 API 的多步业务验证（P3，默认关闭）
 
 在**独立合成数据库、开发环境、管理员 operator 权限**下，新接口将原本的“离线研究脚本”接入实际 FastAPI HTTP 路径：
