@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from config.constants import DEMO_PROVINCES
-
 from scripts.seed_demo_data import DEMO_MAJORS, DEMO_SCHOOLS, DEMO_YEAR
 from server.admin.auth import require_role
 
