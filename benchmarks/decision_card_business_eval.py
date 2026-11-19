@@ -123,7 +123,38 @@ def independent_sql_oracle(profile: DecisionCardProfile) -> tuple[str, dict[str,
                 and p.plan_count > 0
             )
             fully_supported = fully_supported and valid
+            common = {
+                "school_name": name,
+                "major_name": profile.major,
+                "province": profile.province,
+                "year": profile.year,
+            }
+            admission_record = {
+                "table": "admission",
+                "row_id": a.id,
+                **common,
+                "subject_type": a.subject_type,
+                "min_score": a.min_score,
+                "min_rank": a.min_rank,
+                "batch": a.batch,
+            }
+            plan_record = {
+                "table": "plan",
+                "row_id": p.id,
+                **common,
+                "subject_requirement": p.subject_requirement,
+                "plan_count": p.plan_count,
+                "batch": p.batch,
+            }
+            admission_digest = hashlib.sha256(
+                json.dumps(admission_record, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()[:12]
+            plan_digest = hashlib.sha256(
+                json.dumps(plan_record, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()[:12]
+            expected_sources = [f"synthetic:admission:{admission_digest}", f"synthetic:plan:{plan_digest}"]
             details[name] = {
+                "evidence_ids": expected_sources,
                 "historical_min_score": a.min_score,
                 "historical_min_rank": a.min_rank,
                 "plan_count": p.plan_count,
@@ -167,7 +198,12 @@ def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str,
                     break
                 if len(item.get("evidence_ids", [])) != 2:
                     errors.append("school_sources_invalid")
-            if len(set(refs)) != 5 or not all(isinstance(ref, str) and ref.startswith("synthetic:") for ref in refs):
+            expected_all = {
+                f"synthetic:major:{hashlib.sha256(profile.major.encode()).hexdigest()[:12]}"
+            }
+            for oracle_row in rows.values():
+                expected_all.update(oracle_row["evidence_ids"])
+            if len(set(refs)) != 5 or set(refs) != expected_all:
                 errors.append("source_contract_invalid")
     return {"passed": not errors, "failure_codes": sorted(set(errors))}
 
