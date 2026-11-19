@@ -26,6 +26,7 @@ def fake_docker(monkeypatch):
         if correct:
             (workspace / "artifact.txt").write_text("PASS", encoding="utf-8")
         return {"passed": correct}
+
     monkeypatch.setattr(coding, "run_sandbox_probe", run)
 
 
@@ -49,13 +50,16 @@ def test_finish_without_test_cannot_claim_success(fake_docker):
 
 def test_patch_after_success_invalidates_previous_test(fake_docker):
     result = run_repair(
-        "addition", IMAGE,
-        Actions([
-            CodingAction("edit", "def add(a, b):\n    return a + b\n"),
-            CodingAction("test"),
-            CodingAction("edit", "def add(a, b):\n    return a - b\n"),
-            CodingAction("finish"),
-        ]),
+        "addition",
+        IMAGE,
+        Actions(
+            [
+                CodingAction("edit", "def add(a, b):\n    return a + b\n"),
+                CodingAction("test"),
+                CodingAction("edit", "def add(a, b):\n    return a - b\n"),
+                CodingAction("finish"),
+            ]
+        ),
     )
     assert result["reason"] == "unverified_finish"
 
