@@ -95,7 +95,12 @@ def _fetch_row(kind: str, args: dict[str, Any]) -> dict[str, Any]:
                 batch=row.batch,
             )
         fingerprint = {"table": kind, "row_id": row.id, **details}
-        return {"data_profile": PROFILE, "record_count": 1, "source_ids": [_record_source(kind, fingerprint)], **details}
+        return {
+            "data_profile": PROFILE,
+            "record_count": 1,
+            "source_ids": [_record_source(kind, fingerprint)],
+            **details,
+        }
     finally:
         db.close()
 
@@ -161,8 +166,7 @@ class DecisionCardPlanner:
             if (tool, name) not in seen:
                 return Decision("tool", tool=tool, arguments=args)
         if any(
-            seen[(tool, name)].get("record_count") != 1
-            or len(seen[(tool, name)]["source_ids"]) != 1
+            seen[(tool, name)].get("record_count") != 1 or len(seen[(tool, name)]["source_ids"]) != 1
             for tool, name, _ in plan
         ):
             return Decision("abstain")
@@ -175,8 +179,10 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
     if profile.school_a == profile.school_b or profile.subject_type not in {"物理类", "历史类"}:
         raise ValueError("Invalid fictional decision-card profile")
     tools = synthetic_readonly_tools()
+
     def admission(args: dict[str, Any]) -> dict[str, Any]:
         return _fetch_row("admission", args)
+
     def plan(args: dict[str, Any]) -> dict[str, Any]:
         return _fetch_row("plan", args)
 
@@ -196,12 +202,15 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
     captured: list[tuple[str, dict[str, Any]]] = []
     wrapped: dict[str, ReadOnlyTool] = {}
     for name, tool in tools.items():
+
         def make_handler(target: ReadOnlyTool, label: str):
             def handler(args: dict[str, Any]) -> dict[str, Any]:
                 observed = target.handler(args)
                 captured.append((label, observed))
                 return observed
+
             return handler
+
         wrapped[name] = ReadOnlyTool(name, tool.parameters, make_handler(tool, name))
 
     result = run_readonly_agent(
@@ -209,8 +218,11 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
         DecisionCardPlanner(profile),
         wrapped,
         HarnessLimits(
-            max_model_steps=6, max_tool_calls=5, max_repeated_call=1,
-            max_observation_chars=750, max_context_chars=4000,
+            max_model_steps=6,
+            max_tool_calls=5,
+            max_repeated_call=1,
+            max_observation_chars=750,
+            max_context_chars=4000,
         ),
     )
     records: dict[tuple[str, str], dict[str, Any]] = {}
