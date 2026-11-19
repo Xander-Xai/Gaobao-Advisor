@@ -319,9 +319,7 @@ def run_readonly_agent(
                 "completion_tokens": completion_tokens,
                 "usage_known": usage_known,
             }
-            checkpoint_version = checkpoint.save(
-                run_id, task_digest(task), checkpoint_version, snapshot
-            )
+            checkpoint_version = checkpoint.save(run_id, task_digest(task), checkpoint_version, snapshot)
     else:
         reason = "step_budget_exhausted"
 
