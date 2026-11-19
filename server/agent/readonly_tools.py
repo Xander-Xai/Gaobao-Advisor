@@ -85,8 +85,7 @@ def _candidates(args: dict[str, Any]) -> dict[str, Any]:
     results = query_match_schools_v2(score=score, province=province, subject_type=subject, strategy="稳")
     if not isinstance(results, list):
         raise RuntimeError("Expected a list from candidate query")
-    names = [str(item.get("school_name") or item.get("name") or "") for item in results[:5]
-             if isinstance(item, dict)]
+    names = [str(item.get("school_name") or item.get("name") or "") for item in results[:5] if isinstance(item, dict)]
     names = [n for n in names if "（合成）" in n]
     return {
         "data_profile": "SYNTHETIC_DEMO",
