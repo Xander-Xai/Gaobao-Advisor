@@ -76,6 +76,24 @@ def test_syntax_error_cannot_be_executed(fake_docker):
     assert result["test_runs"] == 0
 
 
+@pytest.mark.parametrize(
+    "malicious_source",
+    [
+        "import os\ndef add(a, b):\n    return a + b\n",
+        "def add(a, b):\n    import os\n    os._exit(0)\n",
+        "def add(a, b):\n    return __import__('os').system('id')\n",
+        "def add(a, b):\n    return print('SYNTHETIC_WORKSPACE_PASS')\n",
+        "def add(a, b):\n    return open('/workspace/probe.py','w')\n",
+        "def add(a, b):\n    return a + b\ndef probe():\n    return 1\n",
+    ],
+)
+def test_untrusted_patch_cannot_bypass_oracle_via_file_or_process_side_effects(fake_docker, malicious_source):
+    result = run_repair("addition", IMAGE, Actions([CodingAction("edit", malicious_source)]))
+    assert result["reason"] == "unsafe_patch_ast"
+    assert result["tool_calls"] == 0
+    assert result["test_runs"] == 0
+
+
 def test_step_budget_stops_unending_inspection(fake_docker):
     result = run_repair("addition", IMAGE, Actions([CodingAction("inspect")] * 12), max_steps=3)
     assert result["reason"] == "step_budget_exhausted"
