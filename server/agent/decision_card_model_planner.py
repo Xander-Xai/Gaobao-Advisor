@@ -121,8 +121,10 @@ class DecisionCardModelPlanner:
             if set(raw) != {"kind", "tool", "arguments"}:
                 raise ValueError("Tool action has forbidden extra fields")
             name, args = raw["tool"], raw["arguments"]
-            identity = args.get("major_name") if name == "major_lookup" and isinstance(args, dict) else (
-                args.get("school_name") if isinstance(args, dict) else None
+            identity = (
+                args.get("major_name")
+                if name == "major_lookup" and isinstance(args, dict)
+                else (args.get("school_name") if isinstance(args, dict) else None)
             )
             target = (name, identity)
             if target not in self._required or target in seen or args != self._required[target] or observation_failed:
