@@ -29,8 +29,13 @@ def test_model_selects_two_tools_and_finishes_with_real_evidence():
         [
             Decision("tool", "school_lookup", {"school_name": "合成 A"}, prompt_tokens=10, completion_tokens=5),
             Decision("tool", "school_lookup", {"school_name": "合成 B"}, prompt_tokens=11, completion_tokens=6),
-            Decision("finish", answer="合成演示，非真实招生数据", evidence_ids=[SOURCE],
-                     prompt_tokens=12, completion_tokens=7),
+            Decision(
+                "finish",
+                answer="合成演示，非真实招生数据",
+                evidence_ids=[SOURCE],
+                prompt_tokens=12,
+                completion_tokens=7,
+            ),
         ]
     )
     result = run_readonly_agent(
@@ -74,12 +79,16 @@ def test_repeated_tool_loop_stops_before_third_execution():
 
 
 def test_tool_budget_stops_before_second_execution():
-    planner = SequencePlanner([
-        Decision("tool", "school_lookup", {"school_name": "A"}),
-        Decision("tool", "school_lookup", {"school_name": "B"}),
-    ])
+    planner = SequencePlanner(
+        [
+            Decision("tool", "school_lookup", {"school_name": "A"}),
+            Decision("tool", "school_lookup", {"school_name": "B"}),
+        ]
+    )
     result = run_readonly_agent(
-        "虚构数据", planner, {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
+        "虚构数据",
+        planner,
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
         HarnessLimits(max_tool_calls=1),
     )
     assert result.reason == "tool_budget_exhausted"
@@ -89,6 +98,7 @@ def test_tool_budget_stops_before_second_execution():
 def test_tool_exception_and_untrusted_provenance_block():
     def explode(_arguments):
         raise RuntimeError("private provider token")
+
     for handler, reason in [
         (explode, "tool_execution_failed"),
         (lambda _args: {"data_profile": "REAL_DATA", "source_ids": [SOURCE]}, "tool_provenance_invalid"),
@@ -107,14 +117,19 @@ def test_tool_exception_and_untrusted_provenance_block():
 def test_context_compaction_maintains_bounded_history_and_unknown_tokens():
     def large_result(args):
         return {"data_profile": "SYNTHETIC_DEMO", "source_ids": [SOURCE], "content": args["school_name"] * 400}
-    planner = SequencePlanner([
-        Decision("tool", "school_lookup", {"school_name": "A"}),
-        Decision("tool", "school_lookup", {"school_name": "B"}),
-        Decision("tool", "school_lookup", {"school_name": "C"}),
-        Decision("finish", answer="安全结束", evidence_ids=[SOURCE]),
-    ])
+
+    planner = SequencePlanner(
+        [
+            Decision("tool", "school_lookup", {"school_name": "A"}),
+            Decision("tool", "school_lookup", {"school_name": "B"}),
+            Decision("tool", "school_lookup", {"school_name": "C"}),
+            Decision("finish", answer="安全结束", evidence_ids=[SOURCE]),
+        ]
+    )
     result = run_readonly_agent(
-        "虚构数据", planner, {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, large_result)},
+        "虚构数据",
+        planner,
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, large_result)},
         HarnessLimits(max_context_chars=1000, max_observation_chars=450),
     )
     assert result.status == "completed"
@@ -127,7 +142,9 @@ def test_context_compaction_maintains_bounded_history_and_unknown_tokens():
 def test_no_tools_except_allowlisted_and_stop_at_step_budget():
     planner = SequencePlanner([Decision("tool", "school_lookup", {"school_name": str(i)}) for i in range(8)])
     result = run_readonly_agent(
-        "虚构数据", planner, {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
+        "虚构数据",
+        planner,
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
         HarnessLimits(max_model_steps=2, max_tool_calls=5),
     )
     assert result.status == "blocked"
@@ -142,7 +159,11 @@ def test_opt_in_model_planner_parses_action_and_provider_usage():
 
         def create(self, **kwargs):
             self.kwargs = kwargs
-            choice = SimpleNamespace(message=SimpleNamespace(content='{"kind":"tool","tool":"school_lookup","arguments":{"school_name":"合成 A"}}'))
+            choice = SimpleNamespace(
+                message=SimpleNamespace(
+                    content='{"kind":"tool","tool":"school_lookup","arguments":{"school_name":"合成 A"}}'
+                )
+            )
             return SimpleNamespace(choices=[choice], usage=SimpleNamespace(prompt_tokens=8, completion_tokens=4))
 
     chat = Chat()
