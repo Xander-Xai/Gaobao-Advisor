@@ -67,10 +67,7 @@ def _faulted_tools(tools: dict[str, ReadOnlyTool], case: dict[str, Any]) -> dict
     return updated
 
 
-
-def _capturing_tools(
-    tools: dict[str, ReadOnlyTool], captured: list[dict[str, Any]]
-) -> dict[str, ReadOnlyTool]:
+def _capturing_tools(tools: dict[str, ReadOnlyTool], captured: list[dict[str, Any]]) -> dict[str, ReadOnlyTool]:
     """Observe real outputs for independent fact oracles, never export values."""
     wrapped: dict[str, ReadOnlyTool] = {}
     for name, spec in tools.items():
