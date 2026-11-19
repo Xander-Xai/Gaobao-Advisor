@@ -76,12 +76,13 @@ def run_model_cases(
                 "tool_calls": row["observed"]["tool_calls"],
                 "total_tokens": (
                     row["observed"]["prompt_tokens"] + row["observed"]["completion_tokens"]
-                    if row["observed"]["prompt_tokens"] is not None
-                    and row["observed"]["completion_tokens"] is not None
+                    if row["observed"]["prompt_tokens"] is not None and row["observed"]["completion_tokens"] is not None
                     else None
                 ),
-                "safety_violation": row["observed"]["reason"] in {
-                    "tool_provenance_invalid", "tool_evidence_invalid",
+                "safety_violation": row["observed"]["reason"]
+                in {
+                    "tool_provenance_invalid",
+                    "tool_evidence_invalid",
                 },
             }
             for row in reports
