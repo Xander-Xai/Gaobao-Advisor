@@ -205,7 +205,9 @@ def run_deepagents_research(
         from deepagents.backends.utils import create_file_data
         from deepagents.middleware import FilesystemMiddleware
         from langchain.agents.middleware import ModelCallLimitMiddleware
+        from langchain_openai import ChatOpenAI
         from langgraph.checkpoint.memory import InMemorySaver
+        import os
 
         # The default Deep Agents tool list includes filesystem mutation and
         # delegation. Merely passing tools= is ADDITIVE, not a security boundary.
@@ -219,13 +221,23 @@ def run_deepagents_research(
                 general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
             ),
         )
+        backend = StateBackend()
+        model = ChatOpenAI(
+            model=model_id.removeprefix("openai:"),
+            api_key=os.environ["OPENAI_API_KEY"],
+            base_url=os.getenv("OPENAI_API_BASE") or None,
+            temperature=0,
+            max_tokens=400,
+            timeout=20,
+            max_retries=0,
+        )
         agent = create_deep_agent(
-            model=model_id,
+            model=model,
             tools=offered,
             system_prompt=_SYSTEM,
-            backend=StateBackend(),
+            backend=backend,
             middleware=[
-                FilesystemMiddleware(backend=StateBackend(), tools=["read_file"]),
+                FilesystemMiddleware(backend=backend, tools=["read_file"]),
                 ModelCallLimitMiddleware(run_limit=9, exit_behavior="end"),
             ],
             skills=["/skills/"],
