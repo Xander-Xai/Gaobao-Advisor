@@ -20,6 +20,8 @@ import type {
   SyntheticDecisionCardExample,
   SyntheticDecisionCardRequest,
   SyntheticDecisionCardResult,
+  SyntheticTaskRun,
+  SyntheticTaskRunCreate,
 } from '../types/admin'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
@@ -166,6 +168,24 @@ export const adminApi = {
       method: 'POST',
       body: payload,
       token,
+    })
+  },
+  createSyntheticTaskRun(payload: SyntheticTaskRunCreate, token: string): Promise<SyntheticTaskRun> {
+    return request<SyntheticTaskRun>('/admin/agent-taskruns/runs', {
+      method: 'POST', body: payload, token,
+    })
+  },
+  getSyntheticTaskRun(runId: string, token: string): Promise<SyntheticTaskRun> {
+    return request<SyntheticTaskRun>(`/admin/agent-taskruns/runs/${encodeURIComponent(runId)}`, { token })
+  },
+  approveSyntheticTaskRun(runId: string, token: string): Promise<SyntheticTaskRun> {
+    return request<SyntheticTaskRun>(`/admin/agent-taskruns/runs/${encodeURIComponent(runId)}/approve`, {
+      method: 'POST', token,
+    })
+  },
+  executeSyntheticTaskRun(runId: string, token: string): Promise<SyntheticTaskRun> {
+    return request<SyntheticTaskRun>(`/admin/agent-taskruns/runs/${encodeURIComponent(runId)}/execute`, {
+      method: 'POST', token, timeoutMs: 20_000,
     })
   },
   decisionCardExample(token: string): Promise<SyntheticDecisionCardExample> {
