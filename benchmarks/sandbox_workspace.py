@@ -41,22 +41,42 @@ def sandbox_command(image_id: str, workspace: Path, name: str) -> list[str]:
         raise ValueError("Invalid sandbox container name")
     root = _validated_workspace(workspace)
     return [
-        "docker", "run", "--rm", "--pull=never", "--name", name,
-        "--network", "none",
+        "docker",
+        "run",
+        "--rm",
+        "--pull=never",
+        "--name",
+        name,
+        "--network",
+        "none",
         "--read-only",
-        "--cap-drop", "ALL",
-        "--security-opt", "no-new-privileges",
-        "--pids-limit", "48",
-        "--memory", "256m",
-        "--cpus", "1",
-        "--user", "65534:65534",
-        "--tmpfs", "/tmp:rw,nosuid,nodev,size=16m",
-        "--mount", f"type=bind,src={root},dst=/workspace,rw",
-        "--workdir", "/workspace",
-        "--env", "HOME=/tmp",
-        "--env", "PYTHONDONTWRITEBYTECODE=1",
-        "--entrypoint", "python",
-        image_id, "-I", "/workspace/probe.py",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--pids-limit",
+        "48",
+        "--memory",
+        "256m",
+        "--cpus",
+        "1",
+        "--user",
+        "65534:65534",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,size=16m",
+        "--mount",
+        f"type=bind,src={root},dst=/workspace,rw",
+        "--workdir",
+        "/workspace",
+        "--env",
+        "HOME=/tmp",
+        "--env",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "--entrypoint",
+        "python",
+        image_id,
+        "-I",
+        "/workspace/probe.py",
     ]
 
 
@@ -91,14 +111,12 @@ def run_sandbox_probe(
         # intentionally attempted regardless of the outcome. Never shell=True.
         if runner is subprocess.run:
             try:
-                subprocess.run(
-                    ["docker", "rm", "-f", name], check=False, capture_output=True, timeout=5
-                )
+                subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True, timeout=5)
             except (OSError, subprocess.TimeoutExpired):
                 pass
 
 
-_PROBE = '''from pathlib import Path
+_PROBE = """from pathlib import Path
 import socket
 
 root = Path("/workspace")
@@ -117,7 +135,7 @@ else:
 finally:
     connection.close()
 print("SYNTHETIC_WORKSPACE_PASS")
-'''
+"""
 
 
 def main(argv: list[str] | None = None) -> int:
