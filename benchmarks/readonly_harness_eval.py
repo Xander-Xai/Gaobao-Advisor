@@ -53,9 +53,11 @@ def _faulted_tools(tools: dict[str, ReadOnlyTool], case: dict[str, Any]) -> dict
         raise ValueError("Fault target is not in the tool allowlist")
     mode = fault["mode"]
     if mode == "raise":
+
         def handler(_args: dict[str, Any]) -> dict[str, Any]:
             raise RuntimeError("deliberate synthetic tool fault")
     elif mode == "bad_provenance":
+
         def handler(_args: dict[str, Any]) -> dict[str, Any]:
             return {"data_profile": "CUSTOM", "source_ids": []}
     else:
