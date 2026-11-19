@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from benchmarks.groundtruth_pipeline import generate_candidates, verify_reviewed_candidates
+from benchmarks.groundtruth_pipeline import generate_candidates, validate_reviewed_export, verify_reviewed_candidates
 
 
 def approvals_for(draft, reviewer="fixture-reviewer"):
@@ -59,6 +59,16 @@ def test_modified_label_with_stale_digest_is_rejected():
     copied["cases"][0]["expected_facts"][0]["province"] = "示例省·丁"
     with pytest.raises(ValueError, match="manifest changed"):
         verify_reviewed_candidates(copied, approvals_for(copied))
+
+
+def test_reviewed_export_rejects_tampering_even_if_manifest_digest_is_preserved():
+    draft = generate_candidates()
+    reviewed = verify_reviewed_candidates(draft, approvals_for(draft))
+    validate_reviewed_export(reviewed)
+    tampered = copy.deepcopy(reviewed)
+    tampered["cases"][0]["expected_facts"][0]["province"] = "示例省·丁"
+    with pytest.raises(ValueError, match="modified"):
+        validate_reviewed_export(tampered)
 
 
 def test_cli_only_generates_pending_draft_by_default(tmp_path):
