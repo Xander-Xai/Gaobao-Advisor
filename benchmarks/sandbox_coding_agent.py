@@ -315,13 +315,24 @@ def main(argv: list[str] | None = None) -> int:
         controller = "SCRIPTED_NOT_LLM"
     for row in reports:
         row["controller"] = controller
+    tokens_known = all(r["prompt_tokens"] is not None and r["completion_tokens"] is not None for r in reports)
+    passed = sum(r["status"] == "completed" for r in reports)
     summary = {
         "suite": "synthetic_sandbox_code_repair_contract",
         "controller": controller,
         "model_id": args.model if args.model else None,
         "cases": len(reports),
-        "passed": sum(r["status"] == "completed" for r in reports),
-        "real_model_accuracy": "NOT_MEASURED",
+        "passed": passed,
+        "synthetic_model_task_pass_rate": round(passed / len(reports), 4) if args.model else None,
+        "provider_prompt_tokens": (
+            sum(r["prompt_tokens"] for r in reports) if tokens_known and args.model else None
+        ),
+        "provider_completion_tokens": (
+            sum(r["completion_tokens"] for r in reports) if tokens_known and args.model else None
+        ),
+        "total_tool_calls": sum(r["tool_calls"] for r in reports),
+        "total_model_steps": sum(r["model_steps"] for r in reports),
+        "real_admissions_accuracy": "NOT_MEASURED",
         "results": reports,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
