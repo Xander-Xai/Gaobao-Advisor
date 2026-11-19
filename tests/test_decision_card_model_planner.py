@@ -152,7 +152,9 @@ class FakeResponse:
     def create(self, **kwargs):
         payload = json.loads(kwargs["messages"][1]["content"])
         required = payload["required_remaining"]
-        if required:
+        if payload["requires_abstention_due_to_missing_data"]:
+            output = {"kind": "abstain"}
+        elif required:
             step = required[0]
             output = {"kind": "tool", "tool": step["tool"], "arguments": step["arguments"]}
         else:
@@ -178,6 +180,18 @@ assert card["execution"]["model_steps"] == 6
 assert card["execution"]["prompt_tokens"] == 108
 assert card["execution"]["completion_tokens"] == 42
 assert card["planner"] == "INJECTED_PLANNER_UNVERIFIED"
+
+negative_case = next(x for x in frozen_cases() if x["case_id"] == "holdout-no-school")
+negative_profile = DecisionCardProfile(**negative_case["profile"])
+negative_planner = DecisionCardModelPlanner(client, "fake-model-not-llm", negative_profile)
+negative_card = build_synthetic_decision_card(
+    negative_profile, planner=negative_planner, require_provider_usage=True
+)
+negative_assessment = grade_business_case(negative_case, negative_card)
+assert negative_card["status"] == "needs_review"
+assert negative_card["observed_negative_evidence_count"] >= 1
+assert negative_card["schools"] == []
+assert negative_assessment["passed"], negative_assessment
 print(json.dumps({"status": "PASS", "fake_model": True, "source_count": len(card["evidence_ids"])}))
 """
 
