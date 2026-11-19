@@ -49,6 +49,7 @@ jobs:
           mkdir -p /tmp/gaobao-agent-evidence
           python -m benchmarks.readonly_harness_eval --out /tmp/gaobao-agent-evidence/readonly-policy-30cases.json
           python -m benchmarks.groundtruth_pipeline --out /tmp/gaobao-agent-evidence/groundtruth-pending-review.json
+          python -m benchmarks.decision_card_business_eval --out /tmp/gaobao-agent-evidence/business-8case-deterministic-baseline.json
       - name: Upload synthetic Agent Harness evidence
         if: matrix.python-version == '3.11'
         uses: actions/upload-artifact@v4
