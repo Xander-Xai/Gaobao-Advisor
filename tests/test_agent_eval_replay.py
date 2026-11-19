@@ -14,12 +14,19 @@ def test_replay_grades_actual_invocations_and_redacts_private_data():
     def invoke(state):
         observed.append(state)
         return {
-            "scene": state["scene"], "input_text": "private prompt",
+            "scene": state["scene"],
+            "input_text": "private prompt",
             "trace": [{"node": "security_scan", "event": "passed", "secret": "api-key"}],
         }
 
-    cases = [{"id": "fixture-1", "input_text": "private prompt", "scene": "general",
-              "expect": {"scene": "general", "required_nodes": ["security_scan"]}}]
+    cases = [
+        {
+            "id": "fixture-1",
+            "input_text": "private prompt",
+            "scene": "general",
+            "expect": {"scene": "general", "required_nodes": ["security_scan"]},
+        }
+    ]
     report = run_cases(cases, invoke)
     assert report["summary"]["cases"] == 1
     assert report["summary"]["passed"] == 1
