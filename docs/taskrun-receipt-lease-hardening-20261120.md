@@ -32,6 +32,7 @@
 
 ## 复验
 
+本增量以实际 PR HEAD 的 GitHub Actions 记录为验收依据；不得引用父 PR 的成功状态冒充本次新增代码通过。\n
 ```bash
 pytest -q tests/test_taskrun_receipt_verifier.py tests/test_taskrun_store.py tests/test_taskrun_deepagents_worker.py
 ruff check server/agent/taskrun_receipt_verifier.py server/agent/taskrun_worker.py server/agent/taskrun_store.py tests/test_taskrun_receipt_verifier.py tests/test_taskrun_store.py
