@@ -33,6 +33,31 @@
 | 可重复 Eval | 30 条显式合成用例（22 正常、8 负控制）与 24 个独立院校/专业事实断言 |
 | 可选真实模型探针 | `benchmarks/readonly_model_eval.py`，必须显式授权网络和 API 费用，默认 CI 不运行 |
 
+### 可靠 Agent 工程实战（P2 独立实验模块）
+
+| 要证明的能力 | 可复核证据 | 状态/边界 |
+|---|---|---|
+| 跨进程中断恢复 | `server/agent/synthetic_checkpoint.py` + `tests/test_synthetic_checkpoint.py` | SQLite CAS 保存只读工具步骤；三进程恢复测试通过，非分布式 exactly-once |
+| 引用正确但事实错误仍拒绝 | `benchmarks/harness_answer_eval.py` 与 `tests/test_readonly_model_verified_task.py` | 预先冻结的合成事实和工具来源双重验证 |
+| Ground Truth 候选冻结 | `benchmarks/groundtruth_pipeline.py` | 20 条合成候选、开发/holdout、SHA 和审核门禁；**默认待人工审核** |
+| 优化前后评价门禁 | `benchmarks/harness_optimizer.py` | 同模型/同数据集、质量与安全不退化、真实 Token 用量才可提交人工审查；尚无实测收益 |
+| 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；不是生产级多租户 OS 沙箱 |
+| Coding Agent 真实执行链路 | `benchmarks/sandbox_coding_agent.py` | **两个合成算术代码修复 2/2，通过真实容器测试；控制器为 SCRIPTED_NOT_LLM** |
+| 可选模型自主修复 | `benchmarks/sandbox_model_planner.py` | API 适配器已实现、显式授权与 Token 预算；**尚无真实模型跑分** |
+
+[最新 CI 证据（1288 passed / 34 skipped）](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/44579602863) · [CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/44579602669)
+
+沙箱演示（Docker 环境，全部为虚构代码，脚本控制器不产生外部模型费用）：
+
+```bash
+docker build -t gb-advisor:ci .
+IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/workspace-eval.json
+python -m benchmarks.sandbox_coding_agent --image "$IMAGE_ID" --out /tmp/coding-eval.json
+```
+
+需要真实模型控制修复时，必须**主动授权**并配置 `OPENAI_API_KEY`（可按提供商设置 `OPENAI_API_BASE`），之后追加 `--model <provider-model> --permit-external-model`。没有实际完成外部模型试验时，报告中的模型任务表现仍不可声称已验证。
+
 离线回放（每次创建隔离临时合成 SQLite，阻断普通出站 socket，报告不保存提问原文）：
 
 ```bash
