@@ -112,9 +112,7 @@ def verify_taskrun_receipt(profile: DecisionCardProfile, card: dict[str, Any]) -
                 "historical_min_score": min_score,
                 "historical_min_rank": min_rank,
                 "historical_subject_type": admission.get("subject_type"),
-                "historical_score_difference": (
-                    profile.score - min_score if type(min_score) is int else None
-                ),
+                "historical_score_difference": (profile.score - min_score if type(min_score) is int else None),
                 "plan_count": plan_count,
                 "plan_subject_requirement": rule,
                 "subject_constraint": constraint,
