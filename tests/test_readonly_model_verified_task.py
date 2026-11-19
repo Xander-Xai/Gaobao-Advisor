@@ -24,9 +24,7 @@ class TwoStepPlanner:
     def decide(self, task, history, schemas):
         self.called += 1
         if not history:
-            return Decision(
-                "tool", "school_lookup", {"school_name": SCHOOL}, prompt_tokens=10, completion_tokens=2
-            )
+            return Decision("tool", "school_lookup", {"school_name": SCHOOL}, prompt_tokens=10, completion_tokens=2)
         answer = json.dumps(
             {
                 "synthetic_demo": True,
