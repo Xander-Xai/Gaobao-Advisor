@@ -10,12 +10,12 @@ Deep Agents is an optional dependency, not loaded by ordinary FastAPI startup.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from server.agent.readonly_harness import HarnessResult
 from server.agent.readonly_tools import _major
@@ -195,6 +195,8 @@ def run_deepagents_research(
     # MCP server that could add unknown tools behind these functions.
     offered = [major_lookup, admission_lookup, plan_lookup, submit_research, abstain_with_evidence]
     if agent_factory is None:
+        import os
+
         from deepagents import (
             GeneralPurposeSubagentProfile,
             HarnessProfile,
@@ -207,7 +209,6 @@ def run_deepagents_research(
         from langchain.agents.middleware import ModelCallLimitMiddleware
         from langchain_openai import ChatOpenAI
         from langgraph.checkpoint.memory import InMemorySaver
-        import os
 
         # The default Deep Agents tool list includes filesystem mutation and
         # delegation. Merely passing tools= is ADDITIVE, not a security boundary.
