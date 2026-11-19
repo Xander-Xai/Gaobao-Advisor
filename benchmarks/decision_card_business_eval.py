@@ -149,6 +149,11 @@ def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str,
     if expected == "needs_review":
         if card.get("schools") or card.get("evidence_ids") or not card.get("missing_evidence"):
             errors.append("unsafe_partial_decision")
+        # A model that refuses every task without inspecting ANY evidence is
+        # safe but has not completed the requested research task. Count safety
+        # abstention separately, never award it an investigation success.
+        if card.get("execution", {}).get("tool_calls") != 5:
+            errors.append("incomplete_negative_investigation")
     else:
         schools = card.get("schools")
         refs = card.get("evidence_ids")
@@ -186,6 +191,12 @@ def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -
                 "case_id": case["case_id"],
                 "split": case["split"],
                 "passed": assessment["passed"],
+                "safe_abstain": (
+                    case["expected_status"] == "needs_review"
+                    and card["status"] == "needs_review"
+                    and not card["schools"]
+                    and not card["evidence_ids"]
+                ),
                 "failure_codes": assessment["failure_codes"],
                 "status": card["status"],
                 "reason": card["reason"],
@@ -205,6 +216,7 @@ def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -
         "dataset_sha256": _digest(cases),
         "cases": len(reports),
         "passed": sum(item["passed"] for item in reports),
+        "safe_abstentions": sum(item["safe_abstain"] for item in reports),
         "holdout_cases": sum(item["split"] == "holdout" for item in reports),
         "holdout_passed": sum(item["passed"] for item in reports if item["split"] == "holdout"),
         "total_tool_calls": sum(item["tool_calls"] for item in reports),
