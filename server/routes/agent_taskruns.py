@@ -108,6 +108,8 @@ async def execute_synthetic_taskrun(
         raise HTTPException(status_code=404, detail="No visible TaskRun") from exc
     if item["engine"] != "deterministic":
         raise HTTPException(status_code=409, detail="Deep Agents tasks require explicitly authorized worker")
+    if item["status"] != "APPROVED":
+        raise HTTPException(status_code=409, detail="TaskRun must be approved and claimable")
     from server.agent.taskrun_worker import execute_approved_run
 
     try:
