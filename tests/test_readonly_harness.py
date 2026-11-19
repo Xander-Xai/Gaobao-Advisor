@@ -176,3 +176,31 @@ def test_opt_in_model_planner_parses_action_and_provider_usage():
     assert selected.completion_tokens == 4
     assert chat.kwargs["max_tokens"] == 384
     assert chat.kwargs["response_format"] == {"type": "json_object"}
+
+
+def test_reported_token_budget_prevents_next_tool_call():
+    planner = SequencePlanner(
+        [Decision("tool", "school_lookup", {"school_name": "A"}, prompt_tokens=90, completion_tokens=20)]
+    )
+    result = run_readonly_agent(
+        "虚构数据",
+        planner,
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
+        HarnessLimits(max_reported_tokens=100),
+    )
+    assert result.status == "blocked"
+    assert result.reason == "reported_token_budget_exhausted"
+    assert result.tool_calls == 0
+
+
+def test_provider_usage_can_be_required_explicitly():
+    planner = SequencePlanner([Decision("tool", "school_lookup", {"school_name": "A"})])
+    result = run_readonly_agent(
+        "虚构数据",
+        planner,
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
+        HarnessLimits(require_provider_usage=True),
+    )
+    assert result.reason == "provider_usage_missing"
+    assert result.tool_calls == 0
+    assert result.prompt_tokens is None
