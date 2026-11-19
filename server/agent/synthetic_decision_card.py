@@ -227,6 +227,16 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
             missing.append(f"{school}：缺少指定省份/专业/年份的合成录取记录")
         if plan_row.get("record_count") != 1:
             missing.append(f"{school}：缺少指定省份/专业/年份的合成招生计划")
+        if admission_row.get("record_count") == 1 and (
+            type(admission_row.get("min_score")) is not int
+            or type(admission_row.get("min_rank")) is not int
+            or admission_row["min_rank"] <= 0
+        ):
+            missing.append(f"{school}：最低分或最低位次缺少可信的合成记录")
+        if plan_row.get("record_count") == 1 and (
+            type(plan_row.get("plan_count")) is not int or plan_row["plan_count"] <= 0
+        ):
+            missing.append(f"{school}：招生计划人数为空或无效")
         required = plan_row.get("subject_requirement")
         constraint = "unknown"
         if required == "不限":
@@ -258,7 +268,7 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
         if admission_row.get("record_count") == 1 and admission_row.get("subject_type") != profile.subject_type:
             missing.append(f"{school}：录取历史记录选科类别与画像不一致")
     major = records.get(("major_lookup", profile.major), {})
-    if major.get("record_count") != 1:
+    if major.get("record_count") != 1 or not isinstance(major.get("category"), str) or not major.get("category"):
         missing.append("缺少指定合成专业的学科门类来源")
     evidence.extend(major.get("source_ids", []))
 
