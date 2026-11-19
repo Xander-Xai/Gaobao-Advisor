@@ -141,6 +141,38 @@ def verify_reviewed_candidates(draft: dict[str, Any], approvals: list[dict[str, 
     }
 
 
+def validate_reviewed_export(export: dict[str, Any]) -> None:
+    """Reject re-labeled or tampered exported reviews before any model evaluation."""
+    generated = generate_candidates()
+    if (
+        not isinstance(export, dict)
+        or export.get("dataset_kind") != "synthetic_review_declared"
+        or export.get("source_sha256") != generated["manifest_sha256"]
+        or export.get("review_identity_independently_verified") is not False
+    ):
+        raise ValueError("Invalid or stale review declaration")
+    expected = {row["id"]: row for row in generated["cases"]}
+    cases = export.get("cases")
+    if not isinstance(cases, list) or len(cases) != len(expected):
+        raise ValueError("Review export does not contain the frozen case set")
+    seen: set[str] = set()
+    for row in cases:
+        if not isinstance(row, dict):
+            raise ValueError("Invalid reviewed case")
+        identity = row.get("id")
+        if identity not in expected or identity in seen:
+            raise ValueError("Unknown or duplicated reviewed case ID")
+        seen.add(identity)
+        if row.get("review_state") != "REVIEW_DECLARED" or not isinstance(row.get("reviewed_by"), str):
+            raise ValueError("Missing reviewer declaration")
+        unchanged = {key: value for key, value in row.items() if key not in {"review_state", "reviewed_by"}}
+        frozen = {key: value for key, value in expected[identity].items() if key != "review_state"}
+        if unchanged != frozen:
+            raise ValueError("Review export modified the frozen ground truth")
+    if set(expected) != seen:
+        raise ValueError("Review export has missing case IDs")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True, type=Path)
