@@ -36,7 +36,10 @@ def test_real_readonly_harness_30_case_eval_in_clean_subprocess(tmp_path):
     output = tmp_path / "harness-report.json"
     p = subprocess.run(
         [sys.executable, "-m", "benchmarks.readonly_harness_eval", "--out", str(output)],
-        check=False, capture_output=True, text=True, timeout=150,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=150,
     )
     assert output.exists(), f"Offline replay produced no artifact, exit={p.returncode}"
     report = json.loads(output.read_text(encoding="utf-8"))
@@ -45,8 +48,7 @@ def test_real_readonly_harness_30_case_eval_in_clean_subprocess(tmp_path):
     assert report["provider_token_usage"] == "NOT_MEASURED"
     assert report["independent_model_quality"] == "NOT_MEASURED"
     assert report["policy_contract_passed"] == 30, [
-        (row["case_id"], row["observed"]["reason"])
-        for row in report["cases_detail"] if not row["passed"]
+        (row["case_id"], row["observed"]["reason"]) for row in report["cases_detail"] if not row["passed"]
     ]
     assert p.returncode == 0
     serialized = json.dumps(report, ensure_ascii=False)
