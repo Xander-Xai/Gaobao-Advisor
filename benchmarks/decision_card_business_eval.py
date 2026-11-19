@@ -299,6 +299,7 @@ def main(argv: list[str] | None = None) -> int:
             timeout=20.0,
             max_retries=0,
         )
+
         def planner_factory(profile: DecisionCardProfile) -> DecisionCardModelPlanner:
             return DecisionCardModelPlanner(client, args.model, profile)
 
