@@ -6,7 +6,6 @@ success. A separate opt-in SDK smoke test validates official Deep Agents APIs.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 
