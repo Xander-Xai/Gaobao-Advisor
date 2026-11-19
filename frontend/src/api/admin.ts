@@ -17,6 +17,9 @@ import type {
   SyntheticAgentExample,
   SyntheticAgentResearchRequest,
   SyntheticAgentResearchResult,
+  SyntheticDecisionCardExample,
+  SyntheticDecisionCardRequest,
+  SyntheticDecisionCardResult,
 } from '../types/admin'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
@@ -160,6 +163,16 @@ export const adminApi = {
   },
   reviewJob(id: number, payload: ReviewPayload, token: string): Promise<QualityJob> {
     return request<QualityJob>(`/admin/quality/jobs/${id}/review`, {
+      method: 'POST',
+      body: payload,
+      token,
+    })
+  },
+  decisionCardExample(token: string): Promise<SyntheticDecisionCardExample> {
+    return request<SyntheticDecisionCardExample>('/admin/agent-experiments/decision-card/example', { token })
+  },
+  decisionCard(payload: SyntheticDecisionCardRequest, token: string): Promise<SyntheticDecisionCardResult> {
+    return request<SyntheticDecisionCardResult>('/admin/agent-experiments/decision-card', {
       method: 'POST',
       body: payload,
       token,
