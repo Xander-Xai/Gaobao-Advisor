@@ -11,8 +11,9 @@ import json
 import re
 import time
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, Protocol
+from typing import Any, Literal, Protocol
 
 _SOURCE_RE = re.compile(r"^synthetic:[a-z_]+:[0-9a-f]{12}$")
 Outcome = Literal["completed", "abstained", "blocked"]
