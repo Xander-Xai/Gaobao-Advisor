@@ -60,9 +60,7 @@ def test_wrong_citation_even_with_correct_answer_fails():
 
 def test_unrelated_tool_evidence_does_not_authorize_citation():
     expected, observations = setup_case()
-    observations.append(
-        {"tool": "major_lookup", "result": {"source_ids": ["synthetic:school:ffffffffffff"]}}
-    )
+    observations.append({"tool": "major_lookup", "result": {"source_ids": ["synthetic:school:ffffffffffff"]}})
     result = grade_structured_facts(answer_fact(source="synthetic:school:ffffffffffff"), expected, observations)
     assert "citation_not_bound_to_fact" in result["failure_codes"]
 
@@ -87,5 +85,7 @@ def test_malformed_answer_fails_closed(value):
 
 def test_out_of_scope_case_does_not_fake_semantic_score():
     assert grade_structured_facts("unknown", [], []) == {
-        "status": "NOT_SCORED", "passed": None, "failure_codes": [],
+        "status": "NOT_SCORED",
+        "passed": None,
+        "failure_codes": [],
     }
