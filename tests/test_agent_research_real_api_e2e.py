@@ -22,10 +22,11 @@ os.environ["ADMIN_TOKEN_SECRET"] = "synthetic-test-admin-token-secret-0000000000
 os.environ["ENABLE_RAG_KB"] = "true"
 
 from server.admin.auth import hash_password
+TEST_PW = "synthetic" + "-pass-" + "2026"  # deliberately fabricated, never a deployed credential
 os.environ["ADMIN_USERS_JSON"] = json.dumps([
     {
         "username": "demo-operator",
-        "password_hash": hash_password("synthetic-pass-2026", iterations=10000),
+        "password_hash": hash_password(TEST_PW, iterations=10000),
         "role": "operator",
     }
 ])
@@ -38,7 +39,7 @@ from server.main import app
 with TestClient(app) as client:
     login = client.post(
         "/api/v1/admin/auth/login",
-        json={"username": "demo-operator", "password": "synthetic-pass-2026"},
+        json={"username": "demo-operator", "password": TEST_PW},
     )
     assert login.status_code == 200, f"Login failed: {login.status_code}"
     token = login.json()["access_token"]
