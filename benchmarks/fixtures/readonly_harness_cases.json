@@ -24,7 +24,14 @@
         "school_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "北辰示例科技大学（合成）",
+        "province": "示例省·甲"
+      }
+    ]
   },
   {
     "id": "school-02",
@@ -51,7 +58,14 @@
         "school_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "海岳示例师范大学（合成）",
+        "province": "示例省·甲"
+      }
+    ]
   },
   {
     "id": "school-03",
@@ -78,7 +92,14 @@
         "school_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "云栖示例理工大学（合成）",
+        "province": "示例省·乙"
+      }
+    ]
   },
   {
     "id": "school-04",
@@ -105,7 +126,14 @@
         "school_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "南岭示例医科大学（合成）",
+        "province": "示例省·乙"
+      }
+    ]
   },
   {
     "id": "school-05",
@@ -132,7 +160,14 @@
         "school_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "东洲示例财经大学（合成）",
+        "province": "示例省·丙"
+      }
+    ]
   },
   {
     "id": "school-06",
@@ -159,7 +194,14 @@
         "school_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "西岭示例工业大学（合成）",
+        "province": "示例省·丙"
+      }
+    ]
   },
   {
     "id": "school-07",
@@ -186,7 +228,14 @@
         "school_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "沧澜示例农业大学（合成）",
+        "province": "示例省·丁"
+      }
+    ]
   },
   {
     "id": "school-08",
@@ -213,7 +262,14 @@
         "school_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "长风示例师范大学（合成）",
+        "province": "示例省·丁"
+      }
+    ]
   },
   {
     "id": "major-01",
@@ -240,7 +296,14 @@
         "major_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "计算机科学与技术（合成）",
+        "category": "工学"
+      }
+    ]
   },
   {
     "id": "major-02",
@@ -267,7 +330,14 @@
         "major_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "软件工程（合成）",
+        "category": "工学"
+      }
+    ]
   },
   {
     "id": "major-03",
@@ -294,7 +364,14 @@
         "major_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "电子信息工程（合成）",
+        "category": "工学"
+      }
+    ]
   },
   {
     "id": "major-04",
@@ -321,7 +398,14 @@
         "major_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "临床医学（合成）",
+        "category": "医学"
+      }
+    ]
   },
   {
     "id": "major-05",
@@ -348,7 +432,14 @@
         "major_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "药学（合成）",
+        "category": "医学"
+      }
+    ]
   },
   {
     "id": "major-06",
@@ -375,7 +466,14 @@
         "major_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "数学与应用数学（合成）",
+        "category": "理学"
+      }
+    ]
   },
   {
     "id": "major-07",
@@ -402,7 +500,14 @@
         "major_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "应用统计学（合成）",
+        "category": "理学"
+      }
+    ]
   },
   {
     "id": "major-08",
@@ -429,7 +534,14 @@
         "major_lookup"
       ],
       "min_evidence": 1
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "汉语言文学（合成）",
+        "category": "文学"
+      }
+    ]
   },
   {
     "id": "compare-01",
@@ -464,7 +576,19 @@
         "major_lookup"
       ],
       "min_evidence": 2
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "北辰示例科技大学（合成）",
+        "province": "示例省·甲"
+      },
+      {
+        "tool": "major_lookup",
+        "major_name": "计算机科学与技术（合成）",
+        "category": "工学"
+      }
+    ]
   },
   {
     "id": "compare-02",
@@ -499,7 +623,19 @@
         "major_lookup"
       ],
       "min_evidence": 2
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "海岳示例师范大学（合成）",
+        "province": "示例省·甲"
+      },
+      {
+        "tool": "major_lookup",
+        "major_name": "软件工程（合成）",
+        "category": "工学"
+      }
+    ]
   },
   {
     "id": "compare-03",
@@ -534,7 +670,19 @@
         "major_lookup"
       ],
       "min_evidence": 2
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "云栖示例理工大学（合成）",
+        "province": "示例省·乙"
+      },
+      {
+        "tool": "major_lookup",
+        "major_name": "电子信息工程（合成）",
+        "category": "工学"
+      }
+    ]
   },
   {
     "id": "compare-04",
@@ -569,7 +717,19 @@
         "major_lookup"
       ],
       "min_evidence": 2
-    }
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "南岭示例医科大学（合成）",
+        "province": "示例省·乙"
+      },
+      {
+        "tool": "major_lookup",
+        "major_name": "临床医学（合成）",
+        "category": "医学"
+      }
+    ]
   },
   {
     "id": "knowledge-01",
