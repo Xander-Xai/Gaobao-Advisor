@@ -13,7 +13,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from benchmarks.readonly_harness_eval import load_suite
+from benchmarks.harness_answer_eval import grade_structured_facts
+from benchmarks.readonly_harness_eval import _capturing_tools, load_suite
 from server.agent.readonly_harness import HarnessLimits, run_readonly_agent
 from server.agent.readonly_model_planner import OpenAIJsonPlanner
 from server.agent.readonly_tools import synthetic_readonly_tools
@@ -25,25 +26,41 @@ def run_model_cases(cases: list[dict[str, Any]], planner: Any) -> dict[str, Any]
     tools = synthetic_readonly_tools()
     for case in cases:
         expected = case["expect"]
+        captured: list[dict[str, Any]] = []
         result = run_readonly_agent(
             case["task"],
             planner,
-            tools,
+            _capturing_tools(tools, captured),
             HarnessLimits(max_model_steps=8, max_tool_calls=5, max_reported_tokens=6000, require_provider_usage=True),
         )
-        # Source IDs are generated from real synthetic tool results, not the model.
+        # Path membership is only a loose signal. Real result correctness is
+        # separately judged from reviewer-authored facts and bound tool output.
         goal_path = set(expected["tool_sequence"]).issubset(set(result.tool_sequence))
         passed = result.status == "completed" and len(result.evidence_ids) >= expected["min_evidence"] and goal_path
-        reports.append({"case_id": case["id"], "goal_path_passed": passed, "observed": result.public_report()})
+        facts = grade_structured_facts(result.answer, case.get("expected_facts", []), captured)
+        reports.append(
+            {
+                "case_id": case["id"],
+                "goal_path_passed": passed,
+                "answer_facts": facts,
+                "observed": result.public_report(),
+            }
+        )
     known = all(item["observed"]["prompt_tokens"] is not None for item in reports)
+    scored = [r for r in reports if r["answer_facts"]["status"] == "SCORED"]
     return {
         "suite": "synthetic_model_driven_tool_trajectory",
         "controller": "REAL_MODEL_NOT_SCRIPTED",
         "cases": len(reports),
         "goal_path_passed": sum(item["goal_path_passed"] for item in reports),
+        "answer_fact_scored_cases": len(scored),
+        "answer_fact_passed": sum(r["answer_facts"]["passed"] is True for r in scored),
+        "answer_fact_pass_rate": (
+            round(sum(r["answer_facts"]["passed"] is True for r in scored) / len(scored), 4) if scored else None
+        ),
         "prompt_tokens": sum(item["observed"]["prompt_tokens"] or 0 for item in reports) if known else None,
         "completion_tokens": sum(item["observed"]["completion_tokens"] or 0 for item in reports) if known else None,
-        "model_answer_semantic_quality": "NOT_MEASURED",
+        "unstructured_or_unreviewed_answer_quality": "NOT_MEASURED",
         "real_admissions_accuracy": "NOT_MEASURED",
         "results": reports,
     }
