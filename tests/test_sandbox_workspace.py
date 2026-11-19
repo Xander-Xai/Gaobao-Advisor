@@ -30,7 +30,7 @@ def test_docker_isolated_command_has_no_host_shell_or_network(workspace):
     assert command[command.index("--security-opt") + 1] == "no-new-privileges"
     assert "--user" in command
     assert "65534:65534" in command
-    assert command[-3:] == [FAKE_IMAGE, "-I", "/workspace/probe.py"]
+    assert command[-4:] == [FAKE_IMAGE, "-I", "-B", "/workspace/probe.py"]
     assert all("/var/run/docker.sock" not in item for item in command)
     assert not any(item.startswith("--privileged") for item in command)
 
