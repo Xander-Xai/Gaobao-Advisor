@@ -291,6 +291,25 @@ def build_synthetic_decision_card(
         missing.append("缺少指定合成专业的学科门类来源")
     evidence.extend(major.get("source_ids", []))
 
+    # A refusal is safe even without tools, but only *observed negative SQL
+    # evidence* establishes completion of a negative research task.
+    negative_evidence_count = sum(
+        row.get("record_count") != 1
+        or (
+            label == "admission_lookup"
+            and row.get("record_count") == 1
+            and row.get("subject_type") != profile.subject_type
+        )
+        or (
+            label == "plan_lookup"
+            and row.get("record_count") == 1
+            and (
+                row.get("subject_requirement") not in {"不限", "物理必选"}
+                or (row.get("subject_requirement") == "物理必选" and profile.subject_type != "物理类")
+            )
+        )
+        for label, row in captured
+    )
     # No success is possible on missing data, tool failure or fabricated claims.
     completed = (
         result.status == "completed"
@@ -325,6 +344,7 @@ def build_synthetic_decision_card(
         "major_category": major.get("category") if completed else None,
         "schools": schools,
         "missing_evidence": missing if not completed else [],
+        "observed_negative_evidence_count": negative_evidence_count,
         "evidence_ids": evidence if completed else [],
         "manual_checks": [
             "真实考生位次不可由示例分数推断",
