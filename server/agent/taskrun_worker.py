@@ -29,12 +29,7 @@ def _gate_execution(engine: str, *, permit_external_model: bool, model: str | No
     ):
         raise ValueError("Synthetic Agent worker disabled or unsafe environment")
     if engine == "deepagents":
-        if (
-            not permit_external_model
-            or not model
-            or not model.startswith("openai:")
-            or not os.getenv("OPENAI_API_KEY")
-        ):
+        if not permit_external_model or not model or not model.startswith("openai:") or not os.getenv("OPENAI_API_KEY"):
             raise ValueError("Deep Agents requires explicit model authorization and provider key")
     elif permit_external_model or model:
         raise ValueError("Deterministic mode must not request external model access")
@@ -65,11 +60,7 @@ def execute_approved_run(
             card = build_synthetic_decision_card(profile)
         if card.get("data_profile") != "SYNTHETIC_DEMO":
             raise ValueError("Agent returned non-synthetic output")
-        status = (
-            "SUCCEEDED"
-            if card.get("status") == "evidence_complete_historical_only"
-            else "NEEDS_REVIEW"
-        )
+        status = "SUCCEEDED" if card.get("status") == "evidence_complete_historical_only" else "NEEDS_REVIEW"
         failure = None if status == "SUCCEEDED" else "insufficient_verified_evidence"
         return store.finish(run_id, token, status, card, failure)
     except Exception:  # noqa: BLE001 - never persist model/SQL/stack trace errors
