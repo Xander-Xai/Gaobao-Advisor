@@ -231,6 +231,18 @@ jobs:
           assert record["passed"] and record["scratch_artifact_created"], record
           print("sandbox isolation smoke passed")
           PY
+      - name: Execute two synthetic code repairs inside Docker workspace
+        run: |
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+          python -m benchmarks.sandbox_coding_agent --image "$IMAGE_ID" --out /tmp/gaobao-coding-agent.json
+          python - <<'PY'
+          import json
+          report = json.load(open("/tmp/gaobao-coding-agent.json"))
+          assert report["cases"] == 2 and report["passed"] == 2, report
+          assert report["controller"] == "SCRIPTED_NOT_LLM", report
+          assert all(r["test_runs"] == 2 for r in report["results"]), report
+          print("coding sandbox smoke passed (scripted controller; real Docker)")
+          PY
       - name: Start without any API key
         run: |
           docker run -d --name gb-advisor -p 8000:8000 gb-advisor:ci
