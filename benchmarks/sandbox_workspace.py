@@ -77,6 +77,7 @@ def sandbox_command(image_id: str, workspace: Path, name: str) -> list[str]:
         "python",
         image_id,
         "-I",
+        "-B",
         "/workspace/probe.py",
     ]
 
