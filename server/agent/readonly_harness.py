@@ -53,6 +53,8 @@ class HarnessLimits:
     max_repeated_call: int = 2
     max_observation_chars: int = 800
     max_context_chars: int = 2400
+    max_reported_tokens: int = 6000
+    require_provider_usage: bool = False
 
     def __post_init__(self) -> None:
         for value in (
@@ -61,6 +63,7 @@ class HarnessLimits:
             self.max_repeated_call,
             self.max_observation_chars,
             self.max_context_chars,
+            self.max_reported_tokens,
         ):
             if type(value) is not int or value <= 0:
                 raise ValueError("Harness limits must be positive integers")
@@ -170,6 +173,12 @@ def run_readonly_agent(
         else:
             prompt_tokens += p_tokens
             completion_tokens += c_tokens
+        if not usage_known and limits.require_provider_usage:
+            reason = "provider_usage_missing"
+            break
+        if prompt_tokens + completion_tokens > limits.max_reported_tokens:
+            reason = "reported_token_budget_exhausted"
+            break
 
         if choice.kind == "abstain":
             status, reason = "abstained", "explicit_abstention"
