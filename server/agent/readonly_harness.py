@@ -12,8 +12,10 @@ import re
 import time
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Protocol
+
+from server.agent.synthetic_checkpoint import SQLiteSyntheticCheckpointStore, task_digest
 
 _SOURCE_RE = re.compile(r"^synthetic:[a-z_]+:[0-9a-f]{12}$")
 Outcome = Literal["completed", "abstained", "blocked"]
@@ -125,6 +127,9 @@ def run_readonly_agent(
     planner: Planner,
     tools: dict[str, ReadOnlyTool],
     limits: HarnessLimits | None = None,
+    *,
+    checkpoint: SQLiteSyntheticCheckpointStore | None = None,
+    run_id: str | None = None,
 ) -> HarnessResult:
     """Execute an agent loop with explicit budget, evidence and repeat gates.
 
@@ -154,8 +159,34 @@ def run_readonly_agent(
     answer = ""
     status: Outcome = "blocked"
     reason = "step_budget_exhausted"
-
-    for step in range(1, limits.max_model_steps + 1):
+    checkpoint_version: int | None = None
+    resume_step = 1
+    if (checkpoint is None) != (run_id is None):
+        raise ValueError("Checkpoint store and synthetic run ID must be supplied together")
+    if checkpoint is not None and run_id is not None:
+        saved = checkpoint.load(run_id, task_digest(task))
+        if saved is not None:
+            checkpoint_version, state = saved
+            if state.get("phase") == "done":
+                return HarnessResult(**state["result"])
+            if state.get("phase") != "active":
+                raise ValueError("Unknown checkpoint phase")
+            history = list(state["history"])
+            sources = set(state["sources"])
+            sequence = list(state["sequence"])
+            trace = list(state["trace"])
+            repeats = Counter(state["repeats"])
+            model_steps = int(state["model_steps"])
+            tool_calls = int(state["tool_calls"])
+            tool_failures = int(state["tool_failures"])
+            repeated_calls = int(state["repeated_calls"])
+            evictions = int(state["evictions"])
+            peak_chars = int(state["peak_chars"])
+            prompt_tokens = int(state["prompt_tokens"])
+            completion_tokens = int(state["completion_tokens"])
+            usage_known = bool(state["usage_known"])
+            resume_step = model_steps + 1
+    for step in range(resume_step, limits.max_model_steps + 1):
         model_steps = step
         try:
             choice = planner.decide(task, [dict(item) for item in history], schemas)
@@ -269,10 +300,32 @@ def run_readonly_agent(
                 "elapsed_ms": round((time.monotonic() - start) * 1000, 2),
             }
         )
+        if checkpoint is not None and run_id is not None:
+            snapshot = {
+                "data_profile": "SYNTHETIC_DEMO",
+                "phase": "active",
+                "history": history,
+                "sources": sorted(sources),
+                "sequence": sequence,
+                "trace": trace,
+                "repeats": dict(repeats),
+                "model_steps": model_steps,
+                "tool_calls": tool_calls,
+                "tool_failures": tool_failures,
+                "repeated_calls": repeated_calls,
+                "evictions": evictions,
+                "peak_chars": peak_chars,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "usage_known": usage_known,
+            }
+            checkpoint_version = checkpoint.save(
+                run_id, task_digest(task), checkpoint_version, snapshot
+            )
     else:
         reason = "step_budget_exhausted"
 
-    return HarnessResult(
+    result = HarnessResult(
         status=status,
         reason=reason,
         answer=answer,
@@ -288,3 +341,11 @@ def run_readonly_agent(
         tool_sequence=sequence,
         trace=trace,
     )
+    if checkpoint is not None and run_id is not None and reason != "planner_failed":
+        checkpoint.save(
+            run_id,
+            task_digest(task),
+            checkpoint_version,
+            {"data_profile": "SYNTHETIC_DEMO", "phase": "done", "result": asdict(result)},
+        )
+    return result
