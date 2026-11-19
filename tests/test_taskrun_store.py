@@ -111,3 +111,25 @@ def test_recovery_budget_and_untrusted_profile_are_rejected(tmp_path):
             )
     with pytest.raises(TaskRunConflict, match="recovery"):
         store.claim(item["run_id"])
+
+
+def test_atomic_pending_quota_prevents_unbounded_task_creation(tmp_path):
+    store = SyntheticTaskRunStore(tmp_path / "journal.db")
+    records = [
+        store.create(sample(), "deterministic", "sample-operator", f"quota-request-{index:02}")
+        for index in range(8)
+    ]
+    assert len({row["run_id"] for row in records}) == 8
+    # Idempotent replay is still permitted at the quota ceiling.
+    same = store.create(sample(), "deterministic", "sample-operator", "quota-request-00")
+    assert same["run_id"] == records[0]["run_id"]
+    with pytest.raises(TaskRunConflict, match="outstanding"):
+        store.create(sample(), "deterministic", "sample-operator", "quota-request-09")
+
+    # Closing an approved task restores capacity while preserving the audit record.
+    target = records[0]["run_id"]
+    store.approve(target, "separate-admin")
+    _, lease = store.claim(target)
+    store.finish(target, lease, "NEEDS_REVIEW", {"data_profile": "SYNTHETIC_DEMO"}, None)
+    ninth = store.create(sample(), "deterministic", "sample-operator", "quota-request-09")
+    assert ninth["run_id"] not in {row["run_id"] for row in records}
