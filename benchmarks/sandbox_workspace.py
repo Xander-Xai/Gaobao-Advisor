@@ -65,7 +65,7 @@ def sandbox_command(image_id: str, workspace: Path, name: str) -> list[str]:
         "--tmpfs",
         "/tmp:rw,nosuid,nodev,size=16m",
         "--mount",
-        f"type=bind,src={root},dst=/workspace,rw",
+        f"type=bind,src={root},dst=/workspace",
         "--workdir",
         "/workspace",
         "--env",
@@ -101,7 +101,12 @@ def run_sandbox_probe(
             timeout=timeout_seconds,
         )
         passed = completed.returncode == 0 and "SYNTHETIC_WORKSPACE_PASS" in completed.stdout
-        return {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": passed, "exit_code": completed.returncode}
+        report = {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": passed, "exit_code": completed.returncode}
+        if completed.returncode == 125:
+            # Docker launch failed before the synthetic probe; do not export raw
+            # Docker stderr (it could contain host paths or private metadata).
+            report["error"] = "docker_launch_failed"
+        return report
     except subprocess.TimeoutExpired:
         return {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "sandbox_timeout"}
     except OSError:
