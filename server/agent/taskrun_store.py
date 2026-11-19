@@ -155,9 +155,7 @@ class SyntheticTaskRunStore:
             "data_profile": "SYNTHETIC_DEMO",
         }
 
-    def create(
-        self, payload: dict[str, Any], engine: str, owner: str, idempotency_key: str
-    ) -> dict[str, Any]:
+    def create(self, payload: dict[str, Any], engine: str, owner: str, idempotency_key: str) -> dict[str, Any]:
         self._validate_payload(payload, engine)
         if not isinstance(owner, str) or not 3 <= len(owner) <= 64:
             raise ValueError("Invalid task owner")
@@ -280,7 +278,15 @@ class SyntheticTaskRunStore:
                 "UPDATE synthetic_task_runs SET status=?,result_json=?,failure_code=?,"
                 "lease_token=NULL,lease_deadline=NULL,version=version+1,updated_at=? "
                 "WHERE run_id=? AND status='RUNNING' AND lease_token=? AND lease_deadline>?",
-                (status, _canonical(result) if result is not None else None, failure_code, now, run_id, lease_token, now),
+                (
+                    status,
+                    _canonical(result) if result is not None else None,
+                    failure_code,
+                    now,
+                    run_id,
+                    lease_token,
+                    now,
+                ),
             )
             if updated.rowcount != 1:
                 raise TaskRunConflict("Lost lease: stale worker cannot commit")
