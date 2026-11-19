@@ -13,8 +13,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from server.agent.synthetic_decision_card import DecisionCardProfile, build_synthetic_decision_card
 from server.agent.taskrun_store import SyntheticTaskRunStore
