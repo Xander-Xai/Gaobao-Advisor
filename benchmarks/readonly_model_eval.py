@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from benchmarks.groundtruth_pipeline import generate_candidates
+from benchmarks.groundtruth_pipeline import validate_reviewed_export
 from benchmarks.harness_answer_eval import grade_structured_facts
 from benchmarks.readonly_harness_eval import _capturing_tools, load_suite
 from server.agent.readonly_harness import HarnessLimits, run_readonly_agent
@@ -127,13 +127,11 @@ def main(argv: list[str] | None = None) -> int:
     # Unreviewed cases are exploratory only and cannot enter optimizer gates.
     if args.reviewed_dataset:
         reviewed = json.loads(args.reviewed_dataset.read_text(encoding="utf-8"))
-        expected_source = generate_candidates()["manifest_sha256"]
-        if (
-            reviewed.get("dataset_kind") != "synthetic_review_declared"
-            or reviewed.get("source_sha256") != expected_source
-            or reviewed.get("review_identity_independently_verified") is not False
-        ):
-            parser.error("Review declaration is missing, stale, or not from the synthetic generator")
+        try:
+            validate_reviewed_export(reviewed)
+        except ValueError as exc:
+            parser.error(str(exc))
+        expected_source = reviewed["source_sha256"]
         cases = reviewed["cases"][: args.max_cases]
         groundtruth_review = "REVIEW_DECLARED"
         dataset_sha256 = expected_source
