@@ -51,6 +51,7 @@ def test_result_never_exports_raw_container_output(workspace):
         assert args[0] == "docker"
         assert kwargs["timeout"] == 25
         return subprocess.CompletedProcess(args, 0, "SYNTHETIC_WORKSPACE_PASS\nsecret=example", "")
+
     result = run_sandbox_probe(FAKE_IMAGE, workspace, runner=fake_runner)
     assert result == {
         "sandbox": "DOCKER_RESTRICTED_SYNTHETIC",
@@ -63,6 +64,7 @@ def test_result_never_exports_raw_container_output(workspace):
 def test_sandbox_timeout_is_fail_closed(workspace):
     def fake_timeout(args, **kwargs):
         raise subprocess.TimeoutExpired(args, 25)
+
     result = run_sandbox_probe(FAKE_IMAGE, workspace, runner=fake_timeout)
     assert result["passed"] is False
     assert result["error"] == "sandbox_timeout"
