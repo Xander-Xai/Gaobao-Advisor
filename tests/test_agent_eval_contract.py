@@ -37,9 +37,14 @@ def test_failed_memory_is_not_mistaken_for_success():
 
 
 def test_rag_state_and_structured_card_checks():
-    case = {"id": "synthetic-3", "expect": {
-        "rag_state": "RAG_ENABLED", "has_rag_evidence": True, "has_structured_card": True,
-    }}
+    case = {
+        "id": "synthetic-3",
+        "expect": {
+            "rag_state": "RAG_ENABLED",
+            "has_rag_evidence": True,
+            "has_structured_card": True,
+        },
+    }
     result = {"rag_state": "RAG_ERROR", "rag_evidence": False, "structured_result": {"title": "Card"}}
     grade = grade_case(case, result)
     assert len(grade["failure_codes"]) == 3
@@ -48,7 +53,9 @@ def test_rag_state_and_structured_card_checks():
 def test_summary_never_conflates_nodes_with_tools_or_quality():
     cases = [
         grade_case({"id": "a", "expect": {"scene": "gaokao"}}, {"scene": "gaokao", "trace": [{"node": "a"}]}),
-        grade_case({"id": "b", "expect": {"scene": "gaokao"}}, {"scene": "career", "trace": [{"node": "a"}, {"node": "b"}]}),
+        grade_case(
+            {"id": "b", "expect": {"scene": "gaokao"}}, {"scene": "career", "trace": [{"node": "a"}, {"node": "b"}]}
+        ),
     ]
     summary = summarize(cases)
     assert summary["cases"] == 2
