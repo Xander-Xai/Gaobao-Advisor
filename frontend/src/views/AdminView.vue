@@ -53,6 +53,7 @@
       <AdminDataPanel v-show="activeTab === 'data'" />
       <AdminQualityPanel v-show="activeTab === 'quality'" />
       <AdminAgentResearchPanel v-if="admin.canWrite" v-show="activeTab === 'agent'" />
+      <AdminDecisionCardPanel v-if="admin.canWrite" v-show="activeTab === 'agent'" />
       <AdminAuditPanel v-if="admin.isAdmin" v-show="activeTab === 'audit'" />
     </main>
   </div>
@@ -62,6 +63,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AdminAuditPanel from '../components/admin/AdminAuditPanel.vue'
 import AdminAgentResearchPanel from '../components/admin/AdminAgentResearchPanel.vue'
+import AdminDecisionCardPanel from '../components/admin/AdminDecisionCardPanel.vue'
 import AdminDataPanel from '../components/admin/AdminDataPanel.vue'
 import AdminLoginPanel from '../components/admin/AdminLoginPanel.vue'
 import AdminQualityPanel from '../components/admin/AdminQualityPanel.vue'
