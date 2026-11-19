@@ -175,6 +175,18 @@ def get_subject_rankings(db: Session, school_id: int | None = None, major_catego
 # ── 策略性查询（给 agent 用）──
 
 
+def _admission_source_label(school: School, year: int) -> str:
+    """Describe known provenance without claiming unaudited official origin."""
+    is_synthetic = (
+        "（合成）" in school.name
+        or school.special_type == "SYNTHETIC_DEMO_DATA"
+        or "SYNTHETIC" in (school.data_source_note or "").upper()
+    )
+    if is_synthetic:
+        return f"SYNTHETIC_DEMO 合成演示录取数据（{year}年；不得用于真实填报）"
+    return f"数据库录取记录（{year}年；原始官方来源未核验）"
+
+
 def query_admission_from_db(db: Session, school_name: str, province: str, year: int | None = None) -> list[dict]:
     """根据学校名+省份查录取数据，返回格式化结果"""
     school = get_school_by_name(db, school_name)
@@ -197,7 +209,7 @@ def query_admission_from_db(db: Session, school_name: str, province: str, year: 
                 "avg_score": s.avg_score,
                 "min_rank": s.min_rank,
                 "major": major.name if major else "院校线",
-                "data_source": f"数据库（来源：{school.name}官方/省考试院 {s.year}年数据）",
+                "data_source": _admission_source_label(school, s.year),
             }
         )
     return results
