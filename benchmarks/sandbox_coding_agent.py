@@ -24,6 +24,8 @@ from benchmarks.sandbox_workspace import run_sandbox_probe
 class CodingAction:
     kind: Literal["inspect", "edit", "test", "finish"]
     content: str = ""
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
 
 class CodingPlanner(Protocol):
@@ -82,10 +84,14 @@ def run_repair(
     planner: CodingPlanner,
     *,
     max_steps: int = 8,
+    max_provider_tokens: int = 6000,
+    require_provider_usage: bool = False,
 ) -> dict[str, Any]:
     """Require a *real sandbox test pass after the last patch* before completion."""
     if task_id not in _TASKS or type(max_steps) is not int or not 1 <= max_steps <= 12:
         raise ValueError("Unknown synthetic task or invalid model step budget")
+    if type(max_provider_tokens) is not int or not 1 <= max_provider_tokens <= 200000:
+        raise ValueError("Invalid provider Token budget")
     spec = _TASKS[task_id]
     actions: list[str] = []
     trace: list[dict[str, Any]] = []
@@ -93,6 +99,8 @@ def run_repair(
     last_patch_hash = ""
     last_test_pass = False
     tool_calls = test_runs = model_steps = 0
+    prompt_tokens = completion_tokens = 0
+    usage_known = True
     status = "blocked"
     reason = "step_budget_exhausted"
 
@@ -113,6 +121,22 @@ def run_repair(
                 break
             if not isinstance(action, CodingAction):
                 reason = "planner_contract_invalid"
+                break
+            if (
+                type(action.prompt_tokens) is not int
+                or type(action.completion_tokens) is not int
+                or action.prompt_tokens < 0
+                or action.completion_tokens < 0
+            ):
+                usage_known = False
+                if require_provider_usage:
+                    reason = "provider_usage_missing"
+                    break
+            else:
+                prompt_tokens += action.prompt_tokens
+                completion_tokens += action.completion_tokens
+            if prompt_tokens + completion_tokens > max_provider_tokens:
+                reason = "provider_token_budget_exhausted"
                 break
             if action.kind == "inspect":
                 tool_calls += 1
@@ -170,6 +194,8 @@ def run_repair(
         "status": status,
         "reason": reason,
         "model_steps": model_steps,
+        "prompt_tokens": prompt_tokens if usage_known else None,
+        "completion_tokens": completion_tokens if usage_known else None,
         "tool_calls": tool_calls,
         "test_runs": test_runs,
         "tool_sequence": actions,
@@ -184,13 +210,47 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--model", help="Explicit OpenAI-compatible model ID (optional)")
+    parser.add_argument("--permit-external-model", action="store_true")
     args = parser.parse_args(argv)
-    reports = [run_repair(name, args.image, ScriptedRepairPlanner(task["correct"])) for name, task in _TASKS.items()]
+    if args.model and not args.permit_external_model:
+        parser.error("Explicit --permit-external-model required before external API calls")
+    if not args.model and args.permit_external_model:
+        parser.error("--model is required with --permit-external-model")
+    if args.model:
+        import os
+
+        if not os.getenv("OPENAI_API_KEY"):
+            parser.error("OPENAI_API_KEY is required for explicit model calls")
+        from openai import OpenAI
+
+        from benchmarks.sandbox_model_planner import JSONCodingPlanner
+
+        client = OpenAI(
+            api_key=os.environ["OPENAI_API_KEY"],
+            base_url=os.getenv("OPENAI_API_BASE") or None,
+            timeout=20.0,
+            max_retries=0,
+        )
+        reports = [
+            run_repair(
+                name,
+                args.image,
+                JSONCodingPlanner(client, args.model),
+                require_provider_usage=True,
+            )
+            for name in _TASKS
+        ]
+        controller = "REAL_MODEL_NOT_SCRIPTED"
+    else:
+        reports = [run_repair(name, args.image, ScriptedRepairPlanner(task["correct"])) for name, task in _TASKS.items()]
+        controller = "SCRIPTED_NOT_LLM"
     for row in reports:
-        row["controller"] = "SCRIPTED_NOT_LLM"
+        row["controller"] = controller
     summary = {
         "suite": "synthetic_sandbox_code_repair_contract",
-        "controller": "SCRIPTED_NOT_LLM",
+        "controller": controller,
+        "model_id": args.model if args.model else None,
         "cases": len(reports),
         "passed": sum(r["status"] == "completed" for r in reports),
         "real_model_accuracy": "NOT_MEASURED",
