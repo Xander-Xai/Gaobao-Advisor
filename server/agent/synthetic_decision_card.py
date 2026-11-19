@@ -272,8 +272,13 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
         and all(row.get("data_profile") == PROFILE for _, row in captured)
     )
     if completed:
-        expected = json.dumps({"synthetic_demo": True, "sources": evidence})
-        completed = json.loads(result.answer) == json.loads(expected)
+        declared = json.loads(result.answer)
+        completed = (
+            declared.get("synthetic_demo") is True
+            and isinstance(declared.get("sources"), list)
+            and len(declared["sources"]) == len(evidence)
+            and set(declared["sources"]) == set(evidence)
+        )
     if not completed:
         schools = []  # Never emit partial comparisons as complete advice.
     return {
