@@ -1,0 +1,4 @@
+# Optional isolated Agent worker dependencies (not imported by public FastAPI startup).
+# Install only for an explicitly authorized synthetic Deep Agents worker.
+deepagents>=0.7.13,<1.0
+langchain-openai>=1.0,<2.0
