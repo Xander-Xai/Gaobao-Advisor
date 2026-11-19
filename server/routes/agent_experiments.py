@@ -30,17 +30,36 @@ class SyntheticResearchRequest(BaseModel):
     major: str = Field(..., min_length=3, max_length=80)
 
 
+def _require_experiment_enabled() -> None:
+    if (
+        os.getenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "").lower() != "true"
+        or os.getenv("APP_ENV", "development").lower() == "production"
+    ):
+        raise HTTPException(status_code=404, detail="Experiment not enabled")
+
+
+@router.get("/example")
+async def synthetic_research_example() -> dict:
+    """Discover an explicitly fictional request from the same seeded dataset."""
+    _require_experiment_enabled()
+    return {
+        "data_profile": "SYNTHETIC_DEMO",
+        "planner": "DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM",
+        "request": {
+            "school_a": DEMO_SCHOOLS[0][0],
+            "school_b": DEMO_SCHOOLS[1][0],
+            "major": DEMO_MAJORS[0][0],
+        },
+    }
+
+
 @router.post("/research")
 async def synthetic_research(request: SyntheticResearchRequest) -> dict:
     """Run actual synthetic SQL data tools and return redacted Agent trace.
 
     This is a demonstration of runtime policy, NOT actual LLM autonomy.
     """
-    if (
-        os.getenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "").lower() != "true"
-        or os.getenv("APP_ENV", "development").lower() == "production"
-    ):
-        raise HTTPException(status_code=404, detail="Experiment not enabled")
+    _require_experiment_enabled()
     if (
         request.school_a not in _ALLOWED_SCHOOLS
         or request.school_b not in _ALLOWED_SCHOOLS
