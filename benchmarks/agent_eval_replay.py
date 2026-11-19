@@ -12,9 +12,10 @@ import os
 import socket
 import tempfile
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from benchmarks.agent_eval_contract import grade_case, summarize
 
