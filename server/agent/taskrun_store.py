@@ -14,9 +14,10 @@ import re
 import secrets
 import sqlite3
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 _RUN_RE = re.compile(r"^syn_[0-9a-f]{32}$")
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,96}$")
@@ -106,7 +107,6 @@ class SyntheticTaskRunStore:
             raise ValueError("Only the frozen synthetic decision-card contract is accepted")
         # Reject free-form prompts, secrets and any fields not in the Pydantic contract.
         from scripts.seed_demo_data import DEMO_MAJORS, DEMO_SCHOOLS, DEMO_YEAR
-
         from server.agent.synthetic_decision_card import DecisionCardProfile
 
         fields = {
