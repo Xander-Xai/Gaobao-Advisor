@@ -52,6 +52,7 @@
 
       <AdminDataPanel v-show="activeTab === 'data'" />
       <AdminQualityPanel v-show="activeTab === 'quality'" />
+      <AdminAgentResearchPanel v-if="admin.canWrite" v-show="activeTab === 'agent'" />
       <AdminAuditPanel v-if="admin.isAdmin" v-show="activeTab === 'audit'" />
     </main>
   </div>
@@ -60,13 +61,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AdminAuditPanel from '../components/admin/AdminAuditPanel.vue'
+import AdminAgentResearchPanel from '../components/admin/AdminAgentResearchPanel.vue'
 import AdminDataPanel from '../components/admin/AdminDataPanel.vue'
 import AdminLoginPanel from '../components/admin/AdminLoginPanel.vue'
 import AdminQualityPanel from '../components/admin/AdminQualityPanel.vue'
 import AdminStatsCards from '../components/admin/AdminStatsCards.vue'
 import { useAdminStore } from '../stores/admin'
 
-type TabId = 'data' | 'quality' | 'audit'
+type TabId = 'data' | 'quality' | 'agent' | 'audit'
 
 const admin = useAdminStore()
 const activeTab = ref<TabId>('data')
@@ -80,6 +82,7 @@ const visibleTabs = computed(() => {
     { id: 'data', label: '招生数据' },
     { id: 'quality', label: '质检任务' },
   ]
+  if (admin.canWrite) tabs.push({ id: 'agent', label: 'Agent 研究' })
   if (admin.isAdmin) tabs.push({ id: 'audit', label: '操作审计' })
   return tabs
 })
