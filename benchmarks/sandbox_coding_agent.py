@@ -325,9 +325,7 @@ def main(argv: list[str] | None = None) -> int:
         "cases": len(reports),
         "passed": passed,
         "synthetic_model_task_pass_rate": round(passed / len(reports), 4) if args.model else None,
-        "provider_prompt_tokens": (
-            sum(r["prompt_tokens"] for r in reports) if tokens_known and args.model else None
-        ),
+        "provider_prompt_tokens": (sum(r["prompt_tokens"] for r in reports) if tokens_known and args.model else None),
         "provider_completion_tokens": (
             sum(r["completion_tokens"] for r in reports) if tokens_known and args.model else None
         ),
