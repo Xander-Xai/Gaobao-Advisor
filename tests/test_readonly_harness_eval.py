@@ -27,10 +27,10 @@ def test_offline_suite_has_30_independent_declared_oracles():
 
 def test_independent_fact_oracle_rejects_plausible_but_wrong_school_location():
     expected = [{"tool": "school_lookup", "school_name": "北辰示例科技大学（合成）", "province": "示例省·甲"}]
-    correct = [{"tool": "school_lookup", "result": {"school_name": "北辰示例科技大学（合成）",
-                                                   "province": "示例省·甲"}}]
-    wrong = [{"tool": "school_lookup", "result": {"school_name": "北辰示例科技大学（合成）",
-                                                 "province": "示例省·丁"}}]
+    correct = [
+        {"tool": "school_lookup", "result": {"school_name": "北辰示例科技大学（合成）", "province": "示例省·甲"}}
+    ]
+    wrong = [{"tool": "school_lookup", "result": {"school_name": "北辰示例科技大学（合成）", "province": "示例省·丁"}}]
     assert fact_oracle_matches(expected, correct)
     assert not fact_oracle_matches(expected, wrong)
 
