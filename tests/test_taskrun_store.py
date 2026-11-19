@@ -102,7 +102,7 @@ def test_recovery_budget_and_untrusted_profile_are_rejected(tmp_path):
         store.create(invalid, "deterministic", "sample-operator", "request-key-4")
     item = store.create(sample(), "deterministic", "sample-operator", "request-key-5")
     store.approve(item["run_id"], "senior-admin")
-    for attempt in range(2):
+    for _attempt in range(2):
         store.claim(item["run_id"], lease_seconds=15)
         with sqlite3.connect(store.path) as conn:
             conn.execute(
