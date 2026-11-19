@@ -124,7 +124,6 @@ def validate_synthetic_patch(source: str, task_id: str) -> None:
             raise ValueError("Patch has an unapproved constant")
 
 
-
 class ScriptedRepairPlanner:
     """Deterministic test fixture. No model is being evaluated."""
 
@@ -311,7 +310,9 @@ def main(argv: list[str] | None = None) -> int:
         ]
         controller = "REAL_MODEL_NOT_SCRIPTED"
     else:
-        reports = [run_repair(name, args.image, ScriptedRepairPlanner(task["correct"])) for name, task in _TASKS.items()]
+        reports = [
+            run_repair(name, args.image, ScriptedRepairPlanner(task["correct"])) for name, task in _TASKS.items()
+        ]
         controller = "SCRIPTED_NOT_LLM"
     for row in reports:
         row["controller"] = controller
