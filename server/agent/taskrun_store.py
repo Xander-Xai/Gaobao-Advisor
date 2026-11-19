@@ -14,8 +14,9 @@ import re
 import secrets
 import sqlite3
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 _RUN_RE = re.compile(r"^syn_[0-9a-f]{32}$")
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,96}$")
@@ -39,9 +40,20 @@ class SyntheticTaskRunStore:
     """Versioned operator task queue, independent of the admissions DB."""
 
     def __init__(self, path: Path) -> None:
-        self.path = Path(path).resolve()
-        if not self.path.is_absolute() or not self.path.parent.is_dir():
-            raise ValueError("Task journal requires an existing absolute directory")
+        original = Path(path)
+        if not original.is_absolute():
+            raise ValueError("Task journal path must be absolute")
+        self.path = original.resolve()
+        if not self.path.parent.is_dir():
+            raise ValueError("Task journal requires an existing directory")
+        # Never open the admissions SQLite as an Agent job journal.
+        import os
+
+        existing_database = os.getenv("DATABASE_URL", "")
+        if existing_database.startswith("sqlite:///"):
+            admissions_path = Path(existing_database.removeprefix("sqlite:///")).resolve()
+            if admissions_path == self.path:
+                raise ValueError("Task journal must be separate from admissions database")
         if self.path.exists() and not self.path.is_file():
             raise ValueError("Task journal must be a regular file")
         with self._open() as conn:
@@ -69,11 +81,15 @@ class SyntheticTaskRunStore:
                 """
             )
 
-    def _open(self) -> sqlite3.Connection:
+    @contextmanager
+    def _open(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA busy_timeout=5000")
-        return conn
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA busy_timeout=5000")
+            yield conn
+        finally:
+            conn.close()
 
     @staticmethod
     def _validate_run_id(run_id: str) -> None:
