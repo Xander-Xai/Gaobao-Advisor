@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from server.agent.readonly_harness import Decision, HarnessLimits, Planner, ReadOnlyTool, run_readonly_agent
+from server.agent.readonly_harness import Decision, HarnessLimits, HarnessResult, Planner, ReadOnlyTool, run_readonly_agent
 from server.agent.readonly_tools import _require_demo_database, synthetic_readonly_tools
 
 PROFILE = "SYNTHETIC_DEMO"
@@ -232,125 +232,141 @@ def build_synthetic_decision_card(
             require_provider_usage=require_provider_usage,
         ),
     )
-    records: dict[tuple[str, str], dict[str, Any]] = {}
-    for label, row in captured:
-        key = (label, row.get("school_name", row.get("major_name", "")))
-        records[key] = row
-    schools: list[dict[str, Any]] = []
-    missing: list[str] = []
-    evidence: list[str] = []
-    for school in (profile.school_a, profile.school_b):
-        admission_row = records.get(("admission_lookup", school), {})
-        plan_row = records.get(("plan_lookup", school), {})
-        if admission_row.get("record_count") != 1:
-            missing.append(f"{school}：缺少指定省份/专业/年份的合成录取记录")
-        if plan_row.get("record_count") != 1:
-            missing.append(f"{school}：缺少指定省份/专业/年份的合成招生计划")
-        if admission_row.get("record_count") == 1 and (
-            type(admission_row.get("min_score")) is not int
-            or type(admission_row.get("min_rank")) is not int
-            or admission_row["min_rank"] <= 0
-        ):
-            missing.append(f"{school}：最低分或最低位次缺少可信的合成记录")
-        if plan_row.get("record_count") == 1 and (
-            type(plan_row.get("plan_count")) is not int or plan_row["plan_count"] <= 0
-        ):
-            missing.append(f"{school}：招生计划人数为空或无效")
-        required = plan_row.get("subject_requirement")
-        constraint = "unknown"
-        if required == "不限":
-            constraint = "compatible"
-        elif required == "物理必选":
-            constraint = "compatible" if profile.subject_type == "物理类" else "incompatible"
-        elif required is not None:
-            missing.append(f"{school}：未知选科规则，需人工确认")
-        if constraint == "incompatible":
-            missing.append(f"{school}：选科与合成招生计划要求不匹配")
-        school_sources = admission_row.get("source_ids", []) + plan_row.get("source_ids", [])
-        evidence.extend(school_sources)
-        historical_score = admission_row.get("min_score")
-        schools.append(
-            {
-                "school_name": school,
-                "historical_min_score": historical_score,
-                "historical_min_rank": admission_row.get("min_rank"),
-                "historical_subject_type": admission_row.get("subject_type"),
-                "historical_score_difference": (
-                    profile.score - historical_score if type(historical_score) is int else None
-                ),
-                "plan_count": plan_row.get("plan_count"),
-                "plan_subject_requirement": required,
-                "subject_constraint": constraint,
-                "evidence_ids": school_sources,
-            }
-        )
-        if admission_row.get("record_count") == 1 and admission_row.get("subject_type") != profile.subject_type:
-            missing.append(f"{school}：录取历史记录选科类别与画像不一致")
-    major = records.get(("major_lookup", profile.major), {})
-    if major.get("record_count") != 1 or not isinstance(major.get("category"), str) or not major.get("category"):
-        missing.append("缺少指定合成专业的学科门类来源")
-    evidence.extend(major.get("source_ids", []))
+    return compose_synthetic_decision_card(
+        profile,
+        captured,
+        result,
+        planner_label=CONTROLLER if planner is None else "INJECTED_PLANNER_UNVERIFIED",
+    )
 
-    # A refusal is safe even without tools, but only *observed negative SQL
-    # evidence* establishes completion of a negative research task.
-    negative_evidence_count = sum(
-        row.get("record_count") != 1
-        or (
-            label == "admission_lookup"
-            and row.get("record_count") == 1
-            and row.get("subject_type") != profile.subject_type
-        )
-        or (
-            label == "plan_lookup"
-            and row.get("record_count") == 1
-            and (
-                row.get("subject_requirement") not in {"不限", "物理必选"}
-                or (row.get("subject_requirement") == "物理必选" and profile.subject_type != "物理类")
+
+def compose_synthetic_decision_card(
+    profile: DecisionCardProfile,
+    captured: list[tuple[str, dict[str, Any]]],
+    result: HarnessResult,
+    *,
+    planner_label: str,
+) -> dict[str, Any]:
+    """One deterministic Evidence Gate for both built-in and Deep Agents backends."""
+        records: dict[tuple[str, str], dict[str, Any]] = {}
+        for label, row in captured:
+            key = (label, row.get("school_name", row.get("major_name", "")))
+            records[key] = row
+        schools: list[dict[str, Any]] = []
+        missing: list[str] = []
+        evidence: list[str] = []
+        for school in (profile.school_a, profile.school_b):
+            admission_row = records.get(("admission_lookup", school), {})
+            plan_row = records.get(("plan_lookup", school), {})
+            if admission_row.get("record_count") != 1:
+                missing.append(f"{school}：缺少指定省份/专业/年份的合成录取记录")
+            if plan_row.get("record_count") != 1:
+                missing.append(f"{school}：缺少指定省份/专业/年份的合成招生计划")
+            if admission_row.get("record_count") == 1 and (
+                type(admission_row.get("min_score")) is not int
+                or type(admission_row.get("min_rank")) is not int
+                or admission_row["min_rank"] <= 0
+            ):
+                missing.append(f"{school}：最低分或最低位次缺少可信的合成记录")
+            if plan_row.get("record_count") == 1 and (
+                type(plan_row.get("plan_count")) is not int or plan_row["plan_count"] <= 0
+            ):
+                missing.append(f"{school}：招生计划人数为空或无效")
+            required = plan_row.get("subject_requirement")
+            constraint = "unknown"
+            if required == "不限":
+                constraint = "compatible"
+            elif required == "物理必选":
+                constraint = "compatible" if profile.subject_type == "物理类" else "incompatible"
+            elif required is not None:
+                missing.append(f"{school}：未知选科规则，需人工确认")
+            if constraint == "incompatible":
+                missing.append(f"{school}：选科与合成招生计划要求不匹配")
+            school_sources = admission_row.get("source_ids", []) + plan_row.get("source_ids", [])
+            evidence.extend(school_sources)
+            historical_score = admission_row.get("min_score")
+            schools.append(
+                {
+                    "school_name": school,
+                    "historical_min_score": historical_score,
+                    "historical_min_rank": admission_row.get("min_rank"),
+                    "historical_subject_type": admission_row.get("subject_type"),
+                    "historical_score_difference": (
+                        profile.score - historical_score if type(historical_score) is int else None
+                    ),
+                    "plan_count": plan_row.get("plan_count"),
+                    "plan_subject_requirement": required,
+                    "subject_constraint": constraint,
+                    "evidence_ids": school_sources,
+                }
             )
+            if admission_row.get("record_count") == 1 and admission_row.get("subject_type") != profile.subject_type:
+                missing.append(f"{school}：录取历史记录选科类别与画像不一致")
+        major = records.get(("major_lookup", profile.major), {})
+        if major.get("record_count") != 1 or not isinstance(major.get("category"), str) or not major.get("category"):
+            missing.append("缺少指定合成专业的学科门类来源")
+        evidence.extend(major.get("source_ids", []))
+
+        # A refusal is safe even without tools, but only *observed negative SQL
+        # evidence* establishes completion of a negative research task.
+        negative_evidence_count = sum(
+            row.get("record_count") != 1
+            or (
+                label == "admission_lookup"
+                and row.get("record_count") == 1
+                and row.get("subject_type") != profile.subject_type
+            )
+            or (
+                label == "plan_lookup"
+                and row.get("record_count") == 1
+                and (
+                    row.get("subject_requirement") not in {"不限", "物理必选"}
+                    or (row.get("subject_requirement") == "物理必选" and profile.subject_type != "物理类")
+                )
+            )
+            for label, row in captured
         )
-        for label, row in captured
-    )
-    # No success is possible on missing data, tool failure or fabricated claims.
-    completed = (
-        result.status == "completed"
-        and len(captured) == 5
-        and len(evidence) == 5
-        and not missing
-        and len(set(evidence)) == len(evidence)
-        and all(row.get("data_profile") == PROFILE for _, row in captured)
-    )
-    if completed:
-        declared = json.loads(result.answer)
+        # No success is possible on missing data, tool failure or fabricated claims.
         completed = (
-            declared.get("synthetic_demo") is True
-            and isinstance(declared.get("sources"), list)
-            and len(declared["sources"]) == len(evidence)
-            and set(declared["sources"]) == set(evidence)
+            result.status == "completed"
+            and len(captured) == 5
+            and len(evidence) == 5
+            and not missing
+            and len(set(evidence)) == len(evidence)
+            and all(row.get("data_profile") == PROFILE for _, row in captured)
         )
-    if not completed:
-        schools = []  # Never emit partial comparisons as complete advice.
-    return {
-        "status": "evidence_complete_historical_only" if completed else "needs_review",
-        "reason": result.reason,
-        "data_profile": PROFILE,
-        "planner": CONTROLLER if planner is None else "INJECTED_PLANNER_UNVERIFIED",
-        "profile": {
-            "province": profile.province,
-            "score": profile.score,
-            "subject_type": profile.subject_type,
-            "major": profile.major,
-            "year": profile.year,
-        },
-        "major_category": major.get("category") if completed else None,
-        "schools": schools,
-        "missing_evidence": missing if not completed else [],
-        "observed_negative_evidence_count": negative_evidence_count,
-        "evidence_ids": evidence if completed else [],
-        "manual_checks": [
-            "真实考生位次不可由示例分数推断",
-            "真实当年招生计划、选科要求及官方来源均未核验",
-            "历史最低分差不是录取概率，不提供冲稳保推荐",
-        ],
-        "execution": result.public_report(),
-        "disclaimer": DISCLAIMER,
-    }
+        if completed:
+            declared = json.loads(result.answer)
+            completed = (
+                declared.get("synthetic_demo") is True
+                and isinstance(declared.get("sources"), list)
+                and len(declared["sources"]) == len(evidence)
+                and set(declared["sources"]) == set(evidence)
+            )
+        if not completed:
+            schools = []  # Never emit partial comparisons as complete advice.
+        return {
+            "status": "evidence_complete_historical_only" if completed else "needs_review",
+            "reason": result.reason,
+            "data_profile": PROFILE,
+            "planner": planner_label,
+            "profile": {
+                "province": profile.province,
+                "score": profile.score,
+                "subject_type": profile.subject_type,
+                "major": profile.major,
+                "year": profile.year,
+            },
+            "major_category": major.get("category") if completed else None,
+            "schools": schools,
+            "missing_evidence": missing if not completed else [],
+            "observed_negative_evidence_count": negative_evidence_count,
+            "evidence_ids": evidence if completed else [],
+            "manual_checks": [
+                "真实考生位次不可由示例分数推断",
+                "真实当年招生计划、选科要求及官方来源均未核验",
+                "历史最低分差不是录取概率，不提供冲稳保推荐",
+            ],
+            "execution": result.public_report(),
+            "disclaimer": DISCLAIMER,
+        }
