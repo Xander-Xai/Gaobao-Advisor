@@ -118,16 +118,18 @@ def test_recovery_budget_and_untrusted_profile_are_rejected(tmp_path):
     # The previous lease cannot publish a "successful" late result.
     with pytest.raises(TaskRunConflict, match="stale"):
         store.finish(
-            item["run_id"], "outdated-lease", "SUCCEEDED",
-            {"data_profile": "SYNTHETIC_DEMO"}, None,
+            item["run_id"],
+            "outdated-lease",
+            "SUCCEEDED",
+            {"data_profile": "SYNTHETIC_DEMO"},
+            None,
         )
 
 
 def test_exhausted_lease_releases_owner_outstanding_quota(tmp_path):
     store = SyntheticTaskRunStore(tmp_path / "journal.db")
     ids = [
-        store.create(sample(), "deterministic", "sample-operator", f"quota-expire-{n:02}")["run_id"]
-        for n in range(8)
+        store.create(sample(), "deterministic", "sample-operator", f"quota-expire-{n:02}")["run_id"] for n in range(8)
     ]
     with pytest.raises(TaskRunConflict, match="outstanding"):
         store.create(sample(), "deterministic", "sample-operator", "quota-expire-08")
