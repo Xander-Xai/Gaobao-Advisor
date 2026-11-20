@@ -13,6 +13,8 @@ import re
 import uuid
 from collections.abc import Awaitable, Callable
 
+from server.observability.agent_trace import continue_trace, safe_agent_span
+
 logger = logging.getLogger(__name__)
 
 _REQUEST_ID: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="")
@@ -51,7 +53,15 @@ class RequestIDMiddleware:
                 message = {**message, "headers": raw_headers}
             await send(message)
 
+        route = scope.get("path", "")
+        group = "agent_admin" if route.startswith("/api/v1/admin/agent-") else (
+            "public_chat" if route.startswith("/api/v1/chat") else "other"
+        )
+        method = scope.get("method", "OTHER")
+        method = method if method in {"GET", "POST", "DELETE", "PUT", "PATCH"} else "OTHER"
         try:
-            await self.app(scope, receive, send_with_header)
+            with continue_trace(headers.get("traceparent")):
+                with safe_agent_span("http.request", {"http.method": method, "http.route_group": group}):
+                    await self.app(scope, receive, send_with_header)
         finally:
             _REQUEST_ID.reset(token)
