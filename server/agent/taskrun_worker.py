@@ -19,7 +19,7 @@ from typing import Any
 
 from server.agent.synthetic_decision_card import DecisionCardProfile, build_synthetic_decision_card
 from server.agent.taskrun_receipt_verifier import verify_taskrun_receipt
-from server.agent.taskrun_store import SyntheticTaskRunStore
+from server.agent.taskrun_store import SyntheticTaskRunStore, TaskRunConflict
 
 
 def _gate_execution(engine: str, *, permit_external_model: bool, model: str | None) -> None:
@@ -51,6 +51,7 @@ def execute_approved_run(
     claimed, token = store.claim(run_id, lease_seconds=600 if engine == "deepagents" else 120)
     profile = DecisionCardProfile(**claimed["payload"]["profile"])
     try:
+        store.assert_active_lease(run_id, token)
         if engine == "deepagents":
             if agent_runner is None:
                 from server.agent.deepagents_adapter import run_deepagents_research
@@ -59,13 +60,29 @@ def execute_approved_run(
             card = agent_runner(profile, model, task_id=run_id)
         else:
             card = build_synthetic_decision_card(profile)
+        # A cancellation during a blocking model/tool call must suppress any
+        # later SQL verification and result publication. This is cooperative,
+        # not a network request or OS process hard interrupt.
+        store.assert_active_lease(run_id, token)
         # Do not trust the runner's self-reported status or source labels.
         # Re-read the approved fictional profile against SQL outside the Agent.
         status = verify_taskrun_receipt(profile, card)
+        store.assert_active_lease(run_id, token)
         failure = None if status == "SUCCEEDED" else "insufficient_verified_evidence"
         return store.finish(run_id, token, status, card, failure)
+    except TaskRunConflict:
+        current = store.get(run_id)
+        if current["status"] == "CANCELLED":
+            return current
+        raise
     except Exception:  # noqa: BLE001 - never persist model/SQL/stack trace errors
-        return store.finish(run_id, token, "FAILED", None, "agent_execution_failed")
+        try:
+            return store.finish(run_id, token, "FAILED", None, "agent_execution_failed")
+        except TaskRunConflict:
+            current = store.get(run_id)
+            if current["status"] == "CANCELLED":
+                return current
+            raise
 
 
 def main(argv: list[str] | None = None) -> int:
