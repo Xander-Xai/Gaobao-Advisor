@@ -52,8 +52,13 @@ def test_expired_pointer_cleanup_is_bounded_and_preserves_task_history(tmp_path)
                 "(owner,memory_key,source_run_id,receipt_sha256,published_by,created_at,expires_at) "
                 "VALUES (?,?,?,?,?,?,?)",
                 (
-                    "synthetic-owner", str(index), "syn_" + f"{index:032x}",
-                    "a" * 64, "synthetic-admin", 0, 0 if index < 2 else 9999999999,
+                    "synthetic-owner",
+                    str(index),
+                    "syn_" + f"{index:032x}",
+                    "a" * 64,
+                    "synthetic-admin",
+                    0,
+                    0 if index < 2 else 9999999999,
                 ),
             )
     assert store.prune_expired(limit=1)["expired_memory_pointers_deleted"] == 1

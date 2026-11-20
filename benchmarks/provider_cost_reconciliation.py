@@ -35,8 +35,12 @@ def _money(value: Any) -> Decimal:
 
 def _validate_rate_card(card: dict[str, Any], model: str) -> tuple[Decimal, Decimal]:
     required = {
-        "model_id", "currency", "as_of_date", "source_url",
-        "input_usd_per_million_tokens", "output_usd_per_million_tokens",
+        "model_id",
+        "currency",
+        "as_of_date",
+        "source_url",
+        "input_usd_per_million_tokens",
+        "output_usd_per_million_tokens",
     }
     if not isinstance(card, dict) or set(card) != required:
         raise ValueError("Frozen pricing snapshot schema mismatch")
@@ -76,9 +80,7 @@ def estimate_synthetic_model_cost(
         ):
             raise ValueError("Invoice claim disagrees with frozen run usage")
         claimed_invoice_usd = str(_money(invoice["billed_usd"]).quantize(_QUANTUM))
-    digest = hashlib.sha256(
-        json.dumps(rate_card, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    digest = hashlib.sha256(json.dumps(rate_card, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
     # No dollar claims when the rate card is missing; this function requires
     # explicit model-specific pricing and a dated source.
     return {
@@ -95,8 +97,7 @@ def estimate_synthetic_model_cost(
         "estimated_cost_usd": str(estimated.quantize(_QUANTUM)),
         "declared_invoice_cost_usd": claimed_invoice_usd,
         "estimated_cost_per_passing_case_usd": (
-            str((estimated / Decimal(report["passed"])).quantize(_QUANTUM))
-            if report["passed"] else None
+            str((estimated / Decimal(report["passed"])).quantize(_QUANTUM)) if report["passed"] else None
         ),
         "pricing_independently_verified": False,
         "provider_execution_independently_verified": False,

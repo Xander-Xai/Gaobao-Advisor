@@ -37,4 +37,6 @@ rate-card.json:
 命令：python -m benchmarks.provider_cost_reconciliation --report synthetic-eval.json --rate-card rate-card.json --out cost-estimate.json
 
 以上金额是假设的**测试价格**，不是任意真实模型的当前定价。输出中的 provider_billing_reconciled 永远为 false；只有可信供应商结算记录、价格版本与真实运行身份都核验后，才能另行建立实际账单对账。
-\n## Memory 增量（与生产长期记忆不同）\n\n已消除 MemoryManager / Graph 持久化失败时将原始异常文本写入日志或 Trace 的风险；增加有界的合成证据记忆过期指针清理方法 prune_expired（仅清理索引、不删除 TaskRun / 审计）。仍不构成真实考生资料的个人信息完全删除或自动跨会话记忆。\n
+
+## Memory 增量（与生产长期记忆不同）\n\n已消除 MemoryManager / Graph 持久化失败时将原始异常文本写入日志或 Trace 的风险；增加有界的合成证据记忆过期指针清理方法 prune_expired（仅清理索引、不删除 TaskRun / 审计）。仍不构成真实考生资料的个人信息完全删除或自动
+跨会话记忆。

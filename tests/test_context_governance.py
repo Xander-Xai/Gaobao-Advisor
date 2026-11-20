@@ -89,13 +89,23 @@ def test_context_cap_retains_source_and_safe_json():
 def test_trace_grader_counts_executed_context_failures():
     execution = {
         "os_sandbox": False,
-        "trace": [{
-            "step": 1, "kind": "tool", "tool": "major_lookup",
-            "result": "context_budget_exhausted",
-            "model_elapsed_ms": 1.0, "prompt_tokens": 4, "completion_tokens": 2,
-        }],
-        "model_steps": 1, "tool_calls": 1, "tool_sequence": ["major_lookup"],
-        "prompt_tokens": 4, "completion_tokens": 2,
-        "status": "blocked", "reason": "context_budget_exhausted",
+        "trace": [
+            {
+                "step": 1,
+                "kind": "tool",
+                "tool": "major_lookup",
+                "result": "context_budget_exhausted",
+                "model_elapsed_ms": 1.0,
+                "prompt_tokens": 4,
+                "completion_tokens": 2,
+            }
+        ],
+        "model_steps": 1,
+        "tool_calls": 1,
+        "tool_sequence": ["major_lookup"],
+        "prompt_tokens": 4,
+        "completion_tokens": 2,
+        "status": "blocked",
+        "reason": "context_budget_exhausted",
     }
     assert grade_step_trace(execution)["executed_tool_calls"] == 1
