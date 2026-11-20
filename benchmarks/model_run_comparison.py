@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from benchmarks.decision_card_trace_eval import TRACE_CONTRACT, check_trace_receipt
+
 _CONTRACT = "SYNTHETIC_DECISION_CARD_V1"
 
 
@@ -63,6 +65,16 @@ def _validate(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if not isinstance(row.get("failure_codes"), list):
             raise ValueError("Missing failure categories")
         indexed[row["case_id"]] = row
+    # New trace-bearing reports require every case to carry a regradable receipt.
+    # Legacy no-trace declared reports are still accepted but have no trace evidence.
+    contract = report.get("trace_contract")
+    if contract is not None:
+        if contract != TRACE_CONTRACT or report.get("trace_validated_cases") != 8:
+            raise ValueError("Invalid redacted trace contract coverage")
+        for row in cases:
+            check_trace_receipt(row)
+    elif any("trace_receipt" in row or "execution_status" in row for row in cases):
+        raise ValueError("Trace receipt is present without its versioned contract")
     if sum(row["split"] == "holdout" for row in cases) != 4:
         raise ValueError("Expected frozen four-case holdout")
     if sum(row["prompt_tokens"] for row in cases) != report.get("provider_prompt_tokens"):
