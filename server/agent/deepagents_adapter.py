@@ -21,13 +21,13 @@ from pathlib import Path
 from typing import Any
 
 from server.agent.readonly_harness import HarnessResult
-from server.observability.agent_trace import safe_agent_span
 from server.agent.readonly_tools import _major
 from server.agent.synthetic_decision_card import (
     DecisionCardProfile,
     _fetch_row,
     compose_synthetic_decision_card,
 )
+from server.observability.agent_trace import safe_agent_span
 
 _MODEL_RE = re.compile(r"^openai:[A-Za-z0-9_.-]{2,100}$")
 _SKILL_PATH = Path(__file__).resolve().parent / "skills" / "synthetic-admissions" / "SKILL.md"
