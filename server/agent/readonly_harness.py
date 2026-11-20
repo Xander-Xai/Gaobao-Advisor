@@ -15,6 +15,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Protocol
 
+from server.agent.context_policy import ContextBudgetExceeded, bound_history, encode_observation
 from server.agent.synthetic_checkpoint import SQLiteSyntheticCheckpointStore, task_digest
 
 _SOURCE_RE = re.compile(r"^synthetic:[a-z_]+:[0-9a-f]{12}$")
@@ -311,17 +312,17 @@ def run_readonly_agent(
             trace.append({**step_meta, "kind": "tool", "tool": spec.name, "result": reason})
             break
         sources.update(refs)
-        observation = json.dumps(result, ensure_ascii=False, sort_keys=True, default=str)
-        history.append(
-            {
-                "tool": spec.name,
-                "observation": observation[: limits.max_observation_chars],
-                "source_ids": refs,
-            }
-        )
-        while len(json.dumps(history, ensure_ascii=False)) > limits.max_context_chars and len(history) > 1:
-            history.pop(0)
-            evictions += 1
+        try:
+            observation = encode_observation(result, limits.max_observation_chars)
+            history, removed = bound_history(
+                [*history, {"tool": spec.name, "observation": observation, "source_ids": refs}],
+                limits.max_context_chars,
+            )
+        except ContextBudgetExceeded:
+            reason = "context_budget_exhausted"
+            trace.append({**step_meta, "kind": "tool", "tool": spec.name, "result": reason})
+            break
+        evictions += removed
         peak_chars = max(peak_chars, len(json.dumps(history, ensure_ascii=False)))
         trace.append(
             {

@@ -28,7 +28,7 @@ _FIELDS = frozenset(
         "completion_tokens",
     }
 )
-_EXECUTED = frozenset({"ok", "tool_execution_failed", "tool_provenance_invalid", "tool_evidence_invalid"})
+_EXECUTED = frozenset({"ok", "tool_execution_failed", "tool_provenance_invalid", "tool_evidence_invalid", "context_budget_exhausted"})
 _TOOL_ERRORS = frozenset({"tool_not_allowlisted", "tool_schema_invalid", "tool_repeat_loop", *_EXECUTED})
 _BLOCKED = frozenset({"provider_usage_missing", "reported_token_budget_exhausted", "tool_budget_exhausted"})
 _TERMINAL = frozenset({"planner_failed", "planner_contract_invalid"})
