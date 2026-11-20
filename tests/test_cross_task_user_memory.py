@@ -235,7 +235,9 @@ def test_llm_stream_receives_bounded_user_memory_without_token(monkeypatch):
 
     client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create)))
     monkeypatch.setattr(llm, "_get_llm_client", lambda: client)
-    monkeypatch.setattr(llm, "_get_config", lambda: {"model": "synthetic-test-model", "temperature": 0, "max_tokens": 50})
+    monkeypatch.setattr(
+        llm, "_get_config", lambda: {"model": "synthetic-test-model", "temperature": 0, "max_tokens": 50}
+    )
     monkeypatch.setattr(llm, "_load_system_prompt", lambda: "base prompt")
     monkeypatch.setattr(llm, "_load_memory_for_session", lambda _session: [])
     monkeypatch.setattr(llm, "build_llm_context", lambda _state: "current user question")
