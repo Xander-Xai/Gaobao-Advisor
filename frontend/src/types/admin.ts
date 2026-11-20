@@ -193,3 +193,50 @@ export interface ReviewPayload {
   note: string
   expected_version: number
 }
+
+
+export interface SyntheticAgentResearchRequest {
+  school_a: string
+  school_b: string
+  major: string
+}
+
+export interface SyntheticAgentExample {
+  data_profile: 'SYNTHETIC_DEMO'
+  planner: 'DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM'
+  request: SyntheticAgentResearchRequest
+}
+
+export interface SyntheticAgentFact {
+  tool: 'school_lookup' | 'major_lookup'
+  school_name?: string
+  major_name?: string
+  province?: string
+  category?: string
+  source_id: string
+}
+
+export interface SyntheticAgentTraceEvent {
+  step: number
+  kind: 'tool' | 'finish' | 'abstain'
+  tool?: string
+  result?: string
+  elapsed_ms?: number
+  observed_source_count?: number
+}
+
+export interface SyntheticAgentResearchResult {
+  status: 'completed' | 'abstained' | 'blocked'
+  reason: string
+  facts: SyntheticAgentFact[]
+  disclaimer: string
+  planner: 'DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM'
+  execution: {
+    tool_calls: number
+    model_steps: number
+    prompt_tokens: number | null
+    completion_tokens: number | null
+    tool_sequence: string[]
+    trace: SyntheticAgentTraceEvent[]
+  }
+}

@@ -14,6 +14,9 @@ import type {
   SchoolQuery,
   Stats,
   SystemStatus,
+  SyntheticAgentExample,
+  SyntheticAgentResearchRequest,
+  SyntheticAgentResearchResult,
 } from '../types/admin'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
@@ -157,6 +160,19 @@ export const adminApi = {
   },
   reviewJob(id: number, payload: ReviewPayload, token: string): Promise<QualityJob> {
     return request<QualityJob>(`/admin/quality/jobs/${id}/review`, {
+      method: 'POST',
+      body: payload,
+      token,
+    })
+  },
+  agentResearchExample(token: string): Promise<SyntheticAgentExample> {
+    return request<SyntheticAgentExample>('/admin/agent-experiments/example', { token })
+  },
+  agentResearch(
+    payload: SyntheticAgentResearchRequest,
+    token: string,
+  ): Promise<SyntheticAgentResearchResult> {
+    return request<SyntheticAgentResearchResult>('/admin/agent-experiments/research', {
       method: 'POST',
       body: payload,
       token,

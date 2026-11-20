@@ -33,6 +33,36 @@
 | 可重复 Eval | 30 条显式合成用例（22 正常、8 负控制）与 24 个独立院校/专业事实断言 |
 | 可选真实模型探针 | `benchmarks/readonly_model_eval.py`，必须显式授权网络和 API 费用，默认 CI 不运行 |
 
+### 面向实际 API 的多步业务验证（P3，默认关闭）
+
+在**独立合成数据库、开发环境、管理员 operator 权限**下，新接口将原本的“离线研究脚本”接入实际 FastAPI HTTP 路径：
+
+```text
+POST /api/v1/admin/agent-experiments/research
+    → 现有管理员 Bearer 鉴权与 RBAC
+    → 合成院校/专业输入白名单
+    → 受约束观察驱动 Planner
+    → school_lookup(院校 A)
+    → school_lookup(院校 B)
+    → major_lookup(专业)
+    → 三条事实和对应来源 ID + 脱敏步数 Trace
+```
+
+这是一项**多步真实合成数据查询演示**，不是决定哪所学校更适合考生。Planner 由工具观测驱动，但明确标记为 `DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM`；不得据此声称真实 LLM 自主规划成功。
+
+仅在人工配置 `ENABLE_SYNTHETIC_AGENT_EXPERIMENT=true`、`APP_ENV=development` 和 `ENABLE_OUTBOUND_FETCH=false` 后启用。登录已配置的管理员后：
+
+```bash
+curl -sS -X POST http://localhost:8000/api/v1/admin/agent-experiments/research \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"school_a":"北辰示例科技大学（合成）","school_b":"海岳示例师范大学（合成）","major":"计算机科学与技术（合成）"}'
+```
+
+该接口只接受固定种子中的虚构学校和专业，不采集真实考生资料、不运行外部模型、不接受自由编写的 SQL/代码。生产环境即使设置开关仍返回 404，缺少管理员权限返回 401/403。现有公开 `/api/v1/chat` 不变。完成验收的证据在 `tests/test_agent_research_real_api_e2e.py`（真实临时 SQLite + HTTP TestClient）、`tests/test_agent_experiments_api.py`（权限与开关）和 `tests/test_synthetic_research.py`（工具链及缺数据拒答）。
+
+**切记：HTTP 执行 deadline 不是硬进程隔离，也不是多租户生产 Sandbox。** 若需要让真实模型执行不可信代码，必须使用独立受限容器、凭证隔离与真模型评测，不能复用这个查询接口冒充。
+
 ### 可靠 Agent 工程实战（P2 独立实验模块）
 
 | 要证明的能力 | 可复核证据 | 状态/边界 |
