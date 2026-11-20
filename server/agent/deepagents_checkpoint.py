@@ -34,7 +34,21 @@ def _profile_digest(profile: DecisionCardProfile, model_id: str, contract_sha256
         raise ValueError("Invalid fixed model identifier")
     if not isinstance(contract_sha256, str) or not _HEX_SHA.fullmatch(contract_sha256):
         raise ValueError("Missing frozen model and tool contract SHA")
-    from scripts.seed_demo_data import DATASET_VERSION
+    from scripts.seed_demo_data import DATASET_VERSION, DEMO_MAJORS, DEMO_SCHOOLS, DEMO_YEAR
+
+    if (
+        profile.school_a not in {row[0] for row in DEMO_SCHOOLS}
+        or profile.school_b not in {row[0] for row in DEMO_SCHOOLS}
+        or profile.school_a == profile.school_b
+        or profile.major not in {row[0] for row in DEMO_MAJORS}
+        or profile.province not in {"示例省·甲", "示例省·乙", "示例省·丙", "示例省·丁"}
+        or type(profile.score) is not int
+        or not 100 <= profile.score <= 750
+        or profile.subject_type not in {"物理类", "历史类"}
+        or type(profile.year) is not int
+        or profile.year != DEMO_YEAR
+    ):
+        raise ValueError("Only frozen fictional TaskRun profiles can be checkpointed")
 
     payload: dict[str, Any] = {
         "data_profile": "SYNTHETIC_DEMO",
