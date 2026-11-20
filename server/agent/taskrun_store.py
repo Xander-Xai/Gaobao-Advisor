@@ -234,6 +234,43 @@ class SyntheticTaskRunStore:
                 conn.rollback()
                 raise
 
+    def cancel(self, run_id: str, principal: str, *, admin: bool = False) -> dict[str, Any]:
+        """Cancel a synthetic task atomically and fence every prior worker.
+
+        For a RUNNING task this revokes the journal lease and prevents any
+        result publication. It does not interrupt a blocking model or thread.
+        """
+        self._validate_run_id(run_id)
+        if not isinstance(principal, str) or not 3 <= len(principal) <= 64:
+            raise ValueError("Invalid cancellation principal")
+        now = time.time()
+        with self._open() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute("SELECT * FROM synthetic_task_runs WHERE run_id=?", (run_id,)).fetchone()
+                if row is None or (row["owner"] != principal and not admin):
+                    raise TaskRunNotFound("No visible synthetic TaskRun")
+                if row["status"] == "CANCELLED":
+                    conn.commit()
+                    return self._public(row)
+                if row["status"] not in {"PENDING_APPROVAL", "APPROVED", "RUNNING"}:
+                    raise TaskRunConflict("Completed tasks cannot be cancelled")
+                conn.execute(
+                    "UPDATE synthetic_task_runs SET status='CANCELLED',"
+                    "failure_code='cancelled_by_operator',result_json=NULL,"
+                    "lease_token=NULL,lease_deadline=NULL,version=version+1,updated_at=? "
+                    "WHERE run_id=?",
+                    (now, run_id),
+                )
+                updated = conn.execute(
+                    "SELECT * FROM synthetic_task_runs WHERE run_id=?", (run_id,)
+                ).fetchone()
+                conn.commit()
+                return self._public(updated)
+            except Exception:
+                conn.rollback()
+                raise
+
     def claim(self, run_id: str, lease_seconds: int = 60) -> tuple[dict[str, Any], str]:
         """Atomic claim; expired workers cannot commit their old lease token."""
         self._validate_run_id(run_id)
