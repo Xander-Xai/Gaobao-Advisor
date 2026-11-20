@@ -73,8 +73,7 @@ def test_scripted_replan_with_transient_failure_and_independent_sql_oracle(tmp_p
     assert report["real_admissions_quality"] == "NOT_MEASURED"
     assert all(r["tool_attempts"] <= 7 and r["plan_rounds"] <= 3 for r in report["results"])
     assert any(
-        x["kind"] == "tool" and x["result"] == "transient_failure"
-        for r in report["results"] for x in r["trace"]
+        x["kind"] == "tool" and x["result"] == "transient_failure" for r in report["results"] for x in r["trace"]
     )
     assert all("password" not in str(r).lower() for r in report["results"])
 
