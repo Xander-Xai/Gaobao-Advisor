@@ -163,6 +163,8 @@ def check_trace_receipt(row: dict[str, Any]) -> None:
         raise ValueError("Missing versioned redacted trace receipt")
     if receipt.get("validated_redacted_trace") is not True:
         raise ValueError("Trace was not validated")
+    if not isinstance(receipt.get("step_events"), list):
+        raise ValueError("Malformed or missing redacted step events")
     expected = grade_step_trace(
         {
             "trace": receipt.get("step_events"),
