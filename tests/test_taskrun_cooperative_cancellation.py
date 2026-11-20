@@ -163,4 +163,4 @@ def test_worker_observes_cancellation_after_fake_model_and_on_error(tmp_path):
         env=env,
     )
     assert result.returncode == 0, result.stderr[-2600:] + result.stdout[-800:]
-    assert "cooperative_cancel_fake_model_cases=4/4" in result.stdout
+    assert "cooperative_cancel_fake_model_cases=6/6" in result.stdout
