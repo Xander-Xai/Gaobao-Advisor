@@ -88,6 +88,9 @@ def execute_approved_run(
 
             if not verify_synthetic_portfolio(profile, card):
                 raise ValueError("Portfolio SQL receipt does not match approved evidence")
+            from server.agent.portfolio_sql_oracle import verify_portfolio_sql_truth
+
+            verify_portfolio_sql_truth(profile, card)
             status = "SUCCEEDED" if card["eligible_history_count"] > 0 else "NEEDS_REVIEW"
         else:
             status = verify_taskrun_receipt(profile, card)
