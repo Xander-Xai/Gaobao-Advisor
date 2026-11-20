@@ -168,4 +168,4 @@ def test_report_storage_rejects_symlink_escape(isolated, tmp_path):
 def test_report_component_requires_full_match(isolated):
     _, storage = isolated
     with pytest.raises(ValueError, match="unsafe report_id"):
-        storage.save(Report(id="synthetic-report\\n", session_id="synthetic-session"))
+        storage.save(Report(id="synthetic-report\n", session_id="synthetic-session"))
