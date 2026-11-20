@@ -88,7 +88,7 @@ def test_fresh_mysql_upgrade_seed_and_idempotency(mysql_engine):
     assert repeat.returncode == 0, repeat.stderr
     with mysql_engine.connect() as connection:
         assert connection.execute(text("SELECT COUNT(*) FROM schools")).scalar_one() == 8
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261031_0005"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261120_0006"
 
 
 def test_existing_create_all_schema_is_adopted_without_data_loss(mysql_engine):
@@ -109,7 +109,7 @@ def test_existing_create_all_schema_is_adopted_without_data_loss(mysql_engine):
         assert (
             connection.execute(text("SELECT COUNT(*) FROM schools WHERE name='mysql-adopt-marker'")).scalar_one() == 1
         )
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261031_0005"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261120_0006"
     assert verify_tables(mysql_engine, ALL_TABLES) == []
 
 
