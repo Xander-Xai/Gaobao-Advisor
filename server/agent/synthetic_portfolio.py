@@ -41,10 +41,7 @@ class PortfolioRequest:
         if len(set(self.candidates)) != len(self.candidates):
             raise ValueError("Duplicate school/major candidate")
         if any(
-            not isinstance(item, tuple)
-            or len(item) != 2
-            or item[0] not in _SCHOOLS
-            or item[1] not in _MAJORS
+            not isinstance(item, tuple) or len(item) != 2 or item[0] not in _SCHOOLS or item[1] not in _MAJORS
             for item in self.candidates
         ):
             raise ValueError("Portfolio only accepts the seeded fictional school/major catalog")
