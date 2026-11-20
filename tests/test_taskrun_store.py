@@ -111,6 +111,44 @@ def test_recovery_budget_and_untrusted_profile_are_rejected(tmp_path):
             )
     with pytest.raises(TaskRunConflict, match="recovery"):
         store.claim(item["run_id"])
+    exhausted = store.get(item["run_id"])
+    assert exhausted["status"] == "FAILED"
+    assert exhausted["failure_code"] == "recovery_budget_exhausted"
+    assert exhausted["attempts"] == 2
+    # The previous lease cannot publish a "successful" late result.
+    with pytest.raises(TaskRunConflict, match="stale"):
+        store.finish(
+            item["run_id"],
+            "outdated-lease",
+            "SUCCEEDED",
+            {"data_profile": "SYNTHETIC_DEMO"},
+            None,
+        )
+
+
+def test_exhausted_lease_releases_owner_outstanding_quota(tmp_path):
+    store = SyntheticTaskRunStore(tmp_path / "journal.db")
+    ids = [
+        store.create(sample(), "deterministic", "sample-operator", f"quota-expire-{n:02}")["run_id"] for n in range(8)
+    ]
+    with pytest.raises(TaskRunConflict, match="outstanding"):
+        store.create(sample(), "deterministic", "sample-operator", "quota-expire-08")
+    target = ids[0]
+    store.approve(target, "separate-admin")
+    for _ in range(2):
+        store.claim(target, lease_seconds=15)
+        with sqlite3.connect(store.path) as conn:
+            conn.execute(
+                "UPDATE synthetic_task_runs SET lease_deadline=? WHERE run_id=?",
+                (time.time() - 5, target),
+            )
+    with pytest.raises(TaskRunConflict, match="recovery"):
+        store.claim(target, lease_seconds=15)
+    assert store.get(target)["status"] == "FAILED"
+    # No unbounded RUNNING tombstone consuming the eighth slot.
+    new = store.create(sample(), "deterministic", "sample-operator", "quota-expire-08")
+    assert new["status"] == "PENDING_APPROVAL"
+    assert new["run_id"] not in ids
 
 
 def test_atomic_pending_quota_prevents_unbounded_task_creation(tmp_path):

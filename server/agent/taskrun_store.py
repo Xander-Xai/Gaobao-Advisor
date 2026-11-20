@@ -253,6 +253,17 @@ class SyntheticTaskRunStore:
                 if not eligible:
                     raise TaskRunConflict("TaskRun is not claimable")
                 if row["attempts"] >= _MAX_ATTEMPTS:
+                    # An expired final attempt must not remain RUNNING forever:
+                    # it would permanently consume the owner's active-task quota.
+                    # Invalidate the old lease atomically before returning conflict.
+                    conn.execute(
+                        "UPDATE synthetic_task_runs SET status='FAILED',"
+                        "failure_code='recovery_budget_exhausted',"
+                        "lease_token=NULL,lease_deadline=NULL,version=version+1,updated_at=? "
+                        "WHERE run_id=?",
+                        (now, run_id),
+                    )
+                    conn.commit()
                     raise TaskRunConflict("TaskRun exhausted its recovery budget")
                 conn.execute(
                     "UPDATE synthetic_task_runs SET status='RUNNING',attempts=attempts+1,"
