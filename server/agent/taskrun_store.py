@@ -353,6 +353,24 @@ class SyntheticTaskRunStore:
                 conn.rollback()
                 raise
 
+    def assert_active_lease(self, run_id: str, lease_token: str) -> None:
+        """Cooperative cancellation check before/after potentially expensive work.
+
+        This is NOT a hard interrupt: a blocking provider request may finish
+        before the next check. Do not return the lease token to API clients.
+        """
+        self._validate_run_id(run_id)
+        if not isinstance(lease_token, str) or not re.fullmatch(r"[0-9a-f]{32}", lease_token):
+            raise ValueError("Invalid lease token")
+        with self._open() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM synthetic_task_runs "
+                "WHERE run_id=? AND status='RUNNING' AND lease_token=? AND lease_deadline>?",
+                (run_id, lease_token, time.time()),
+            ).fetchone()
+        if row is None:
+            raise TaskRunConflict("TaskRun lease no longer active")
+
     def finish(
         self, run_id: str, lease_token: str, status: str, result: dict[str, Any] | None, failure_code: str | None
     ) -> dict[str, Any]:
