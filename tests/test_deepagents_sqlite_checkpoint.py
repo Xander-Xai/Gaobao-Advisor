@@ -144,3 +144,67 @@ def test_langgraph_sqlite_persists_and_resumes_only_pending_node(tmp_path):
     assert resumed.returncode == 0, resumed.stderr[-2500:] + resumed.stdout[-500:]
     assert "langgraph_persistent_cross_process_resume=1/1" in resumed.stdout
     assert (tmp_path / "first-node-executions.txt").read_text(encoding="utf-8") == "first\n"
+
+
+def test_official_deepagents_constructor_accepts_private_sqlite_checkpointer(monkeypatch, tmp_path):
+    """Actual SDK graph construction only, deliberately no model invocation."""
+    from deepagents import (
+        GeneralPurposeSubagentProfile,
+        HarnessProfile,
+        create_deep_agent,
+        register_harness_profile,
+    )
+    from deepagents.backends import StateBackend
+    from deepagents.middleware import FilesystemMiddleware
+    from langchain.agents.middleware import ModelCallLimitMiddleware
+    from langchain_openai import ChatOpenAI
+
+    from scripts.seed_demo_data import DEMO_MAJORS, DEMO_SCHOOLS, DEMO_YEAR
+    from server.agent.deepagents_checkpoint import open_synthetic_deepagents_checkpointer
+    from server.agent.synthetic_decision_card import DecisionCardProfile
+
+    monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "true")
+    monkeypatch.setenv("ENABLE_OUTBOUND_FETCH", "false")
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///" + str(tmp_path / "fictional.sqlite"))
+    monkeypatch.setenv("SYNTHETIC_TASKRUN_JOURNAL", str(tmp_path / "journal.sqlite"))
+    model_id = "openai:synthetic-checkpoint-constructor"
+    register_harness_profile(
+        model_id,
+        HarnessProfile(
+            excluded_tools=frozenset(
+                {"ls", "glob", "grep", "write_file", "edit_file", "delete", "execute", "task", "write_todos"}
+            ),
+            general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
+        ),
+    )
+    profile = DecisionCardProfile(
+        school_a=DEMO_SCHOOLS[0][0],
+        school_b=DEMO_SCHOOLS[6][0],
+        major=DEMO_MAJORS[0][0],
+        province="示例省·甲",
+        score=550,
+        subject_type="物理类",
+        year=DEMO_YEAR,
+    )
+    backend = StateBackend()
+    model = ChatOpenAI(model=model_id.removeprefix("openai:"), api_key="synthetic-no-network-call", max_retries=0)
+    with open_synthetic_deepagents_checkpointer(
+        tmp_path / "checkpoint.sqlite", "syn_" + "c" * 32, profile, model_id, "e" * 64
+    ) as (saver, prior):
+        assert prior is False
+        graph = create_deep_agent(
+            model=model,
+            tools=[],
+            system_prompt="No network calls; synthetic checkpoint constructor.",
+            backend=backend,
+            middleware=[
+                FilesystemMiddleware(backend=backend, tools=["read_file"]),
+                ModelCallLimitMiddleware(run_limit=9, exit_behavior="end"),
+            ],
+            skills=["/skills/"],
+            checkpointer=saver,
+            subagents=[],
+        )
+        assert callable(graph.invoke)
+        assert "tools" in graph.get_graph().nodes
