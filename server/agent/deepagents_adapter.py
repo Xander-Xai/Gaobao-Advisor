@@ -248,9 +248,7 @@ def run_deepagents_research(
         if optional_checkpoint_path:
             from server.agent.deepagents_checkpoint import open_synthetic_deepagents_checkpointer
 
-            contract = hashlib.sha256(
-                (_SYSTEM + _SKILL_PATH.read_text(encoding="utf-8")).encode("utf-8")
-            ).hexdigest()
+            contract = hashlib.sha256((_SYSTEM + _SKILL_PATH.read_text(encoding="utf-8")).encode("utf-8")).hexdigest()
             checkpointer, prior_state = checkpoint_stack.enter_context(
                 open_synthetic_deepagents_checkpointer(
                     Path(optional_checkpoint_path), task_id, profile, model_id, contract
