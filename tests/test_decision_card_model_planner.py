@@ -145,6 +145,7 @@ from scripts.seed_demo_data import seed_database, DEMO_YEAR
 seed_database(db_path=dbpath, reset=True)
 
 from benchmarks.decision_card_business_eval import frozen_cases, grade_business_case
+from benchmarks.decision_card_trace_eval import grade_step_trace
 from server.agent.synthetic_decision_card import build_synthetic_decision_card, DecisionCardProfile
 from server.agent.decision_card_model_planner import DecisionCardModelPlanner
 
@@ -179,6 +180,14 @@ assert card["execution"]["tool_calls"] == 5
 assert card["execution"]["model_steps"] == 6
 assert card["execution"]["prompt_tokens"] == 108
 assert card["execution"]["completion_tokens"] == 42
+trace = grade_step_trace(card["execution"])
+assert trace["model_decisions"] == 6
+assert trace["executed_tool_calls"] == 5
+assert trace["provider_prompt_tokens"] == 108
+assert trace["provider_completion_tokens"] == 42
+assert [event["kind"] for event in trace["step_events"]] == ["tool"] * 5 + ["finish"]
+assert all(event["prompt_tokens"] == 18 for event in trace["step_events"])
+assert all(event["completion_tokens"] == 7 for event in trace["step_events"])
 assert card["planner"] == "INJECTED_PLANNER_UNVERIFIED"
 
 negative_case = next(x for x in frozen_cases() if x["case_id"] == "holdout-no-school")
