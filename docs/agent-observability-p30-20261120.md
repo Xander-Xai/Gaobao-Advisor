@@ -7,6 +7,7 @@
 - **HTTP → TaskRun → Worker**：沿用 P26 持久化的私有 W3C traceparent。FastAPI 与独立 Worker 现在分别初始化可选 OTLP exporter，Worker 退出前 flush。Trace ID 不放入公开 TaskRun JSON。
 - **阶段 Span**：HTTP request / TaskRun / Deep Agents runtime / planner / SQL tool / receipt verification 均使用固定 Span 名；无 prompt、学生画像、SQL 行、密钥、异常原文作为属性。HTTP status 和业务最终状态只记录有限枚举。
 - **低基数指标**：HTTP Prometheus 标签优先使用路由模板；中间件拿不到模板时退回静态业务分组，不再把 `/runs/<ID>` 写进 label。新增 `agent_taskrun_attempts_total{engine,status,reason}`，仅统计执行尝试次数，不是唯一任务数，也不等于考生有效交付数。
+- **跨进程指标边界**：短命 Worker 中的 `agent_taskrun_attempts_total` 只是本进程尝试计数，进程退出后 FastAPI 不能直接抓取它。新增 `agent_taskrun_stored_jobs{engine,status}`：仅在显式开启合成实验并配置独立 SQLite Journal 时，由 API `/metrics` 只读汇总持久化任务当前状态。该 Gauge 不是请求/尝试历史，也不能替代完整的生产 Metrics Pipeline。
 - **故障归因**：任务执行状态区分 SUCCEEDED / NEEDS_REVIEW / FAILED / CANCELLED / ERROR；失败原因仅允许固定归类。现有 agent_safe_spans_total 和 duration_seconds 可以定位阶段异常与时延。
 
 ## 本地验证（不需要付费模型或外部连接）

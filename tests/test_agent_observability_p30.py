@@ -105,6 +105,7 @@ def test_worker_wrapper_records_stored_status_not_exception_text(monkeypatch):
     ]
     assert matches
 
+
 def test_durable_taskrun_metrics_read_journal_without_identity(tmp_path, monkeypatch):
     from server.agent.taskrun_store import SyntheticTaskRunStore
     from tests.test_taskrun_store import sample
