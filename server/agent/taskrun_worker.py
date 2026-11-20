@@ -49,10 +49,27 @@ def execute_approved_run(
     engine = current["engine"]
     _gate_execution(engine, permit_external_model=permit_external_model, model=model)
     claimed, token = store.claim(run_id, lease_seconds=600 if engine == "deepagents" else 120)
-    profile = DecisionCardProfile(**claimed["payload"]["profile"])
+    payload = claimed["payload"]
+    if engine == "portfolio":
+        from server.agent.synthetic_portfolio import PortfolioRequest
+
+        options = payload["portfolio"]
+        profile = PortfolioRequest(
+            options["province"],
+            options["score"],
+            options["subject_type"],
+            options["year"],
+            tuple((item["school"], item["major"]) for item in options["candidates"]),
+        )
+    else:
+        profile = DecisionCardProfile(**payload["profile"])
     try:
         store.assert_active_lease(run_id, token)
-        if engine == "deepagents":
+        if engine == "portfolio":
+            from server.agent.synthetic_portfolio import build_synthetic_portfolio
+
+            card = build_synthetic_portfolio(profile)
+        elif engine == "deepagents":
             if agent_runner is None:
                 from server.agent.deepagents_adapter import run_deepagents_research
 
@@ -66,7 +83,14 @@ def execute_approved_run(
         store.assert_active_lease(run_id, token)
         # Do not trust the runner's self-reported status or source labels.
         # Re-read the approved fictional profile against SQL outside the Agent.
-        status = verify_taskrun_receipt(profile, card)
+        if engine == "portfolio":
+            from server.agent.synthetic_portfolio import verify_synthetic_portfolio
+
+            if not verify_synthetic_portfolio(profile, card):
+                raise ValueError("Portfolio SQL receipt does not match approved evidence")
+            status = "SUCCEEDED" if card["eligible_history_count"] > 0 else "NEEDS_REVIEW"
+        else:
+            status = verify_taskrun_receipt(profile, card)
         store.assert_active_lease(run_id, token)
         failure = None if status == "SUCCEEDED" else "insufficient_verified_evidence"
         return store.finish(run_id, token, status, card, failure)

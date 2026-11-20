@@ -21,7 +21,7 @@ from typing import Any
 
 _RUN_RE = re.compile(r"^syn_[0-9a-f]{32}$")
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,96}$")
-_ALLOWED_ENGINES = frozenset({"deterministic", "deepagents"})
+_ALLOWED_ENGINES = frozenset({"deterministic", "deepagents", "portfolio"})
 _MAX_ATTEMPTS = 2
 _MAX_OUTSTANDING_PER_OWNER = 8
 _MAX_TASK_JOURNAL_ROWS = 5000
@@ -105,6 +105,33 @@ class SyntheticTaskRunStore:
             raise ValueError("Unsupported execution engine")
         if not isinstance(payload, dict) or payload.get("data_profile") != "SYNTHETIC_DEMO":
             raise ValueError("TaskRun accepts synthetic data only")
+        if engine == "portfolio":
+            from server.agent.synthetic_portfolio import PortfolioRequest
+
+            if set(payload) != {"data_profile", "portfolio"} or not isinstance(payload["portfolio"], dict):
+                raise ValueError("Only the frozen synthetic portfolio contract is accepted")
+            options = payload["portfolio"]
+            if set(options) != {"province", "score", "subject_type", "year", "candidates"}:
+                raise ValueError("Unexpected portfolio fields")
+            candidates = options["candidates"]
+            if not isinstance(candidates, list) or any(
+                not isinstance(item, dict)
+                or set(item) != {"school", "major"}
+                or type(item["school"]) is not str
+                or type(item["major"]) is not str
+                for item in candidates
+            ):
+                raise ValueError("Unsupported portfolio candidate fields")
+            PortfolioRequest(
+                options["province"],
+                options["score"],
+                options["subject_type"],
+                options["year"],
+                tuple((item["school"], item["major"]) for item in candidates),
+            )
+            if len(_canonical(payload)) > 3000:
+                raise ValueError("Synthetic portfolio exceeds task budget")
+            return
         if set(payload) != {"data_profile", "profile"} or not isinstance(payload["profile"], dict):
             raise ValueError("Only the frozen synthetic decision-card contract is accepted")
         # Reject free-form prompts, secrets and any fields not in the Pydantic contract.

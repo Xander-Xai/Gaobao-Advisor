@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from server.admin.auth import AdminPrincipal, require_role
 from server.agent.taskrun_store import (
@@ -23,6 +23,7 @@ from server.agent.taskrun_store import (
 )
 from server.routes.agent_experiments import (
     SyntheticDecisionCardRequest,
+    SyntheticPortfolioRequest,
     _require_experiment_enabled,
 )
 
@@ -36,6 +37,15 @@ router = APIRouter(
 class NewSyntheticTaskRun(BaseModel):
     profile: SyntheticDecisionCardRequest
     engine: Literal["deterministic", "deepagents"] = "deterministic"
+    idempotency_key: str = Field(..., min_length=8, max_length=96, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+class NewSyntheticPortfolioTaskRun(BaseModel):
+    """Explicitly non-model, operator-approved multi-candidate research."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    portfolio: SyntheticPortfolioRequest
     idempotency_key: str = Field(..., min_length=8, max_length=96, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
@@ -63,6 +73,22 @@ async def create_synthetic_taskrun(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Unsupported synthetic task payload") from exc
+
+
+@router.post("/portfolio-runs", status_code=201)
+async def create_portfolio_taskrun(
+    request: NewSyntheticPortfolioTaskRun,
+    principal: AdminPrincipal = Depends(require_role("operator")),
+) -> dict:
+    """Create only frozen synthetic SQL work, subject to maker-checker approval."""
+    store = _store()
+    payload = {"data_profile": "SYNTHETIC_DEMO", "portfolio": request.portfolio.model_dump()}
+    try:
+        return store.create(payload, "portfolio", principal.username, request.idempotency_key)
+    except TaskRunConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail="Unsupported synthetic portfolio payload") from exc
 
 
 @router.get("/runs/{run_id}")
@@ -121,7 +147,7 @@ async def execute_synthetic_taskrun(
         item = store.get(run_id, requester=principal.username, admin=principal.role == "admin")
     except (TaskRunNotFound, ValueError) as exc:
         raise HTTPException(status_code=404, detail="No visible TaskRun") from exc
-    if item["engine"] != "deterministic":
+    if item["engine"] not in {"deterministic", "portfolio"}:
         raise HTTPException(status_code=409, detail="Deep Agents tasks require explicitly authorized worker")
     if item["status"] != "APPROVED":
         raise HTTPException(status_code=409, detail="TaskRun must be approved and claimable")
