@@ -70,9 +70,16 @@ def test_cli_cannot_start_canary_through_deterministic_mode(tmp_path):
     from benchmarks.decision_card_business_eval import main
 
     with pytest.raises(SystemExit):
-        main([
-            "--out", str(tmp_path / "result.json"), "--mode", "baseline",
-            "--synthetic-canary-journal", str(tmp_path / "journal.sqlite"),
-            "--canary-run-key", IDENTIFIER,
-        ])
+        main(
+            [
+                "--out",
+                str(tmp_path / "result.json"),
+                "--mode",
+                "baseline",
+                "--synthetic-canary-journal",
+                str(tmp_path / "journal.sqlite"),
+                "--canary-run-key",
+                IDENTIFIER,
+            ]
+        )
     assert not (tmp_path / "result.json").exists()
