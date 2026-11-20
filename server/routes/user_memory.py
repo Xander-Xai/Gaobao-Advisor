@@ -64,9 +64,7 @@ def list_memory_entries(response: Response, x_user_memory_token: str | None = He
 
 
 @router.put("/entries/{key}")
-def write_memory_entry(
-    key: str, body: MemoryWrite, response: Response, x_user_memory_token: str | None = Header(None)
-):
+def write_memory_entry(key: str, body: MemoryWrite, response: Response, x_user_memory_token: str | None = Header(None)):
     _no_store(response)
     return _call(
         memory.put_memory,
