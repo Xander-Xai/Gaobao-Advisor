@@ -115,9 +115,8 @@ def compare_model_runs(baseline: dict[str, Any], candidate: dict[str, Any]) -> d
         holdout["candidate_verified_outcomes"] >= holdout["baseline_verified_outcomes"]
         and not holdout["regressed_case_ids"]
     )
-    cheaper = (
-        holdout["provider_token_delta"] < 0
-        or (holdout["provider_token_delta"] == 0 and holdout["tool_call_delta"] < 0)
+    cheaper = holdout["provider_token_delta"] < 0 or (
+        holdout["provider_token_delta"] == 0 and holdout["tool_call_delta"] < 0
     )
     return {
         "kind": "DECLARED_MODEL_PAIRED_SYNTHETIC_COMPARISON",
