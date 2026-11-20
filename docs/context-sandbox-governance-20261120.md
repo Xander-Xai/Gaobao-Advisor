@@ -18,3 +18,22 @@
 pytest -q tests/test_context_governance.py tests/test_sandbox_workspace_governance.py tests/test_provider_cost_reconciliation.py tests/test_readonly_harness.py tests/test_decision_card_trace_eval.py tests/test_sandbox_workspace.py --no-cov -o addopts=''
 
 之后运行完整 CI（Python3.10/3.11、Frontend、MySQL/Redis、Compose、Security、CodeQL），并记录精确提交 SHA 的结果。
+
+## Cost 估算输入示例（均为人工提供的快照，不联网）
+
+rate-card.json:
+
+```json
+{
+  "model_id": "test-provider-model",
+  "currency": "USD",
+  "as_of_date": "2026-11-20",
+  "source_url": "https://example.invalid/pricing",
+  "input_usd_per_million_tokens": "2.50",
+  "output_usd_per_million_tokens": "10.00"
+}
+```
+
+命令：python -m benchmarks.provider_cost_reconciliation --report synthetic-eval.json --rate-card rate-card.json --out cost-estimate.json
+
+以上金额是假设的**测试价格**，不是任意真实模型的当前定价。输出中的 provider_billing_reconciled 永远为 false；只有可信供应商结算记录、价格版本与真实运行身份都核验后，才能另行建立实际账单对账。
