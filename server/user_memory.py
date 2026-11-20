@@ -23,9 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from db.database import get_session
 from db.models import UserMemoryEntry, UserMemoryVault, _utcnow
 
-ALLOWED_KEYS = frozenset(
-    {"preferred_regions", "interested_majors", "career_goal", "study_goal", "response_style"}
-)
+ALLOWED_KEYS = frozenset({"preferred_regions", "interested_majors", "career_goal", "study_goal", "response_style"})
 _MAX_VALUE_LENGTH = 120
 _TOKEN_PATTERN = re.compile(r"^mem1_[A-Za-z0-9_-]{64}$")
 _ALLOWED_STYLES = frozenset({"concise", "detailed", "comparison"})
@@ -271,8 +269,8 @@ def erase_vault(token: str) -> dict[str, Any]:
     db = get_session()
     try:
         owner = _owner(db, token)
-        removed = db.query(UserMemoryEntry).filter(UserMemoryEntry.vault_id == owner.id).delete(
-            synchronize_session=False
+        removed = (
+            db.query(UserMemoryEntry).filter(UserMemoryEntry.vault_id == owner.id).delete(synchronize_session=False)
         )
         db.delete(owner)
         db.commit()
