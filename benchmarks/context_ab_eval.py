@@ -276,11 +276,14 @@ def compare_pair(full: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
     for split in ("development", "holdout"):
         case_ids = sorted(key for key in left if left[key]["split"] == split)
         regressions = [
-            key for key in case_ids
+            key
+            for key in case_ids
             if (left[key]["passed"] and not right[key]["passed"])
             or (left[key]["safe_abstain"] and not right[key]["safe_abstain"])
         ]
-        base_tokens = sum(left[key]["prompt_tokens"] + left[key]["completion_tokens"] for key in case_ids) if real else None
+        base_tokens = (
+            sum(left[key]["prompt_tokens"] + left[key]["completion_tokens"] for key in case_ids) if real else None
+        )
         candidate_tokens = (
             sum(right[key]["prompt_tokens"] + right[key]["completion_tokens"] for key in case_ids) if real else None
         )
@@ -345,8 +348,8 @@ def compare_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> dict[s
         results.append({"trial": index, **result})
     real = frozen_identity[0] == "EXTERNAL_MODEL_CALLS_NOT_INDEPENDENTLY_ATTESTED"
     no_regression = all(r["holdout_no_regression"] for r in results)
-    repeatable_token_reduction = real and len(results) >= 2 and all(
-        r["holdout_provider_token_reduction"] is True for r in results
+    repeatable_token_reduction = (
+        real and len(results) >= 2 and all(r["holdout_provider_token_reduction"] is True for r in results)
     )
     token_deltas = [
         r["groups"]["holdout"]["provider_token_delta"]
@@ -365,7 +368,9 @@ def compare_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> dict[s
         "median_holdout_token_delta": median(token_deltas) if token_deltas else None,
         "descriptive_candidate": "REVIEW_REQUIRED"
         if real and repeatable_token_reduction and no_regression
-        else "NOT_ELIGIBLE_SCRIPTED" if not real else "REJECT_CANDIDATE",
+        else "NOT_ELIGIBLE_SCRIPTED"
+        if not real
+        else "REJECT_CANDIDATE",
         "paired_results": results,
         "real_user_quality": "NOT_MEASURED",
         "independent_expert_ground_truth": False,
@@ -422,7 +427,9 @@ def main(argv: list[str] | None = None) -> int:
             and os.environ.get("OPENAI_API_KEY")
             and os.environ.get("APP_ENV", "development").lower() != "production"
         ):
-            parser.error("Real model requires --permit-external-model, --confirm-provider-charges, key, model and nonproduction")
+            parser.error(
+                "Real model requires --permit-external-model, --confirm-provider-charges, key, model and nonproduction"
+            )
         if args.scripted_smoke:
             parser.error("Cannot mix scripted smoke with paid execution")
     elif args.permit_external_model or args.confirm_provider_charges:
