@@ -79,24 +79,20 @@ def test_cancel_is_owner_scoped_and_never_reverses_completed_results(tmp_path):
     one = store.get(created["run_id"])
     assert one["status"] == "CANCELLED"
     assert store.cancel(created["run_id"], "demo-owner")["status"] == "CANCELLED"
-    occupied = store.get(
-        store.create(payload(), "deterministic", "separate-owner", "quota-release-2026")["run_id"]
-    )
-    assert occupied["status"] == "PENDING_APPROVAL"
-    # Cancelling an outstanding task releases exactly one owner's quota slot.
-    original = store.get(
-        next(
-            row["run_id"]
-            for row in (
-                store.create(payload(), "deterministic", "demo-owner", f"quota-cancel-{n:02}")
-                for n in range(8)
-            )
-            if row["run_id"]
-        )
-    )
-    store.cancel(original["run_id"], "demo-owner")
+
+
+def test_cancelling_active_task_releases_exactly_one_owner_quota_slot(tmp_path):
+    store = SyntheticTaskRunStore(tmp_path / "journal.db")
+    ids = [
+        store.create(payload(), "deterministic", "demo-owner", f"quota-cancel-{n:02}")["run_id"]
+        for n in range(8)
+    ]
+    with pytest.raises(TaskRunConflict, match="quota"):
+        store.create(payload(), "deterministic", "demo-owner", "quota-cancel-08")
+    store.cancel(ids[0], "demo-owner")
     ninth = store.create(payload(), "deterministic", "demo-owner", "quota-cancel-08")
     assert ninth["status"] == "PENDING_APPROVAL"
+    assert ninth["run_id"] not in ids
 
 
 def test_api_cancel_authorization_and_state_machine(admin_client, monkeypatch, tmp_path):
