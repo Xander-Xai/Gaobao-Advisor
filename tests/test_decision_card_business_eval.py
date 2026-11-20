@@ -47,6 +47,12 @@ def test_real_sql_baseline_eight_cases_independently_scored(tmp_path):
     assert report["provider_prompt_tokens"] is None
     assert report["provider_completion_tokens"] is None
     assert report["real_admissions_accuracy"] == "NOT_MEASURED"
+    assert report["evaluation_contract"] == "SYNTHETIC_DECISION_CARD_V1"
+    assert report["run_id"].startswith("synthetic_eval_")
+    assert report["model_prompt_sha256"] is None
+    assert len(report["tool_contract_sha256"]) == 64
+    assert report["comparison_eligible"] is False
+    assert report["provider_cost_usd"] is None
     assert len(report["dataset_sha256"]) == 64
     assert all(row["passed"] and not row["failure_codes"] for row in report["results"])
 

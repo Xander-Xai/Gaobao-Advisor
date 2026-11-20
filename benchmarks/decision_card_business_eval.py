@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 import tempfile
 import time
 from dataclasses import asdict
@@ -323,6 +324,34 @@ def main(argv: list[str] | None = None) -> int:
         engine.dispose()
     report["controller"] = controller
     report["model_id"] = args.model if controller == "REAL_MODEL_NOT_SCRIPTED" else None
+    # Explicit provenance, not proof of provider execution or human review.
+    # Never persist API keys, endpoint URLs, raw model text or student data.
+    report["run_id"] = "synthetic_eval_" + secrets.token_hex(12)
+    report["evaluation_contract"] = "SYNTHETIC_DECISION_CARD_V1"
+    report["temperature"] = 0 if controller == "REAL_MODEL_NOT_SCRIPTED" else None
+    report["model_prompt_sha256"] = None
+    if controller == "REAL_MODEL_NOT_SCRIPTED":
+        from server.agent.decision_card_model_planner import _SYSTEM
+
+        report["model_prompt_sha256"] = hashlib.sha256(_SYSTEM.encode("utf-8")).hexdigest()
+    report["tool_contract_sha256"] = _digest(
+        {
+            "tools": ["major_lookup", "admission_lookup", "plan_lookup"],
+            "max_tool_calls": 5,
+            "require_provider_usage": controller == "REAL_MODEL_NOT_SCRIPTED",
+        }
+    )
+    report["provider_token_source"] = (
+        "OPENAI_COMPATIBLE_REPORTED_USAGE" if controller == "REAL_MODEL_NOT_SCRIPTED" else "NOT_MEASURED"
+    )
+    report["provider_cost_usd"] = None
+    report["comparison_eligible"] = (
+        controller == "REAL_MODEL_NOT_SCRIPTED"
+        and report["cases"] == 8
+        and report["holdout_cases"] == 4
+        and report["provider_prompt_tokens"] is not None
+        and report["provider_completion_tokens"] is not None
+    )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"{controller}: verified_business_tasks={report['passed']}/{report['cases']}")
