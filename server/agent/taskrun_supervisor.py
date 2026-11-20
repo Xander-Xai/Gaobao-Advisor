@@ -54,12 +54,9 @@ def _terminate_owned_group(proc: subprocess.Popen[bytes], *, grace_seconds: floa
         os.killpg(proc.pid, signal.SIGTERM)
     except ProcessLookupError:
         return False
-    try:
-        proc.wait(timeout=grace_seconds)
-    except subprocess.TimeoutExpired:
-        pass
-    # The direct child is intentionally not reaped until after killpg. This
-    # prevents its PID/PGID being reused while the group is being signalled.
+    # Hold the direct child unreaped until after the final group signal so
+    # its PID/PGID cannot be recycled between TERM and KILL.
+    time.sleep(grace_seconds)
     try:
         os.killpg(proc.pid, signal.SIGKILL)
     except ProcessLookupError:
