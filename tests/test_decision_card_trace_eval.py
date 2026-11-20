@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+
 import pytest
 
 from benchmarks.decision_card_trace_eval import (
