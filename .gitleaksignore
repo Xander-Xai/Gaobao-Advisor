@@ -1,0 +1,5 @@
+# One precise, reviewed false-positive from an old synthetic admin-login test fixture.
+# Commit 2c705491f51089efbb67b958948b6f2152895846 on PR #107
+# contained only a fabricated demo password; current test uses TEST_PW instead.
+# This is NOT a global rule exclusion. Never add real secrets here.
+2c705491f51089efbb67b958948b6f2152895846:tests/test_agent_research_real_api_e2e.py:generic-api-key:41
