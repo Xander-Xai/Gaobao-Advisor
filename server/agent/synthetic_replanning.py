@@ -219,25 +219,26 @@ def execute_synthetic_replanning(
         context = {
             "data_profile": "SYNTHETIC_DEMO",
             "profile": {
-                "school_a": profile.school_a, "school_b": profile.school_b,
-                "major": profile.major, "province": profile.province,
-                "subject_type": profile.subject_type, "year": profile.year,
+                "school_a": profile.school_a,
+                "school_b": profile.school_b,
+                "major": profile.major,
+                "province": profile.province,
+                "subject_type": profile.subject_type,
+                "year": profile.year,
             },
             "reason": reason,
             "plan_round": plan_rounds,
             "remaining_steps": list(remaining.values()),
             "completed_steps": [required[key] for key in required if key in completed],
-            "failed_step_attempts": [
-                {"step": required[key], "attempts": count}
-                for key, count in failures.items()
-            ],
+            "failed_step_attempts": [{"step": required[key], "attempts": count} for key, count in failures.items()],
             "tool_attempts_remaining": limits.max_tool_attempts - attempts,
             "plan_rounds_remaining": limits.max_plan_rounds - plan_rounds,
         }
         try:
             proposal, usage = policy.propose(context)
             if (
-                not isinstance(usage, tuple) or len(usage) != 2
+                not isinstance(usage, tuple)
+                or len(usage) != 2
                 or any(type(v) is not int or v < 0 for v in usage if v is not None)
             ):
                 raise ValueError("Invalid provider usage")
@@ -325,7 +326,9 @@ def execute_synthetic_replanning(
         trace=trace,
     )
     card = compose_synthetic_decision_card(
-        profile, captured, harness,
+        profile,
+        captured,
+        harness,
         planner_label="OPT_IN_MODEL_REPLANNING_UNVERIFIED" if require_provider_usage else "SCRIPTED_REPLANNING_NOT_LLM",
     )
     # The existing Evidence Gate intentionally requires exactly 5 observations,
