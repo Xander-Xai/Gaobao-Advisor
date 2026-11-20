@@ -131,7 +131,7 @@ def list_memories(token: str, *, limit: int = 12) -> list[dict[str, Any]]:
 
 
 def _validate_value(key: str, value: str, ttl_days: int) -> str:
-    if key not in ALLOWED_KEYS:
+    if not isinstance(key, str) or key not in ALLOWED_KEYS:
         raise MemoryInvalid("Unsupported memory category")
     if not isinstance(value, str):
         raise MemoryInvalid("Memory value must be text")
@@ -282,6 +282,35 @@ def erase_vault(token: str) -> dict[str, Any]:
             "credential_revoked": True,
             "backups_and_external_processors_erased": False,
         }
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def prune_expired(*, limit: int = 100) -> dict[str, int]:
+    """Bounded operator maintenance: physically delete expired preferences.
+
+    Run via trusted CLI/scheduler, not a public HTTP endpoint.
+    """
+    _require_enabled()
+    if type(limit) is not int or not 1 <= limit <= 1000:
+        raise MemoryInvalid("Cleanup limit must be 1..1000")
+    db = get_session()
+    try:
+        rows = (
+            db.query(UserMemoryEntry.id)
+            .filter(UserMemoryEntry.expires_at <= _utcnow())
+            .order_by(UserMemoryEntry.expires_at)
+            .limit(limit)
+            .all()
+        )
+        ids = [row[0] for row in rows]
+        if ids:
+            db.query(UserMemoryEntry).filter(UserMemoryEntry.id.in_(ids)).delete(synchronize_session=False)
+        db.commit()
+        return {"expired_entries_deleted": len(ids)}
     except Exception:
         db.rollback()
         raise
