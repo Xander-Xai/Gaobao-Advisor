@@ -34,7 +34,9 @@ def test_redacted_scorecard_calculates_synthetic_metrics_without_pretending_real
     assert "test-provider-model" not in str(output)
 
 
-@pytest.mark.parametrize("tamper", ["duplicate", "raw_trace", "wrong_count", "wrong_source", "bad_tokens", "inf_latency"])
+@pytest.mark.parametrize(
+    "tamper", ["duplicate", "raw_trace", "wrong_count", "wrong_source", "bad_tokens", "inf_latency"]
+)
 def test_invalid_claims_fail_closed(tamper):
     report = complete_run()
     if tamper == "duplicate":

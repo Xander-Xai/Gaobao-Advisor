@@ -52,25 +52,38 @@ def summarize_synthetic_delivery(report: dict[str, Any]) -> dict[str, Any]:
     attempts = successes = 0
     has_verified_trace = True
     allowed_failure_codes = {
-        "factual_mismatch", "source_contract_invalid", "incomplete_evidence",
-        "outcome_mismatch", "negative_evidence_not_observed", "unsafe_partial_decision",
-        "runtime_failure_not_valid_abstention", "wrong_data_profile", "school_sources_invalid",
+        "factual_mismatch",
+        "source_contract_invalid",
+        "incomplete_evidence",
+        "outcome_mismatch",
+        "negative_evidence_not_observed",
+        "unsafe_partial_decision",
+        "runtime_failure_not_valid_abstention",
+        "wrong_data_profile",
+        "school_sources_invalid",
         "trace_contract_invalid",
     }
     for row in rows:
         case_id = row.get("case_id") if isinstance(row, dict) else None
         if (
-            not isinstance(case_id, str) or not case_id or len(case_id) > 100
-            or case_id in ids or type(row.get("passed")) is not bool
-            or type(row.get("tool_calls")) is not int or not 0 <= row["tool_calls"] <= 5
-            or type(row.get("model_steps")) is not int or not 0 <= row["model_steps"] <= 8
+            not isinstance(case_id, str)
+            or not case_id
+            or len(case_id) > 100
+            or case_id in ids
+            or type(row.get("passed")) is not bool
+            or type(row.get("tool_calls")) is not int
+            or not 0 <= row["tool_calls"] <= 5
+            or type(row.get("model_steps")) is not int
+            or not 0 <= row["model_steps"] <= 8
             or not _nonnegative(row.get("elapsed_ms"))
         ):
             raise ValueError("Malformed case identity, result or execution counters")
         ids.add(case_id)
         errors = row.get("failure_codes")
-        if not isinstance(errors, list) or len(errors) > 12 or any(
-            not isinstance(item, str) or item not in allowed_failure_codes for item in errors
+        if (
+            not isinstance(errors, list)
+            or len(errors) > 12
+            or any(not isinstance(item, str) or item not in allowed_failure_codes for item in errors)
         ):
             raise ValueError("Unrecognized result failure codes")
         failure_codes.update(errors)
@@ -93,8 +106,11 @@ def summarize_synthetic_delivery(report: dict[str, Any]) -> dict[str, Any]:
             check_trace_receipt(row)
             for event in receipt["step_events"]:
                 if event["kind"] == "tool" and event["result"] in {
-                    "ok", "tool_execution_failed", "tool_provenance_invalid",
-                    "tool_evidence_invalid", "context_budget_exhausted",
+                    "ok",
+                    "tool_execution_failed",
+                    "tool_provenance_invalid",
+                    "tool_evidence_invalid",
+                    "context_budget_exhausted",
                 }:
                     attempts += 1
                     successes += int(event["result"] == "ok")
@@ -117,11 +133,11 @@ def summarize_synthetic_delivery(report: dict[str, Any]) -> dict[str, Any]:
         "p95_synthetic_elapsed_ms": _percentile_95(elapsed),
         "average_tool_calls_per_passing_case": round(tool_calls / passed, 4) if passed else None,
         "average_model_decisions_per_passing_case": round(model_steps / passed, 4) if passed else None,
-        "tool_contract_success_rate": round(successes / attempts, 4)
-        if has_verified_trace and attempts else None,
+        "tool_contract_success_rate": round(successes / attempts, 4) if has_verified_trace and attempts else None,
         "total_provider_declared_tokens": prompt_tokens + completion_tokens if tokens_known else None,
         "provider_declared_tokens_per_passing_case": round((prompt_tokens + completion_tokens) / passed, 2)
-        if tokens_known and passed else None,
+        if tokens_known and passed
+        else None,
         "failure_count_by_code": dict(sorted(failure_codes.items())),
         "trace_complete": has_verified_trace,
         "independent_expert_ground_truth": False,
