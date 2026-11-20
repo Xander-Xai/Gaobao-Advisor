@@ -185,6 +185,25 @@ with TestClient(app) as client:
     session.close()
     assert client.get(endpoint, headers=owner).status_code == 200
 
+    # Database receipt tampering cannot be used to bypass a frozen review digest.
+    with sqlite3.connect(root / "taskruns.sqlite") as db:
+        original_receipt = db.execute(
+            "SELECT result_json FROM synthetic_task_runs WHERE run_id=?", (run_id,)
+        ).fetchone()[0]
+        db.execute(
+            "UPDATE synthetic_task_runs SET result_json=? WHERE run_id=?",
+            (json.dumps({"data_profile": "SYNTHETIC_DEMO", "forged": True}), run_id),
+        )
+        db.commit()
+    assert client.get(endpoint, headers=owner).status_code == 409
+    with sqlite3.connect(root / "taskruns.sqlite") as db:
+        db.execute(
+            "UPDATE synthetic_task_runs SET result_json=? WHERE run_id=?",
+            (original_receipt, run_id),
+        )
+        db.commit()
+    assert client.get(endpoint, headers=owner).status_code == 200
+
     # Demonstrate actual expiry without wall-clock sleeping.
     with sqlite3.connect(root / "taskruns.sqlite") as db:
         db.execute("UPDATE synthetic_evidence_memory SET expires_at=0 WHERE source_run_id=?", (run_id,))
