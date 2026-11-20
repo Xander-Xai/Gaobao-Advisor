@@ -1,6 +1,6 @@
 # P14｜合成多候选 SQL 证据核验：受控 HTTP 入口
 
-> 延续 #117 的 Draft Stack。只读、合成演示、默认关闭。不是志愿方案提交接口、用户真实录取咨询或可接收任意文本的 Agent。
+> [Draft PR #118](https://github.com/Xander-Xai/Gaobao-Advisor/pull/118)，延续 #117 的依赖栈。只读、合成演示、默认关闭。不是志愿方案提交接口、用户真实录取咨询或可接收任意文本的 Agent。
 
 ## 接口
 
