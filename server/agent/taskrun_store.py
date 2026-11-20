@@ -279,6 +279,45 @@ class SyntheticTaskRunStore:
                 conn.rollback()
                 raise
 
+    def reconcile_exhausted(self, max_runs: int = 100) -> int:
+        """Terminalize expired final-attempt leases even when no worker reclaims them.
+
+        This explicit maintenance operation is bounded and idempotent. A
+        still-live lease and an expired first attempt remain untouched.
+        """
+        if type(max_runs) is not int or not 1 <= max_runs <= 200:
+            raise ValueError("Maintenance batch size must be between 1 and 200")
+        now = time.time()
+        with self._open() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                rows = conn.execute(
+                    "SELECT run_id FROM synthetic_task_runs "
+                    "WHERE status='RUNNING' AND attempts>=? AND lease_deadline<? "
+                    "ORDER BY lease_deadline,run_id LIMIT ?",
+                    (_MAX_ATTEMPTS, now, max_runs),
+                ).fetchall()
+                if not rows:
+                    conn.commit()
+                    return 0
+                ids = [row["run_id"] for row in rows]
+                placeholders = ",".join("?" for _ in ids)
+                update = conn.execute(
+                    "UPDATE synthetic_task_runs SET status='FAILED',"
+                    "failure_code='recovery_budget_exhausted',"
+                    "lease_token=NULL,lease_deadline=NULL,version=version+1,updated_at=? "
+                    f"WHERE status='RUNNING' AND attempts>=? AND lease_deadline<? "
+                    f"AND run_id IN ({placeholders})",
+                    (now, _MAX_ATTEMPTS, now, *ids),
+                )
+                if update.rowcount != len(ids):
+                    raise TaskRunConflict("Lease reconciliation changed unexpectedly")
+                conn.commit()
+                return update.rowcount
+            except Exception:
+                conn.rollback()
+                raise
+
     def finish(
         self, run_id: str, lease_token: str, status: str, result: dict[str, Any] | None, failure_code: str | None
     ) -> dict[str, Any]:
