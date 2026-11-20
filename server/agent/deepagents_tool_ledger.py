@@ -123,10 +123,10 @@ class SyntheticDeepAgentsToolLedger:
         self,
         sql_reader: Callable[[str, str], dict[str, Any]],
         negative: Callable[[str, dict[str, Any]], bool],
-    ) -> tuple[list[tuple[str, dict[str, Any]]], str | None]:
+    ) -> tuple[list[tuple[str, str, dict[str, Any]]], str | None]:
         """Restore only after checking EACH persisted result against fresh SQL."""
         rows = self._rows()
-        observations: list[tuple[str, dict[str, Any]]] = []
+        observations: list[tuple[str, str, dict[str, Any]]] = []
         seen: set[tuple[str, str]] = set()
         receipt: str | None = None
         for i, (kind, name, subject, payload) in enumerate(rows):
@@ -140,18 +140,18 @@ class SyntheticDeepAgentsToolLedger:
                     raise UnsafeToolReplay("Failed to recheck historical evidence") from exc
                 if payload != current or current.get("data_profile") != "SYNTHETIC_DEMO":
                     raise UnsafeToolReplay("Frozen SQL evidence no longer matches source snapshot")
-                observations.append((name, payload))
+                observations.append((name, subject, payload))
                 seen.add(key)
             elif kind == "decision":
                 if i != len(rows) - 1 or receipt is not None or name != "final" or subject != "-":
                     raise UnsafeToolReplay("Invalid final receipt ordering")
-                sources = [source for _, row in observations for source in row.get("source_ids", [])]
+                sources = [source for _, _, row in observations for source in row.get("source_ids", [])]
                 if payload == {"status": "complete", "source_ids": sorted(sources)}:
                     if (
                         seen != self.allowed
                         or len(sources) != 5
                         or len(set(sources)) != 5
-                        or any(negative(tool, row) for tool, row in observations)
+                        or any(negative(tool, row) for tool, _, row in observations)
                     ):
                         raise UnsafeToolReplay("Claimed successful tool receipt is not verifiable")
                     receipt = "complete"
