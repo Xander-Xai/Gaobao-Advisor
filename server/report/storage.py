@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import uuid
 from pathlib import Path
 
 from server.report.models import Report
@@ -81,6 +83,74 @@ class ReportStorage:
         for fp in sorted(session_dir.glob("*.json")):
             reports.append(self._load_file(fp))
         return reports
+
+    def stage_session_deletion(self, session_id: str) -> tuple[Path, int] | None:
+        """Atomically hide validated reports before the database transaction.
+
+        Reports in .purge-staging are not visible to load(). No arbitrary path
+        or symlink may be deleted. This is not a cross-process writer lock.
+        """
+        session_dir = self._base / _safe_component(session_id, "session_id")
+        if session_dir.is_symlink():
+            raise ValueError("Symlinked report directory is unsafe")
+        if not session_dir.exists():
+            return None
+        if not session_dir.is_dir():
+            raise ValueError("Report storage entry is not a directory")
+        entries = list(session_dir.iterdir())
+        if len(entries) > 1000 or any(
+            item.is_symlink()
+            or not item.is_file()
+            or item.suffix != ".json"
+            or not _SAFE_COMPONENT_RE.fullmatch(item.stem)
+            for item in entries
+        ):
+            raise ValueError("Report directory contains unrecognized files")
+        staged_root = self._base / ".purge-staging"
+        if staged_root.is_symlink():
+            raise ValueError("Report staging root cannot be a symlink")
+        staged_root.mkdir(parents=True, exist_ok=True)
+        if staged_root.is_symlink():
+            raise ValueError("Report staging root cannot be a symlink")
+        staged = staged_root / ("pending-" + uuid.uuid4().hex)
+        os.replace(session_dir, staged)
+        return staged, len(entries)
+
+    def restore_staged_session(self, session_id: str, staged: Path) -> None:
+        """Restore hidden reports only when the SQL transaction fails."""
+        original = self._base / _safe_component(session_id, "session_id")
+        self._validate_stage(staged)
+        if original.exists() or original.is_symlink():
+            raise RuntimeError("Original report directory was recreated during erasure")
+        os.replace(staged, original)
+
+    def finalize_staged_session(self, staged: Path) -> int:
+        """Delete staged JSON files; never follow child symlinks or arbitrary paths."""
+        self._validate_stage(staged)
+        entries = list(staged.iterdir())
+        if len(entries) > 1000 or any(
+            item.is_symlink()
+            or not item.is_file()
+            or item.suffix != ".json"
+            or not _SAFE_COMPONENT_RE.fullmatch(item.stem)
+            for item in entries
+        ):
+            raise ValueError("Staged report directory changed unexpectedly")
+        for item in entries:
+            item.unlink()
+        staged.rmdir()
+        return len(entries)
+
+    def _validate_stage(self, staged: Path) -> None:
+        root = self._base / ".purge-staging"
+        if (
+            staged.is_symlink()
+            or root.is_symlink()
+            or staged.parent.resolve() != root.resolve()
+            or not re.fullmatch(r"pending-[a-f0-9]{32}", staged.name)
+            or not staged.is_dir()
+        ):
+            raise ValueError("Invalid isolated report deletion stage")
 
     @staticmethod
     def _load_file(path: Path) -> Report:
