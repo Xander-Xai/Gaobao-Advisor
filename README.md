@@ -70,6 +70,8 @@ python -m benchmarks.decision_card_business_eval \
 
 **输出**：完整证据才提供两所虚构学校的历史最低分、分差、最低位次、招生计划数、选科约束与来源 ID。缺记录、选科冲突、无效来源/字段或工具出错时返回 `needs_review`，不显示有误导性的部分比较。所有结果注明**历史分差≠录取概率**，实际考生位次、当年官方计划与政策均未核验，不能给真实“冲稳保”推荐。
 
+**P4 验证门禁：** 该业务卡只可作为合成历史事实与拒答路径的工程证明。每次主分支集成必须使用对应提交的完整 CI/CodeQL 结果；真实模型效果、考生决策正确率与人工招生专家审查仍未测量。
+
 实验开关、operator 权限、生产禁用规则与 P3 相同。打开运营工作台 `/admin` 的「Agent 研究」标签，可点击「核验历史数据与招生约束」查看演示，结果显示真实 5 次工具查询和可信来源；也可：
 
 ```bash
@@ -147,6 +149,8 @@ python -m benchmarks.readonly_harness_eval --out /tmp/gaobao-harness-eval.json
 ```
 
 **指标边界：** 30/30 表示脚本化控制器在已定义的工具流程/安全契约中通过，不是大模型自主规划成功率，也不是高考录取建议准确率。可选的 OpenAI-compatible Planner 尚未完成真实模型的独立 Benchmark。隔离 SQLite + 工具白名单**不等于** Claude Code/Pi 的 OS Sandbox。完整机制、风险和求职证据边界见 [Agent Harness 实验手册](docs/agent-readonly-harness-evidence-20261120.md)。
+
+**PR 合并门禁：** 对每次新增提交，必须以该 PR 当前 HEAD SHA 的必需 CI/CodeQL 检查为准；历史绿色检查不自动代表后续文档或代码提交已验证。
 
 ---
 
