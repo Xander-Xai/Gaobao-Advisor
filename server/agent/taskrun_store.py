@@ -115,7 +115,11 @@ class SyntheticTaskRunStore:
                 raise ValueError("Unexpected portfolio fields")
             candidates = options["candidates"]
             if not isinstance(candidates, list) or any(
-                not isinstance(item, dict) or set(item) != {"school", "major"} for item in candidates
+                not isinstance(item, dict)
+                or set(item) != {"school", "major"}
+                or type(item["school"]) is not str
+                or type(item["major"]) is not str
+                for item in candidates
             ):
                 raise ValueError("Unsupported portfolio candidate fields")
             PortfolioRequest(
