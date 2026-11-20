@@ -44,6 +44,7 @@ class SyntheticDeepAgentsToolLedger:
         self.path = Path(path)
         self.run_id = run_id
         self.expected_contract = _profile_digest(profile, model_id, contract_sha256)
+        self.last_abstain_reason: str | None = None
         self.allowed = {
             ("major_lookup", profile.major),
             ("admission_lookup", profile.school_a),
@@ -126,6 +127,7 @@ class SyntheticDeepAgentsToolLedger:
     ) -> tuple[list[tuple[str, str, dict[str, Any]]], str | None]:
         """Restore only after checking EACH persisted result against fresh SQL."""
         rows = self._rows()
+        self.last_abstain_reason = None
         observations: list[tuple[str, str, dict[str, Any]]] = []
         seen: set[tuple[str, str]] = set()
         receipt: str | None = None
@@ -161,6 +163,7 @@ class SyntheticDeepAgentsToolLedger:
                     if not any(negative(tool, row) for tool, row in observations):
                         raise UnsafeToolReplay("Abstention lacks observed negative SQL evidence")
                     receipt = "abstained"
+                    self.last_abstain_reason = payload["reason_code"]
                 else:
                     raise UnsafeToolReplay("Malformed or unauthorised persisted decision")
             else:
