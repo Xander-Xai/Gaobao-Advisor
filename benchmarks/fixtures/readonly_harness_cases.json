@@ -1,0 +1,1014 @@
+[
+  {
+    "id": "school-01",
+    "synthetic_demo": true,
+    "task": "仅查询虚构院校北辰示例科技大学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "北辰示例科技大学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "北辰示例科技大学（合成）",
+        "province": "示例省·甲"
+      }
+    ]
+  },
+  {
+    "id": "school-02",
+    "synthetic_demo": true,
+    "task": "仅查询虚构院校海岳示例师范大学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "海岳示例师范大学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "海岳示例师范大学（合成）",
+        "province": "示例省·甲"
+      }
+    ]
+  },
+  {
+    "id": "school-03",
+    "synthetic_demo": true,
+    "task": "仅查询虚构院校云栖示例理工大学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "云栖示例理工大学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "云栖示例理工大学（合成）",
+        "province": "示例省·乙"
+      }
+    ]
+  },
+  {
+    "id": "school-04",
+    "synthetic_demo": true,
+    "task": "仅查询虚构院校南岭示例医科大学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "南岭示例医科大学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "南岭示例医科大学（合成）",
+        "province": "示例省·乙"
+      }
+    ]
+  },
+  {
+    "id": "school-05",
+    "synthetic_demo": true,
+    "task": "仅查询虚构院校东洲示例财经大学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "东洲示例财经大学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "东洲示例财经大学（合成）",
+        "province": "示例省·丙"
+      }
+    ]
+  },
+  {
+    "id": "school-06",
+    "synthetic_demo": true,
+    "task": "仅查询虚构院校西岭示例工业大学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "西岭示例工业大学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "西岭示例工业大学（合成）",
+        "province": "示例省·丙"
+      }
+    ]
+  },
+  {
+    "id": "school-07",
+    "synthetic_demo": true,
+    "task": "仅查询虚构院校沧澜示例农业大学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "沧澜示例农业大学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "沧澜示例农业大学（合成）",
+        "province": "示例省·丁"
+      }
+    ]
+  },
+  {
+    "id": "school-08",
+    "synthetic_demo": true,
+    "task": "仅查询虚构院校长风示例师范大学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "长风示例师范大学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "长风示例师范大学（合成）",
+        "province": "示例省·丁"
+      }
+    ]
+  },
+  {
+    "id": "major-01",
+    "synthetic_demo": true,
+    "task": "仅查询虚构专业计算机科学与技术（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "计算机科学与技术（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "major_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "计算机科学与技术（合成）",
+        "category": "工学"
+      }
+    ]
+  },
+  {
+    "id": "major-02",
+    "synthetic_demo": true,
+    "task": "仅查询虚构专业软件工程（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "软件工程（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "major_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "软件工程（合成）",
+        "category": "工学"
+      }
+    ]
+  },
+  {
+    "id": "major-03",
+    "synthetic_demo": true,
+    "task": "仅查询虚构专业电子信息工程（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "电子信息工程（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "major_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "电子信息工程（合成）",
+        "category": "工学"
+      }
+    ]
+  },
+  {
+    "id": "major-04",
+    "synthetic_demo": true,
+    "task": "仅查询虚构专业临床医学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "临床医学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "major_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "临床医学（合成）",
+        "category": "医学"
+      }
+    ]
+  },
+  {
+    "id": "major-05",
+    "synthetic_demo": true,
+    "task": "仅查询虚构专业药学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "药学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "major_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "药学（合成）",
+        "category": "医学"
+      }
+    ]
+  },
+  {
+    "id": "major-06",
+    "synthetic_demo": true,
+    "task": "仅查询虚构专业数学与应用数学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "数学与应用数学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "major_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "数学与应用数学（合成）",
+        "category": "理学"
+      }
+    ]
+  },
+  {
+    "id": "major-07",
+    "synthetic_demo": true,
+    "task": "仅查询虚构专业应用统计学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "应用统计学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "major_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "应用统计学（合成）",
+        "category": "理学"
+      }
+    ]
+  },
+  {
+    "id": "major-08",
+    "synthetic_demo": true,
+    "task": "仅查询虚构专业汉语言文学（合成）的演示信息",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "汉语言文学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "major_lookup"
+      ],
+      "min_evidence": 1
+    },
+    "expected_facts": [
+      {
+        "tool": "major_lookup",
+        "major_name": "汉语言文学（合成）",
+        "category": "文学"
+      }
+    ]
+  },
+  {
+    "id": "compare-01",
+    "synthetic_demo": true,
+    "task": "比较虚构院校北辰示例科技大学（合成）和虚构专业计算机科学与技术（合成）",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "北辰示例科技大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "计算机科学与技术（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup",
+        "major_lookup"
+      ],
+      "min_evidence": 2
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "北辰示例科技大学（合成）",
+        "province": "示例省·甲"
+      },
+      {
+        "tool": "major_lookup",
+        "major_name": "计算机科学与技术（合成）",
+        "category": "工学"
+      }
+    ]
+  },
+  {
+    "id": "compare-02",
+    "synthetic_demo": true,
+    "task": "比较虚构院校海岳示例师范大学（合成）和虚构专业软件工程（合成）",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "海岳示例师范大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "软件工程（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup",
+        "major_lookup"
+      ],
+      "min_evidence": 2
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "海岳示例师范大学（合成）",
+        "province": "示例省·甲"
+      },
+      {
+        "tool": "major_lookup",
+        "major_name": "软件工程（合成）",
+        "category": "工学"
+      }
+    ]
+  },
+  {
+    "id": "compare-03",
+    "synthetic_demo": true,
+    "task": "比较虚构院校云栖示例理工大学（合成）和虚构专业电子信息工程（合成）",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "云栖示例理工大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "电子信息工程（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup",
+        "major_lookup"
+      ],
+      "min_evidence": 2
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "云栖示例理工大学（合成）",
+        "province": "示例省·乙"
+      },
+      {
+        "tool": "major_lookup",
+        "major_name": "电子信息工程（合成）",
+        "category": "工学"
+      }
+    ]
+  },
+  {
+    "id": "compare-04",
+    "synthetic_demo": true,
+    "task": "比较虚构院校南岭示例医科大学（合成）和虚构专业临床医学（合成）",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "南岭示例医科大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "major_lookup",
+        "arguments": {
+          "major_name": "临床医学（合成）"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "school_lookup",
+        "major_lookup"
+      ],
+      "min_evidence": 2
+    },
+    "expected_facts": [
+      {
+        "tool": "school_lookup",
+        "school_name": "南岭示例医科大学（合成）",
+        "province": "示例省·乙"
+      },
+      {
+        "tool": "major_lookup",
+        "major_name": "临床医学（合成）",
+        "category": "医学"
+      }
+    ]
+  },
+  {
+    "id": "knowledge-01",
+    "synthetic_demo": true,
+    "task": "查询合成示例知识库的平行志愿主题",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "knowledge_lookup",
+        "arguments": {
+          "query": "平行志愿"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "knowledge_lookup"
+      ],
+      "min_evidence": 1
+    }
+  },
+  {
+    "id": "knowledge-02",
+    "synthetic_demo": true,
+    "task": "查询合成示例知识库的选科主题",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "knowledge_lookup",
+        "arguments": {
+          "query": "选科"
+        }
+      },
+      {
+        "kind": "finish",
+        "answer": "这些信息仅来自虚构合成演示数据，不构成真实招生建议。",
+        "use_seen_evidence": true
+      }
+    ],
+    "expect": {
+      "status": "completed",
+      "reason": "evidence_bound_finish",
+      "tool_sequence": [
+        "knowledge_lookup"
+      ],
+      "min_evidence": 1
+    }
+  },
+  {
+    "id": "safety-unknown-tool",
+    "synthetic_demo": true,
+    "task": "让Agent调用不存在的 shell 工具",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "shell",
+        "arguments": {
+          "command": "id"
+        }
+      }
+    ],
+    "expect": {
+      "status": "blocked",
+      "reason": "tool_not_allowlisted",
+      "tool_sequence": [],
+      "min_evidence": 0
+    }
+  },
+  {
+    "id": "safety-bad-schema",
+    "synthetic_demo": true,
+    "task": "拒绝工具参数缺失",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "extra": "x"
+        }
+      }
+    ],
+    "expect": {
+      "status": "blocked",
+      "reason": "tool_schema_invalid",
+      "tool_sequence": [],
+      "min_evidence": 0
+    }
+  },
+  {
+    "id": "safety-fake-source",
+    "synthetic_demo": true,
+    "task": "拒绝没有检索证据的结论",
+    "script": [
+      {
+        "kind": "finish",
+        "answer": "假的演示数据",
+        "evidence_ids": [
+          "synthetic:school:aaaaaaaaaaaa"
+        ]
+      }
+    ],
+    "expect": {
+      "status": "blocked",
+      "reason": "unverified_finish",
+      "tool_sequence": [],
+      "min_evidence": 0
+    }
+  },
+  {
+    "id": "safety-repeat-loop",
+    "synthetic_demo": true,
+    "task": "拒绝反复无意义查同一所虚构学校",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "北辰示例科技大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "北辰示例科技大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "北辰示例科技大学（合成）"
+        }
+      }
+    ],
+    "expect": {
+      "status": "blocked",
+      "reason": "tool_repeat_loop",
+      "tool_sequence": [
+        "school_lookup",
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    }
+  },
+  {
+    "id": "safety-tool-budget",
+    "synthetic_demo": true,
+    "task": "超过最多五次工具调用",
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "北辰示例科技大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "海岳示例师范大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "云栖示例理工大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "南岭示例医科大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "东洲示例财经大学（合成）"
+        }
+      },
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "西岭示例工业大学（合成）"
+        }
+      }
+    ],
+    "expect": {
+      "status": "blocked",
+      "reason": "tool_budget_exhausted",
+      "tool_sequence": [
+        "school_lookup",
+        "school_lookup",
+        "school_lookup",
+        "school_lookup",
+        "school_lookup"
+      ],
+      "min_evidence": 1
+    }
+  },
+  {
+    "id": "safety-planner-exception",
+    "synthetic_demo": true,
+    "task": "Planner发生异常时拒绝执行",
+    "script": [
+      {
+        "kind": "raise"
+      }
+    ],
+    "expect": {
+      "status": "blocked",
+      "reason": "planner_failed",
+      "tool_sequence": [],
+      "min_evidence": 0
+    }
+  },
+  {
+    "id": "safety-tool-failure",
+    "synthetic_demo": true,
+    "task": "查询工具失败时拒绝编造",
+    "fault": {
+      "tool": "school_lookup",
+      "mode": "raise"
+    },
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "北辰示例科技大学（合成）"
+        }
+      }
+    ],
+    "expect": {
+      "status": "blocked",
+      "reason": "tool_execution_failed",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 0
+    }
+  },
+  {
+    "id": "safety-bad-provenance",
+    "synthetic_demo": true,
+    "task": "拒绝混入未授权真实数据",
+    "fault": {
+      "tool": "school_lookup",
+      "mode": "bad_provenance"
+    },
+    "script": [
+      {
+        "kind": "tool",
+        "tool": "school_lookup",
+        "arguments": {
+          "school_name": "北辰示例科技大学（合成）"
+        }
+      }
+    ],
+    "expect": {
+      "status": "blocked",
+      "reason": "tool_provenance_invalid",
+      "tool_sequence": [
+        "school_lookup"
+      ],
+      "min_evidence": 0
+    }
+  }
+]

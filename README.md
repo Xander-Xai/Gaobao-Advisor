@@ -1,8 +1,12 @@
-# gaobao-advisor
+# Gaobao Advisor｜可核验的高考志愿辅助决策系统
 
-**AI-Powered College Application Decision Support**
+**AI 应用全栈交付 + 可信数据查询 + Agent 运行时可靠性实验**
 
-基于 **LangGraph、RAG 与多源招生数据**构建的智能高考志愿辅助决策系统。项目把志愿咨询拆成可观测的工作流：多轮考生画像 → 结构化招生数据查询 → 知识检索 → 决策推理 → 来源标注 → 质量检查 → 会话记忆，并通过 Vue 3 提供对话、数据浏览与结构化推荐展示。
+围绕“考生如何在信息不完整时获得可追溯、可解释的志愿咨询结果”，实现 **画像追问 → 结构化 SQL 查询 → 合成知识检索 → 来源/风险检查 → SSE 交互** 的端到端业务链路。工程上包含 Vue 3、FastAPI、受约束的 LangGraph 工作流，以及可选的 Java Gateway、MySQL、Redis、Docker Compose 和 CI 集成验证。
+
+**Agent Harness 工程实验**独立于生产问答路由：用真正的只读业务工具检验模型/Planner 的多步工具执行、预算控制、Fail-Closed 和离线 Eval，不将使用框架或通过单测等同于业务成功。
+
+> **代码归属：** 基于上游早期 MIT 许可代码继续二次开发与工程加固，保留原始许可声明；具体见 [第三方归属说明](THIRD_PARTY_NOTICES.md)。
 
 > **数据边界先行：** 仓库默认只附带程序生成的 **SYNTHETIC_DEMO** 合成演示数据，不对应任何真实院校、专业或录取结果，**不可用于真实志愿决策**。真实数据导入能力保留在源码中，使用者需自行提供合法授权数据。
 
@@ -13,7 +17,29 @@
 ![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11-blue)
 ![Vue](https://img.shields.io/badge/Vue-3-42b883)
 
-**目录：** [项目预览](#项目预览) · [核心功能](#核心功能) · [系统架构](#系统架构) · [技术栈](#技术栈) · [快速开始](#快速开始) · [数据说明](#数据说明) · [功能演示](#功能演示) · [开发与测试](#开发与测试) · [已知限制](#已知限制) · [Roadmap](#roadmap) · [License](#license)
+**目录：** [Agent Harness 实验](#agent-harness--eval-实验) · [项目预览](#项目预览) · [核心功能](#核心功能) · [系统架构](#系统架构) · [技术栈](#技术栈) · [快速开始](#快速开始) · [数据说明](#数据说明) · [功能演示](#功能演示) · [开发与测试](#开发与测试) · [已知限制](#已知限制) · [Roadmap](#roadmap) · [License](#license)
+
+---
+
+## Agent Harness / Eval 实验
+
+与现有 17 节点业务图**分离**的只读执行层，位于 `server/agent/readonly_harness.py`、`readonly_model_planner.py` 和 `readonly_tools.py`。这里实现的是 **Planner → Tool → Observation → Finish/Abstain** 的受约束循环，不是把业务 LangGraph 节点数当成“工具步长”。
+
+| 可验证能力 | 代码与验收 |
+|---|---|
+| 工具治理 | 4 个只读合成数据/知识服务；严格参数类型、来源和工具白名单 |
+| 长步数约束 | 8 模型步、5 工具调用、同参最多 2 次；显式错误原因与安全拒答 |
+| Token / 上下文 | provider 返回的 Token 可累计、超预算阻断；未知用量明确 `null`；限制观测窗口 |
+| 可重复 Eval | 30 条显式合成用例（22 正常、8 负控制）与 24 个独立院校/专业事实断言 |
+| 可选真实模型探针 | `benchmarks/readonly_model_eval.py`，必须显式授权网络和 API 费用，默认 CI 不运行 |
+
+离线回放（每次创建隔离临时合成 SQLite，阻断普通出站 socket，报告不保存提问原文）：
+
+```bash
+python -m benchmarks.readonly_harness_eval --out /tmp/gaobao-harness-eval.json
+```
+
+**指标边界：** 30/30 表示脚本化控制器在已定义的工具流程/安全契约中通过，不是大模型自主规划成功率，也不是高考录取建议准确率。可选的 OpenAI-compatible Planner 尚未完成真实模型的独立 Benchmark。隔离 SQLite + 工具白名单**不等于** Claude Code/Pi 的 OS Sandbox。完整机制、风险和求职证据边界见 [Agent Harness 实验手册](docs/agent-readonly-harness-evidence-20261120.md)。
 
 ---
 
