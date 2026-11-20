@@ -45,7 +45,9 @@ def evaluate_taskruns(store: SyntheticTaskRunStore, cases: list[dict[str, Any]])
             if isinstance(card, dict)
             else {"passed": False, "failure_codes": ["missing_persisted_card"]}
         )
-        expected_terminal = "SUCCEEDED" if case["expected_status"] == "evidence_complete_historical_only" else "NEEDS_REVIEW"
+        expected_terminal = (
+            "SUCCEEDED" if case["expected_status"] == "evidence_complete_historical_only" else "NEEDS_REVIEW"
+        )
         execution = card.get("execution", {}) if isinstance(card, dict) else {}
         safe_refusal = (
             expected_terminal == "NEEDS_REVIEW"
@@ -65,10 +67,7 @@ def evaluate_taskruns(store: SyntheticTaskRunStore, cases: list[dict[str, Any]])
             and persisted["status"] == expected_terminal
             and persisted["attempts"] == 1
             and persisted["result"] == terminal["result"]
-            and (
-                (expected_terminal == "SUCCEEDED" and card.get("status") == case["expected_status"])
-                or safe_refusal
-            )
+            and ((expected_terminal == "SUCCEEDED" and card.get("status") == case["expected_status"]) or safe_refusal)
         )
         failures = list(assessment["failure_codes"])
         if not valid and not failures:
