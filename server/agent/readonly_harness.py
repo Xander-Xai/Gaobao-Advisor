@@ -16,8 +16,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Literal, Protocol
 
 from server.agent.context_policy import ContextBudgetExceeded, bound_history, encode_observation
-from server.observability.agent_trace import safe_agent_span
 from server.agent.synthetic_checkpoint import SQLiteSyntheticCheckpointStore, task_digest
+from server.observability.agent_trace import safe_agent_span
 
 _SOURCE_RE = re.compile(r"^synthetic:[a-z_]+:[0-9a-f]{12}$")
 Outcome = Literal["completed", "abstained", "blocked"]
