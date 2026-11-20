@@ -274,8 +274,14 @@ def run_deepagents_research(
                 observations.append((tool, row))
                 seen.add((tool, subject))
                 recovered_repeat_once.add((tool, subject))
-                trace.append({"kind": "tool", "tool": tool, "result": "recovered_verified",
-                              "evidence_count": len(row.get("source_ids", []))})
+                trace.append(
+                    {
+                        "kind": "tool",
+                        "tool": tool,
+                        "result": "recovered_verified",
+                        "evidence_count": len(row.get("source_ids", [])),
+                    }
+                )
             if recovered_final is not None:
                 receipts.append(recovered_final)
             if lease_guard is not None:
