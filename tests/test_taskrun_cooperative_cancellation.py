@@ -83,6 +83,17 @@ outcome = execute_approved_run(store, run, permit_external_model=True, model="op
 assert outcome["status"] == "SUCCEEDED", outcome
 assert verification_calls == ["called"]
 
+run = new("cancel-during-receipt-verification-2026")
+def cancel_on_verified(p, card):
+    verified = original_verify(p, card)
+    store.cancel(run, "cancellation-owner")
+    return verified
+worker.verify_taskrun_receipt = cancel_on_verified
+outcome = execute_approved_run(store, run, permit_external_model=True, model="openai:fictional-test", agent_runner=healthy_runner)
+assert outcome["status"] == "CANCELLED"
+assert store.get(run)["result"] is None
+worker.verify_taskrun_receipt = counting_verify
+
 run = new("lease-expired-probe-2026")
 _, lease = store.claim(run, lease_seconds=15)
 store.assert_active_lease(run, lease)
@@ -101,7 +112,7 @@ except TaskRunConflict:
     pass
 else:
     raise AssertionError("Cancelled lease was accepted")
-print("cooperative_cancel_fake_model_cases=4/4")
+print("cooperative_cancel_fake_model_cases=5/5")
 """
 
 
