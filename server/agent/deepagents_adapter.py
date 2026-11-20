@@ -10,10 +10,13 @@ Deep Agents is an optional dependency, not loaded by ordinary FastAPI startup.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
 import threading
 from collections.abc import Callable
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any
 
@@ -194,9 +197,8 @@ def run_deepagents_research(
     # Tools are a closed, fully typed, fixed-purpose interface. There is no
     # MCP server that could add unknown tools behind these functions.
     offered = [major_lookup, admission_lookup, plan_lookup, submit_research, abstain_with_evidence]
+    checkpoint_stack = ExitStack()
     if agent_factory is None:
-        import os
-
         from deepagents import (
             GeneralPurposeSubagentProfile,
             HarnessProfile,
@@ -241,6 +243,25 @@ def run_deepagents_research(
             timeout=20,
             max_retries=0,
         )
+        checkpointer = InMemorySaver()
+        optional_checkpoint_path = os.getenv("SYNTHETIC_DEEPAGENTS_CHECKPOINT_DB", "").strip()
+        if optional_checkpoint_path:
+            from server.agent.deepagents_checkpoint import open_synthetic_deepagents_checkpointer
+
+            contract = hashlib.sha256(
+                (_SYSTEM + _SKILL_PATH.read_text(encoding="utf-8")).encode("utf-8")
+            ).hexdigest()
+            checkpointer, prior_state = checkpoint_stack.enter_context(
+                open_synthetic_deepagents_checkpointer(
+                    Path(optional_checkpoint_path), task_id, profile, model_id, contract
+                )
+            )
+            if prior_state:
+                # Internal model/tool observation receipts still live in Python
+                # memory. Invoking None here would silently invent resume
+                # guarantees or produce a partial, invalid research receipt.
+                checkpoint_stack.close()
+                raise RuntimeError("Existing Deep Agents checkpoint requires explicit receipt reconstruction")
         agent = create_deep_agent(
             model=model,
             tools=offered,
@@ -251,7 +272,7 @@ def run_deepagents_research(
                 ModelCallLimitMiddleware(run_limit=9, exit_behavior="end"),
             ],
             skills=["/skills/"],
-            checkpointer=InMemorySaver(),
+            checkpointer=checkpointer,
             subagents=[],
         )
         file_data = create_file_data(_SKILL_PATH.read_text(encoding="utf-8"))
@@ -278,13 +299,16 @@ def run_deepagents_research(
         },
         ensure_ascii=False,
     )
-    outcome = agent.invoke(
-        {
-            "messages": [{"role": "user", "content": query}],
-            "files": {"/skills/synthetic-admissions/SKILL.md": file_data},
-        },
-        config={"configurable": {"thread_id": task_id}, "recursion_limit": 24},
-    )
+    try:
+        outcome = agent.invoke(
+            {
+                "messages": [{"role": "user", "content": query}],
+                "files": {"/skills/synthetic-admissions/SKILL.md": file_data},
+            },
+            config={"configurable": {"thread_id": task_id}, "recursion_limit": 24},
+        )
+    finally:
+        checkpoint_stack.close()
     messages = outcome.get("messages", []) if isinstance(outcome, dict) else []
     used = [getattr(msg, "usage_metadata", None) for msg in messages if getattr(msg, "type", "") == "ai"]
     known = bool(used) and all(
