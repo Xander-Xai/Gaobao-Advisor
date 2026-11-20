@@ -111,11 +111,7 @@ class SyntheticDeepAgentsToolLedger:
                 payload = json.loads(raw)
             except (TypeError, ValueError) as exc:
                 raise UnsafeToolReplay("Corrupt observation encoding") from exc
-            if (
-                ordinal != i
-                or not isinstance(payload, dict)
-                or self._digest(i, kind, name, subject, payload) != digest
-            ):
+            if ordinal != i or not isinstance(payload, dict) or self._digest(i, kind, name, subject, payload) != digest:
                 raise UnsafeToolReplay("Out-of-order or tampered durable observation")
             result.append((kind, name, subject, payload))
         return result
