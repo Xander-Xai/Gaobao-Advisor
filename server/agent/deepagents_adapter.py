@@ -384,7 +384,9 @@ def run_deepagents_research(
         invoke_kwargs["durability"] = "sync"
     try:
         outcome = agent.invoke(
-            None if durable_prior else {
+            None
+            if durable_prior
+            else {
                 "messages": [{"role": "user", "content": query}],
                 "files": {"/skills/synthetic-admissions/SKILL.md": file_data},
             },
