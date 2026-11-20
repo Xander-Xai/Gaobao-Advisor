@@ -167,9 +167,7 @@ class ContextABPlanner:
     arm: ContextArm
     context_metrics: list[dict[str, int]] = field(default_factory=list)
 
-    def decide(
-        self, task: str, history: list[dict[str, Any]], tool_schemas: dict[str, dict[str, str]]
-    ) -> Decision:
+    def decide(self, task: str, history: list[dict[str, Any]], tool_schemas: dict[str, dict[str, str]]) -> Decision:
         projected, metrics = compress_history(history, self.arm)
         self.context_metrics.append(metrics)
         return self.inner.decide(task, projected, tool_schemas)
@@ -178,11 +176,7 @@ class ContextABPlanner:
         return {
             "history_full_chars": sum(item["full_observation_chars"] for item in self.context_metrics),
             "history_sent_chars": sum(item["model_visible_observation_chars"] for item in self.context_metrics),
-            "source_refs_preserved_across_steps": sum(
-                item["source_ids_preserved"] for item in self.context_metrics
-            ),
-            "compacted_observations_across_steps": sum(
-                item["observations_compacted"] for item in self.context_metrics
-            ),
+            "source_refs_preserved_across_steps": sum(item["source_ids_preserved"] for item in self.context_metrics),
+            "compacted_observations_across_steps": sum(item["observations_compacted"] for item in self.context_metrics),
             "decision_calls": len(self.context_metrics),
         }
