@@ -14,7 +14,7 @@ P13 的 `POST /api/v1/admin/agent-taskruns/runs/{run_id}/cancel` 在 SQLite Task
 - 普通 Worker 退出后，Supervisor 只信任持久化数据库中的最终状态；不依靠进程退出码判断业务成功。
 - 完整 process tree 运行时不将模型原文、工具 stdout/stderr 写到 HTTP 响应或应用日志；只有固定枚举的 Supervisor 结果、退出码、是否触发本地信号以及是否需要 TaskRun lease recovery。
 - 增加操作员本地命令：`python -m server.agent.taskrun_supervisor --journal /absolute/path/taskruns.sqlite --run-id syn_<id>`。
-- **FastAPI opt-in**：`SYNTHETIC_TASKRUN_USE_PROCESS_SUPERVISOR=true` 时，原有 `POST /runs/{id}/execute` 仅对原先允许的 `deterministic/portfolio` 通过固定 OS 子进程执行。原有 Owner/Admin `POST /runs/{id}/cancel` 不变；内部 Supervisor 观察到取消后真正发送进程组信号。使用 12 秒本地硬上限，短于原有 15 秒 HTTP 响应上限。默认仍使用旧的线程版本，不擅自改变部署行为。
+- **FastAPI opt-in**：`SYNTHETIC_TASKRUN_USE_PROCESS_SUPERVISOR=true` 时，原有 `POST /runs/{id}/execute` 仅对原先允许的 `deterministic/portfolio` 通过固定 OS 子进程执行。原有 Owner/Admin `POST /runs/{id}/cancel` 不变；内部 Supervisor 观察到取消后真正发送进程组信号。使用 8.5 秒本地硬上限并预留至多 5 秒进程清理，短于原有 15 秒 HTTP 响应上限。默认仍使用旧的线程版本，不擅自改变部署行为。
 - Deep Agents 命令行只有由**本地操作员同时明确提供** `--model` 与 `--permit-external-model`、且已有合法 Provider key/实验开关时才可以启动模型；HTTP 永不能发起收费 Deep Agents 请求。测试环境没有真实 Provider key。
 
 ## 实际验收
