@@ -14,6 +14,10 @@
 - 不论候选配置如何，即使 Holdout 非回退且 Token 下降，也仅输出 `REVIEW_REQUIRED`，并保持 `production_deployment_authorized=false`、`human_review_complete=false`、`statistical_significance=NOT_ESTABLISHED`。
 - 两份报告中的“REAL_MODEL_NOT_SCRIPTED”及 Provider usage 字段只是**自报声明**；比较器无法从 JSON 证明外部模型真的被调用，必须另由受信操作员核对 API/账单/运行记录。本工具不对真实模型的定价作估算，也不触发模型 API。
 
+## PR 与验收状态
+
+本增量对应 [Draft PR #113](https://github.com/Xander-Xai/Gaobao-Advisor/pull/113)。代码提交不等于自动化验收；必须以同一提交 SHA 的 Actions 和 CodeQL 运行结果为准，不能复用 #112 的成功状态。
+
 ## 无 Key 的验证路径
 
 ```bash
