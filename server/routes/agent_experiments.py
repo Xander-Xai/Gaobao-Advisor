@@ -10,7 +10,7 @@ import asyncio
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from config.constants import DEMO_PROVINCES
 from scripts.seed_demo_data import DEMO_MAJORS, DEMO_SCHOOLS, DEMO_YEAR
@@ -138,3 +138,58 @@ async def synthetic_decision_card(request: SyntheticDecisionCardRequest) -> dict
     except Exception as exc:
         # Never leak SQL statements, source text or internal request state.
         raise HTTPException(status_code=503, detail="Synthetic decision-card service unavailable") from exc
+
+
+class SyntheticPortfolioCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    school: str = Field(min_length=3, max_length=80)
+    major: str = Field(min_length=3, max_length=80)
+
+
+class SyntheticPortfolioRequest(BaseModel):
+    """Fictional historical options, not ordered application preferences."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    province: str = Field(min_length=3, max_length=24)
+    score: int = Field(ge=100, le=750)
+    subject_type: str = Field(pattern=r"^(物理类|历史类)$")
+    year: int = Field(ge=2020, le=2100)
+    candidates: list[SyntheticPortfolioCandidate] = Field(min_length=3, max_length=8)
+
+
+@router.post("/portfolio")
+async def synthetic_portfolio(request: SyntheticPortfolioRequest) -> dict:
+    """Operator-only SQL evidence screening. No model or production advice."""
+    _require_experiment_enabled()
+    from server.agent.synthetic_portfolio import (
+        PortfolioRequest,
+        build_synthetic_portfolio,
+        verify_synthetic_portfolio,
+    )
+
+    try:
+        profile = PortfolioRequest(
+            request.province,
+            request.score,
+            request.subject_type,
+            request.year,
+            tuple((item.school, item.major) for item in request.candidates),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Unsupported fictional portfolio") from exc
+
+    def evaluate() -> dict:
+        result = build_synthetic_portfolio(profile)
+        if not verify_synthetic_portfolio(profile, result):
+            raise RuntimeError("Synthetic portfolio SQL receipt verification failed")
+        return result
+
+    try:
+        # Read-only worker; timeout limits the response, not the OS thread.
+        return await asyncio.wait_for(asyncio.to_thread(evaluate), timeout=15.0)
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Synthetic portfolio response deadline exceeded") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Synthetic portfolio evaluation unavailable") from exc
