@@ -33,7 +33,7 @@ def _run(db: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return result
 
 
-def test_alembic_upgrade_creates_all_20_tables(tmp_path):
+def test_alembic_upgrade_creates_all_22_tables(tmp_path):
     db = tmp_path / "migrate.db"
     result = _run(db, "upgrade")
     assert result.returncode == 0, result.stderr
