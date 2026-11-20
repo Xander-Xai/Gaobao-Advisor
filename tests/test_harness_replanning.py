@@ -142,9 +142,7 @@ def test_checkpoint_restores_sanitized_fault_and_retries_in_new_process(tmp_path
     )
     assert failed.reason == "planner_failed"
     resumed_planner = SequencePlanner([_tool_choice(), _finish()])
-    resumed = run_readonly_agent(
-        TASK, resumed_planner, _tool(intermittent), limits, checkpoint=journal, run_id=run_id
-    )
+    resumed = run_readonly_agent(TASK, resumed_planner, _tool(intermittent), limits, checkpoint=journal, run_id=run_id)
     assert resumed.status == "completed"
     assert resumed.model_steps == 3
     assert resumed.tool_calls == 2
