@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 import subprocess
 import sys
 
@@ -92,3 +94,26 @@ def test_multicandidate_real_sql_evidence_negative_cases_and_forgery(tmp_path):
     )
     assert result.returncode == 0, result.stderr[-2300:] + result.stdout[-900:]
     assert '"valid_candidates": 4' in result.stdout
+
+
+def test_portfolio_cli_writes_offline_artifact_and_rejects_production(tmp_path):
+    output = tmp_path / "portfolio.json"
+    env = dict(os.environ)
+    env.pop("OPENAI_API_KEY", None)
+    env["APP_ENV"] = "development"
+    cmd = [sys.executable, "-m", "benchmarks.synthetic_portfolio_eval", "--out", str(output)]
+    run = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=120, env=env)
+    assert run.returncode == 0, run.stderr[-2500:] + run.stdout[-600:]
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["sql_reread_verified"] is True
+    assert report["evaluated_candidates"] == 5
+    assert report["historical_comparisons"] == 4
+    assert report["evidence_exclusions"] == 1
+    assert report["sql_tool_calls"] == 13
+    assert report["model_tokens"] is None
+    assert report["real_user_delivery_rate"] == "NOT_MEASURED"
+    output.unlink()
+    env["APP_ENV"] = "production"
+    denied = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30, env=env)
+    assert denied.returncode != 0
+    assert not output.exists()
