@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from server.agent.readonly_harness import HarnessResult
+from server.observability.agent_trace import safe_agent_span
 from server.agent.readonly_tools import _major
 from server.agent.synthetic_decision_card import (
     DecisionCardProfile,
@@ -139,7 +140,8 @@ def run_deepagents_research(
             seen.add(key)
         # The real tool reads only a verified synthetic SQLite dataset.
         try:
-            observation = handler()
+            with safe_agent_span("agent.tool", {"agent.tool": tool}):
+                observation = handler()
         except Exception:
             with lock:
                 blocked_attempts += 1
@@ -383,15 +385,16 @@ def run_deepagents_research(
         # starting the next step; async checkpoints may be lost on os._exit.
         invoke_kwargs["durability"] = "sync"
     try:
-        outcome = agent.invoke(
-            None
-            if durable_prior
-            else {
-                "messages": [{"role": "user", "content": query}],
-                "files": {"/skills/synthetic-admissions/SKILL.md": file_data},
-            },
-            **invoke_kwargs,
-        )
+        with safe_agent_span("agent.runtime", {"agent.engine": "deepagents"}):
+            outcome = agent.invoke(
+                None
+                if durable_prior
+                else {
+                    "messages": [{"role": "user", "content": query}],
+                    "files": {"/skills/synthetic-admissions/SKILL.md": file_data},
+                },
+                **invoke_kwargs,
+            )
     finally:
         checkpoint_stack.close()
     messages = outcome.get("messages", []) if isinstance(outcome, dict) else []

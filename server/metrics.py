@@ -95,30 +95,54 @@ QUALITY_HALLUCINATION_DETECTED = Counter(
 )
 
 
+def _metric_endpoint(request: Request) -> str:
+    """Use the trusted FastAPI route template, never a raw identifier path.
+
+    In middleware the router may not have set scope["route"] yet. Group those
+    requests by a finite application prefix instead of admitting path values
+    that may contain run IDs, arbitrary strings or student information.
+    """
+    route = request.scope.get("route")
+    template = getattr(route, "path", None)
+    if isinstance(template, str) and template.startswith("/") and len(template) <= 160:
+        return template
+    path = request.scope.get("path", "")
+    if path.startswith("/api/v1/admin/agent-"):
+        return "/api/v1/admin/agent-*"
+    if path.startswith("/api/v1/admin/"):
+        return "/api/v1/admin/*"
+    for prefix in ("/api/v1/chat", "/api/v1/data", "/api/v1/profile", "/api/v1/knowledge", "/api/v1/health"):
+        if path == prefix or path.startswith(prefix + "/"):
+            return prefix + "/*"
+    return "other"
+
+
 # ── Middleware for Automatic Metrics Collection ────────────
 
 
 async def metrics_middleware(request: Request, call_next):
     """Middleware to automatically collect HTTP metrics."""
-    start_time = time.time()
+    start_time = time.monotonic()
 
     try:
         response = await call_next(request)
 
         # Record metrics
-        duration = time.time() - start_time
-        HTTP_REQUESTS.labels(method=request.method, endpoint=request.url.path, status=response.status_code).inc()
+        duration = time.monotonic() - start_time
+        endpoint = _metric_endpoint(request)
+        HTTP_REQUESTS.labels(method=request.method, endpoint=endpoint, status=response.status_code).inc()
 
-        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=request.url.path).observe(duration)
+        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=endpoint).observe(duration)
 
         return response
 
     except Exception:
         # Record error metrics
-        duration = time.time() - start_time
-        HTTP_REQUESTS.labels(method=request.method, endpoint=request.url.path, status=500).inc()
+        duration = time.monotonic() - start_time
+        endpoint = _metric_endpoint(request)
+        HTTP_REQUESTS.labels(method=request.method, endpoint=endpoint, status=500).inc()
 
-        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=request.url.path).observe(duration)
+        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=endpoint).observe(duration)
 
         raise
 

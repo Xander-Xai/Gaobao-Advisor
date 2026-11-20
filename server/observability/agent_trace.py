@@ -12,11 +12,12 @@ from urllib.parse import urlparse
 
 from prometheus_client import Counter, Histogram
 
-_OPERATIONS = frozenset({"http.request", "agent.taskrun", "agent.planner", "agent.tool", "agent.verify"})
+_OPERATIONS = frozenset({"http.request", "agent.taskrun", "agent.runtime", "agent.planner", "agent.tool", "agent.verify"})
 _ENUMS = {
     "http.method": frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "OTHER"}),
     "http.route_group": frozenset({"agent_admin", "public_chat", "other"}),
     "agent.engine": frozenset({"portfolio", "deterministic", "deepagents", "unknown"}),
+    "agent.status": frozenset({"SUCCEEDED", "NEEDS_REVIEW", "FAILED", "CANCELLED", "ERROR", "unknown"}),
     "agent.tool": frozenset(
         {
             "school_lookup",
@@ -34,6 +35,16 @@ _NUMBERS = frozenset({"http.status_code", "agent.model_steps", "agent.tool_calls
 _PARENT = re.compile(r"^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
 _TOTAL = Counter("agent_safe_spans_total", "Finite Agent phases", ["operation", "outcome"])
 _DURATION = Histogram("agent_safe_span_duration_seconds", "Agent phase seconds", ["operation"])
+_TASKRUN_ATTEMPTS = Counter(
+    "agent_taskrun_attempts_total",
+    "Synthetic task execution attempts (not unique task completions)",
+    ["engine", "status", "reason"],
+)
+_FAILURE_CODES = {
+    "agent_execution_failed": "execution_failed",
+    "insufficient_verified_evidence": "insufficient_evidence",
+    "lease_conflict": "lease_conflict",
+}
 
 
 def safe_attributes(values: dict[str, Any] | None) -> dict[str, str | int]:
@@ -156,3 +167,43 @@ def initialize_agent_otel() -> bool:
     provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
     trace.set_tracer_provider(provider)
     return True
+
+
+def set_current_span_attribute(key: str, value: Any) -> None:
+    """Attach only allowlisted, low-cardinality data to the active span."""
+    attrs = safe_attributes({key: value})
+    if not attrs:
+        return
+    try:
+        from opentelemetry import trace
+    except ImportError:
+        return
+    span = trace.get_current_span()
+    if span.is_recording():
+        for name, safe_value in attrs.items():
+            span.set_attribute(name, safe_value)
+
+
+def record_taskrun_outcome(engine: str, status: str, failure_code: str | None = None) -> None:
+    """One count per execution attempt, never per unique TaskRun.
+
+    All label values come from bounded enums. Unknown error text cannot enter
+    Prometheus or OpenTelemetry. This records a final stored status, not proof
+    of real model quality or actual successful student delivery.
+    """
+    engine_label = safe_attributes({"agent.engine": engine}).get("agent.engine", "unknown")
+    status_label = safe_attributes({"agent.status": status}).get("agent.status", "unknown")
+    reason = _FAILURE_CODES.get(failure_code, "other" if failure_code else "none")
+    _TASKRUN_ATTEMPTS.labels(engine=engine_label, status=status_label, reason=reason).inc()
+
+
+def shutdown_agent_otel() -> None:
+    """Flush a short-lived worker's optional OTLP spans before process exit."""
+    try:
+        from opentelemetry import trace
+    except ImportError:
+        return
+    provider = trace.get_tracer_provider()
+    shutdown = getattr(provider, "shutdown", None)
+    if callable(shutdown):
+        shutdown()
