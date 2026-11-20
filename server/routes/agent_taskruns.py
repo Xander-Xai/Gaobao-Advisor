@@ -77,6 +77,21 @@ async def get_synthetic_taskrun(
         raise HTTPException(status_code=404, detail="No visible TaskRun") from exc
 
 
+@router.post("/runs/{run_id}/cancel")
+async def cancel_synthetic_taskrun(
+    run_id: str,
+    principal: AdminPrincipal = Depends(require_role("operator")),
+) -> dict:
+    """Owner or administrator may revoke a task lease, not kill an OS process."""
+    store = _store()
+    try:
+        return store.cancel(run_id, principal.username, admin=principal.role == "admin")
+    except (TaskRunNotFound, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="No visible TaskRun") from exc
+    except TaskRunConflict as exc:
+        raise HTTPException(status_code=409, detail="Completed TaskRun cannot be cancelled") from exc
+
+
 @router.post("/runs/{run_id}/approve")
 async def approve_synthetic_taskrun(
     run_id: str,
