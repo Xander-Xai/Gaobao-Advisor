@@ -126,7 +126,9 @@ def run_deepagents_research(
             if ledger is not None and key in recovered_repeat_once:
                 # Only one identical replay of a previously committed read is
                 # allowed after an OS crash. Recheck the real SQL each time.
-                prior = next((row for kind, row in observations if kind == tool and row == _fresh_sql(tool, subject)), None)
+                prior = next(
+                    (row for kind, row in observations if kind == tool and row == _fresh_sql(tool, subject)), None
+                )
                 if prior is None:
                     raise ValueError("Recovered SQL evidence differs from source")
                 recovered_repeat_once.remove(key)
