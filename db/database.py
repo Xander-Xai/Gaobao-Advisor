@@ -176,6 +176,8 @@ def init_db():
         Highlight,
         Major,
         OperationAuditLog,
+        UserMemoryEntry,
+        UserMemoryVault,
         QualityScore,
         QualityTaskOutbox,
         School,
