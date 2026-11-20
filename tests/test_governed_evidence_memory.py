@@ -210,7 +210,8 @@ with TestClient(app) as client:
         db.commit()
     assert client.get(endpoint, headers=owner).status_code == 404
     assert client.get(base + "/evidence-memory", headers=owner).json()["active_count"] == 0
-    assert client.post(endpoint, json={"ttl_seconds": 60}, headers=publisher).status_code == 201
+    renewal = client.post(endpoint, json={"ttl_seconds": 60}, headers=publisher)
+    assert renewal.status_code == 201, renewal.text
 
     # Delete only the memory index. The TaskRun and immutable review still exist.
     deleted = client.delete(endpoint, headers=owner)
