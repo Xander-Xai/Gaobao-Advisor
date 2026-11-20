@@ -208,7 +208,7 @@ async def execute_synthetic_taskrun(
             # 15s HTTP response deadline. On cancellation the Supervisor terminates only the
             # process group it spawned; no arbitrary kill-by-PID endpoint.
             observed = await asyncio.wait_for(
-                asyncio.to_thread(supervise_approved_taskrun, store, run_id, max_seconds=12.0),
+                asyncio.to_thread(supervise_approved_taskrun, store, run_id, max_seconds=8.5),
                 timeout=15.0,
             )
             if observed["supervisor_reason"] == "DEADLINE_EXCEEDED":
