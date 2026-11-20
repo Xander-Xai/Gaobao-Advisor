@@ -12,7 +12,14 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from server.agent.readonly_harness import Decision, HarnessLimits, Planner, ReadOnlyTool, run_readonly_agent
+from server.agent.readonly_harness import (
+    Decision,
+    HarnessLimits,
+    HarnessResult,
+    Planner,
+    ReadOnlyTool,
+    run_readonly_agent,
+)
 from server.agent.readonly_tools import _require_demo_database, synthetic_readonly_tools
 
 PROFILE = "SYNTHETIC_DEMO"
@@ -232,6 +239,22 @@ def build_synthetic_decision_card(
             require_provider_usage=require_provider_usage,
         ),
     )
+    return compose_synthetic_decision_card(
+        profile,
+        captured,
+        result,
+        planner_label=CONTROLLER if planner is None else "INJECTED_PLANNER_UNVERIFIED",
+    )
+
+
+def compose_synthetic_decision_card(
+    profile: DecisionCardProfile,
+    captured: list[tuple[str, dict[str, Any]]],
+    result: HarnessResult,
+    *,
+    planner_label: str,
+) -> dict[str, Any]:
+    """One deterministic Evidence Gate for both built-in and Deep Agents backends."""
     records: dict[tuple[str, str], dict[str, Any]] = {}
     for label, row in captured:
         key = (label, row.get("school_name", row.get("major_name", "")))
@@ -333,7 +356,7 @@ def build_synthetic_decision_card(
         "status": "evidence_complete_historical_only" if completed else "needs_review",
         "reason": result.reason,
         "data_profile": PROFILE,
-        "planner": CONTROLLER if planner is None else "INJECTED_PLANNER_UNVERIFIED",
+        "planner": planner_label,
         "profile": {
             "province": profile.province,
             "score": profile.score,

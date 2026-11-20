@@ -281,3 +281,28 @@ export interface SyntheticDecisionCardResult {
   execution: SyntheticAgentResearchResult['execution']
   disclaimer: string
 }
+
+
+export type SyntheticTaskRunStatus =
+  | 'PENDING_APPROVAL' | 'APPROVED' | 'RUNNING' | 'SUCCEEDED' | 'NEEDS_REVIEW' | 'FAILED'
+
+export interface SyntheticTaskRun {
+  run_id: string
+  owner: string
+  engine: 'deterministic' | 'deepagents'
+  status: SyntheticTaskRunStatus
+  approved_by: string | null
+  version: number
+  attempts: number
+  failure_code: string | null
+  result: SyntheticDecisionCardResult | null
+  created_at: number
+  updated_at: number
+  data_profile: 'SYNTHETIC_DEMO'
+}
+
+export interface SyntheticTaskRunCreate {
+  engine: SyntheticTaskRun['engine']
+  idempotency_key: string
+  profile: SyntheticDecisionCardRequest
+}

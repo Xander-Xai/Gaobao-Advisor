@@ -437,7 +437,9 @@ class TestExcludedAssetsAbsent:
 
     def test_tracked_file_count_is_bounded(self) -> None:
         """A clean public repo should be a few hundred files, not thousands."""
-        assert 50 < len(_tracked_files()) < 600
+        # Expanded four-layer Agent task/approval modules are intentional tracked source.
+        # Keep a bounded repo-size gate; restricted assets remain checked separately.
+        assert 50 < len(_tracked_files()) < 680
 
 
 # ── 5. Session auth round-trip through the real FastAPI app ──────────────
