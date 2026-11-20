@@ -262,9 +262,7 @@ class SyntheticTaskRunStore:
                     "WHERE run_id=?",
                     (now, run_id),
                 )
-                updated = conn.execute(
-                    "SELECT * FROM synthetic_task_runs WHERE run_id=?", (run_id,)
-                ).fetchone()
+                updated = conn.execute("SELECT * FROM synthetic_task_runs WHERE run_id=?", (run_id,)).fetchone()
                 conn.commit()
                 return self._public(updated)
             except Exception:
