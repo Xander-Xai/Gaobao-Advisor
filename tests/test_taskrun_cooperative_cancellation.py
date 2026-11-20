@@ -66,6 +66,41 @@ assert outcome["result"] is None
 assert verification_calls == []
 assert store.get(run)["status"] == "CANCELLED"
 
+# A second thread cancels while the fake model request is suspended.
+# The model finishes later; it must not reach the SQL receipt verifier.
+import threading
+
+run = new("cancel-during-inflight-call-2026")
+entered = threading.Event()
+release = threading.Event()
+thread_outcome = []
+thread_failure = []
+def blocked_runner(p, model, *, task_id):
+    entered.set()
+    assert release.wait(10)
+    return {"data_profile": "SYNTHETIC_DEMO", "untrusted": True}
+def run_blocked():
+    try:
+        thread_outcome.append(
+            execute_approved_run(
+                store, run, permit_external_model=True,
+                model="openai:fictional-test", agent_runner=blocked_runner
+            )
+        )
+    except Exception as exc:
+        thread_failure.append(type(exc).__name__)
+thread = threading.Thread(target=run_blocked)
+thread.start()
+assert entered.wait(10)
+store.cancel(run, "cancellation-owner")
+release.set()
+thread.join(10)
+assert not thread.is_alive()
+assert not thread_failure, thread_failure
+assert thread_outcome[0]["status"] == "CANCELLED"
+assert thread_outcome[0]["result"] is None
+assert verification_calls == []
+
 run = new("cancel-and-exception-2026")
 def failing_runner(p, model, *, task_id):
     store.cancel(run, "cancellation-owner")
@@ -112,7 +147,7 @@ except TaskRunConflict:
     pass
 else:
     raise AssertionError("Cancelled lease was accepted")
-print("cooperative_cancel_fake_model_cases=5/5")
+print("cooperative_cancel_fake_model_cases=6/6")
 """
 
 
