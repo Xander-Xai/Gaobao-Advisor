@@ -111,7 +111,7 @@ assert result["status"] == "FAILED"
 assert result["result"] is None
 assert result["failure_code"] == "agent_execution_failed"
 assert result["attempts"] == 1
-print("independent_portfolio_oracle_cases=12/12")
+print("independent_portfolio_oracle_cases=13/13")
 """
 
 
@@ -127,4 +127,4 @@ def test_direct_sql_oracle_and_compromised_worker_receipts(tmp_path):
         timeout=120,
     )
     assert result.returncode == 0, result.stderr[-3500:] + result.stdout[-1000:]
-    assert "independent_portfolio_oracle_cases=12/12" in result.stdout
+    assert "independent_portfolio_oracle_cases=13/13" in result.stdout
