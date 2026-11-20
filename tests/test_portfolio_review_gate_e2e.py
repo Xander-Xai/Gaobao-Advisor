@@ -131,6 +131,24 @@ with TestClient(app) as client:
     assert dispute.json()["review_state"] == "REJECTED_SYNTHETIC_EVIDENCE"
     assert dispute.json()["signoff_count"] == 2
 
+    # Competing signoff writers must not produce more than two rows.
+    from concurrent.futures import ThreadPoolExecutor
+    from server.agent.taskrun_store import TaskRunConflict
+    competing_id = create_completed("synthetic-review-concurrent-2026")
+    competing_sha = client.get(f"{base}/runs/{competing_id}/review", headers=owner).json()["receipt_sha256"]
+    def sign_simultaneously(who):
+        try:
+            return SyntheticTaskRunStore(root / "taskruns.sqlite").signoff_portfolio_review(
+                competing_id, reviewer=who,
+                verdict="verified_historical_only", receipt_sha256=competing_sha,
+            )["review_state"]
+        except TaskRunConflict:
+            return "CONFLICT"
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        responses = list(pool.map(sign_simultaneously, ["reviewer-alpha", "reviewer-bravo", "reviewer-charlie"]))
+    assert responses.count("CONFLICT") == 1, responses
+    assert store.get_portfolio_review(competing_id, requester="evidence-operator")["signoff_count"] == 2
+
     pending = client.post(base + "/portfolio-runs", json={
         "portfolio":portfolio, "idempotency_key":"synthetic-review-not-done-2026"
     }, headers=owner)
