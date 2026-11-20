@@ -228,7 +228,12 @@ def run_deepagents_research(
         if reason_code not in {"missing_record", "subject_conflict", "invalid_evidence"}:
             raise ValueError("Unsupported abstention reason")
         with lock:
-            if receipts == ["abstained"] and recovered_final == "abstained":
+            if (
+                receipts == ["abstained"]
+                and recovered_final == "abstained"
+                and ledger is not None
+                and reason_code == ledger.last_abstain_reason
+            ):
                 return "SYNTHETIC_ABSTENTION_ACCEPTED"
             if receipts or not any(_reason_is_negative(tool, row, profile) for tool, row in observations):
                 raise ValueError("Refusal without observed negative SQL evidence")
