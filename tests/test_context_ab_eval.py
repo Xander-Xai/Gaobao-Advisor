@@ -201,7 +201,11 @@ def test_cli_dry_run_and_real_provider_permission_gates(tmp_path):
             "--out-dir",
             str(path),
         ],
-        env=env, capture_output=True, text=True, timeout=12, check=False,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=12,
+        check=False,
     )
     assert denied.returncode != 0
     assert not path.exists()
@@ -220,7 +224,11 @@ def test_cli_dry_run_and_real_provider_permission_gates(tmp_path):
             "--out-dir",
             str(path),
         ],
-        env=env, capture_output=True, text=True, timeout=12, check=False,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=12,
+        check=False,
     )
     assert denied_production.returncode != 0
     assert not path.exists()
