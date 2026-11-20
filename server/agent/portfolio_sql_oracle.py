@@ -72,9 +72,7 @@ def _direct_sql(profile: PortfolioRequest) -> tuple[list[dict[str, Any]], list[d
     excluded: list[dict[str, Any]] = []
     with sqlite3.connect(db_uri, uri=True, timeout=5.0) as db:
         db.row_factory = sqlite3.Row
-        snapshot = db.execute(
-            "SELECT profile,is_synthetic FROM dataset_snapshots ORDER BY id DESC LIMIT 1"
-        ).fetchone()
+        snapshot = db.execute("SELECT profile,is_synthetic FROM dataset_snapshots ORDER BY id DESC LIMIT 1").fetchone()
         if snapshot is None or snapshot["profile"] != "SYNTHETIC_DEMO" or snapshot["is_synthetic"] != 1:
             raise UnverifiedPortfolioReceipt("Untrusted dataset provenance")
         for school_name, major_name in profile.candidates:
