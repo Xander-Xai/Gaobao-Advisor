@@ -37,7 +37,7 @@ jobs:
       - name: Install optional Deep Agents SDK and core test dependencies
         run: pip install -e ".[dev]" -r requirements-deepagents.txt
       - name: SDK constructor smoke, no provider API calls
-        run: python -m pytest tests/test_deepagents_sdk_smoke.py -q --no-cov --override-ini addopts=''
+        run: python -m pytest tests/test_deepagents_sdk_smoke.py tests/test_deepagents_sqlite_checkpoint.py -q --no-cov --override-ini addopts=''
       - name: Verify default production API does not import Deep Agents
         run: python -c "import server.main; print('web startup import passed without Agent invocation')"
 
