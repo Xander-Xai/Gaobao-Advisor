@@ -194,21 +194,31 @@ def run_readonly_agent(
         except Exception:  # noqa: BLE001 - avoid leaking provider error messages
             usage_known = False  # A failed provider request may still incur billed tokens.
             reason = "planner_failed"
-            trace.append({
-                "step": step, "kind": "planner_error", "result": reason,
-                "model_elapsed_ms": round((time.monotonic() - model_started) * 1000, 2),
-                "prompt_tokens": None, "completion_tokens": None,
-            })
+            trace.append(
+                {
+                    "step": step,
+                    "kind": "planner_error",
+                    "result": reason,
+                    "model_elapsed_ms": round((time.monotonic() - model_started) * 1000, 2),
+                    "prompt_tokens": None,
+                    "completion_tokens": None,
+                }
+            )
             break
         model_elapsed_ms = round((time.monotonic() - model_started) * 1000, 2)
         if not isinstance(choice, Decision):
             usage_known = False
             reason = "planner_contract_invalid"
-            trace.append({
-                "step": step, "kind": "planner_error", "result": reason,
-                "model_elapsed_ms": model_elapsed_ms,
-                "prompt_tokens": None, "completion_tokens": None,
-            })
+            trace.append(
+                {
+                    "step": step,
+                    "kind": "planner_error",
+                    "result": reason,
+                    "model_elapsed_ms": model_elapsed_ms,
+                    "prompt_tokens": None,
+                    "completion_tokens": None,
+                }
+            )
             break
 
         p_tokens = _usage_value(choice.prompt_tokens)
