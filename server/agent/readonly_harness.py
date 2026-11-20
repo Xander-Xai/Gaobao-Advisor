@@ -188,13 +188,27 @@ def run_readonly_agent(
             resume_step = model_steps + 1
     for step in range(resume_step, limits.max_model_steps + 1):
         model_steps = step
+        model_started = time.monotonic()
         try:
             choice = planner.decide(task, [dict(item) for item in history], schemas)
         except Exception:  # noqa: BLE001 - avoid leaking provider error messages
+            usage_known = False  # A failed provider request may still incur billed tokens.
             reason = "planner_failed"
+            trace.append({
+                "step": step, "kind": "planner_error", "result": reason,
+                "model_elapsed_ms": round((time.monotonic() - model_started) * 1000, 2),
+                "prompt_tokens": None, "completion_tokens": None,
+            })
             break
+        model_elapsed_ms = round((time.monotonic() - model_started) * 1000, 2)
         if not isinstance(choice, Decision):
+            usage_known = False
             reason = "planner_contract_invalid"
+            trace.append({
+                "step": step, "kind": "planner_error", "result": reason,
+                "model_elapsed_ms": model_elapsed_ms,
+                "prompt_tokens": None, "completion_tokens": None,
+            })
             break
 
         p_tokens = _usage_value(choice.prompt_tokens)
@@ -204,16 +218,24 @@ def run_readonly_agent(
         else:
             prompt_tokens += p_tokens
             completion_tokens += c_tokens
+        step_meta = {
+            "step": step,
+            "model_elapsed_ms": model_elapsed_ms,
+            "prompt_tokens": p_tokens,
+            "completion_tokens": c_tokens,
+        }
         if not usage_known and limits.require_provider_usage:
             reason = "provider_usage_missing"
+            trace.append({**step_meta, "kind": "blocked", "result": reason})
             break
         if prompt_tokens + completion_tokens > limits.max_reported_tokens:
             reason = "reported_token_budget_exhausted"
+            trace.append({**step_meta, "kind": "blocked", "result": reason})
             break
 
         if choice.kind == "abstain":
             status, reason = "abstained", "explicit_abstention"
-            trace.append({"step": step, "kind": "abstain"})
+            trace.append({**step_meta, "kind": "abstain", "result": reason})
             break
 
         if choice.kind == "finish":
@@ -227,25 +249,26 @@ def run_readonly_agent(
                 or not set(requested).issubset(sources)
             ):
                 reason = "unverified_finish"
-                trace.append({"step": step, "kind": "finish", "result": reason})
+                trace.append({**step_meta, "kind": "finish", "result": reason})
                 break
             answer = choice.answer
             status, reason = "completed", "evidence_bound_finish"
-            trace.append({"step": step, "kind": "finish", "result": "completed"})
+            trace.append({**step_meta, "kind": "finish", "result": "completed"})
             break
 
         if choice.kind != "tool" or choice.tool not in tools:
             reason = "tool_not_allowlisted"
-            trace.append({"step": step, "kind": "tool", "result": reason})
+            trace.append({**step_meta, "kind": "tool", "result": reason})
             break
         if tool_calls >= limits.max_tool_calls:
             reason = "tool_budget_exhausted"
+            trace.append({**step_meta, "kind": "blocked", "result": reason})
             break
 
         spec = tools[choice.tool]
         if not _valid_parameters(choice.arguments, spec.parameters):
             reason = "tool_schema_invalid"
-            trace.append({"step": step, "kind": "tool", "result": reason})
+            trace.append({**step_meta, "kind": "tool", "result": reason})
             break
         signature = json.dumps([choice.tool, choice.arguments], sort_keys=True, ensure_ascii=False)
         repeats[signature] += 1
@@ -253,7 +276,7 @@ def run_readonly_agent(
             repeated_calls += 1
         if repeats[signature] > limits.max_repeated_call:
             reason = "tool_repeat_loop"
-            trace.append({"step": step, "kind": "tool", "result": reason})
+            trace.append({**step_meta, "kind": "tool", "result": reason})
             break
 
         tool_calls += 1
@@ -264,18 +287,18 @@ def run_readonly_agent(
         except Exception:  # noqa: BLE001 - fail closed on all tool errors
             tool_failures += 1
             reason = "tool_execution_failed"
-            trace.append({"step": step, "kind": "tool", "tool": spec.name, "result": reason})
+            trace.append({**step_meta, "kind": "tool", "tool": spec.name, "result": reason})
             break
         if not isinstance(result, dict) or result.get("data_profile") != "SYNTHETIC_DEMO":
             tool_failures += 1
             reason = "tool_provenance_invalid"
-            trace.append({"step": step, "kind": "tool", "tool": spec.name, "result": reason})
+            trace.append({**step_meta, "kind": "tool", "tool": spec.name, "result": reason})
             break
         refs = result.get("source_ids")
         if not isinstance(refs, list) or any(not isinstance(ref, str) or not _SOURCE_RE.fullmatch(ref) for ref in refs):
             tool_failures += 1
             reason = "tool_evidence_invalid"
-            trace.append({"step": step, "kind": "tool", "tool": spec.name, "result": reason})
+            trace.append({**step_meta, "kind": "tool", "tool": spec.name, "result": reason})
             break
         sources.update(refs)
         observation = json.dumps(result, ensure_ascii=False, sort_keys=True, default=str)
@@ -292,7 +315,7 @@ def run_readonly_agent(
         peak_chars = max(peak_chars, len(json.dumps(history, ensure_ascii=False)))
         trace.append(
             {
-                "step": step,
+                **step_meta,
                 "kind": "tool",
                 "tool": spec.name,
                 "result": "ok",
