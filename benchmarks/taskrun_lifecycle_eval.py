@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 from benchmarks.decision_card_business_eval import _digest, frozen_cases, grade_business_case
-from server.agent.synthetic_decision_card import DecisionCardProfile
 from server.agent.taskrun_store import SyntheticTaskRunStore
 from server.agent.taskrun_worker import execute_approved_run
 
