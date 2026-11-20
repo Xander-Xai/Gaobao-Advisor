@@ -240,3 +240,44 @@ export interface SyntheticAgentResearchResult {
     trace: SyntheticAgentTraceEvent[]
   }
 }
+
+
+export interface SyntheticDecisionCardRequest extends SyntheticAgentResearchRequest {
+  province: string
+  score: number
+  subject_type: '物理类' | '历史类'
+  year: number
+}
+
+export interface SyntheticDecisionCardExample {
+  data_profile: 'SYNTHETIC_DEMO'
+  planner: 'DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM'
+  request: SyntheticDecisionCardRequest
+}
+
+export interface SyntheticDecisionSchool {
+  school_name: string
+  historical_min_score: number | null
+  historical_min_rank: number | null
+  historical_subject_type: string | null
+  historical_score_difference: number | null
+  plan_count: number | null
+  plan_subject_requirement: string | null
+  subject_constraint: 'compatible' | 'incompatible' | 'unknown'
+  evidence_ids: string[]
+}
+
+export interface SyntheticDecisionCardResult {
+  status: 'evidence_complete_historical_only' | 'needs_review'
+  reason: string
+  data_profile: 'SYNTHETIC_DEMO'
+  planner: 'DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM'
+  profile: Omit<SyntheticDecisionCardRequest, 'school_a' | 'school_b'>
+  major_category: string | null
+  schools: SyntheticDecisionSchool[]
+  missing_evidence: string[]
+  evidence_ids: string[]
+  manual_checks: string[]
+  execution: SyntheticAgentResearchResult['execution']
+  disclaimer: string
+}
