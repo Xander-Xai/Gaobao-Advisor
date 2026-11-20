@@ -29,9 +29,7 @@ _FIELDS = frozenset(
     }
 )
 _EXECUTED = frozenset({"ok", "tool_execution_failed", "tool_provenance_invalid", "tool_evidence_invalid"})
-_TOOL_ERRORS = frozenset(
-    {"tool_not_allowlisted", "tool_schema_invalid", "tool_repeat_loop", *_EXECUTED}
-)
+_TOOL_ERRORS = frozenset({"tool_not_allowlisted", "tool_schema_invalid", "tool_repeat_loop", *_EXECUTED})
 _BLOCKED = frozenset({"provider_usage_missing", "reported_token_budget_exhausted", "tool_budget_exhausted"})
 _TERMINAL = frozenset({"planner_failed", "planner_contract_invalid"})
 
@@ -127,9 +125,15 @@ def grade_step_trace(execution: dict[str, Any]) -> dict[str, Any]:
     status, reason = execution.get("status"), execution.get("reason")
     last = events[-1]
     if (
-        (last["kind"] == "finish" and (status, reason) != (
-            ("completed", "evidence_bound_finish") if last["result"] == "completed" else ("blocked", "unverified_finish")
-        ))
+        (
+            last["kind"] == "finish"
+            and (status, reason)
+            != (
+                ("completed", "evidence_bound_finish")
+                if last["result"] == "completed"
+                else ("blocked", "unverified_finish")
+            )
+        )
         or (last["kind"] == "abstain" and (status, reason) != ("abstained", "explicit_abstention"))
         or (last["kind"] in {"blocked", "planner_error"} and (status, reason) != ("blocked", last["result"]))
         or (last["kind"] == "tool" and last["result"] != "ok" and (status, reason) != ("blocked", last["result"]))
@@ -192,4 +196,8 @@ def trace_failure_category(row: dict[str, Any]) -> str | None:
     if row.get("execution_status") != "blocked":
         return None
     reason = row.get("execution_reason")
-    return reason if reason in _TOOL_ERRORS | _BLOCKED | _TERMINAL | {"unverified_finish", "step_budget_exhausted"} else None
+    return (
+        reason
+        if reason in _TOOL_ERRORS | _BLOCKED | _TERMINAL | {"unverified_finish", "step_budget_exhausted"}
+        else None
+    )
