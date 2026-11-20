@@ -145,7 +145,9 @@ async def signoff_synthetic_portfolio_review(
     except (TaskRunNotFound, ValueError) as exc:
         raise HTTPException(status_code=404, detail="Synthetic portfolio review not found") from exc
     except TaskRunConflict as exc:
-        raise HTTPException(status_code=409, detail="Review rejected: stale receipt or separation-of-duties gate") from exc
+        raise HTTPException(
+            status_code=409, detail="Review rejected: stale receipt or separation-of-duties gate"
+        ) from exc
 
 
 @router.post("/runs/{run_id}/cancel")
