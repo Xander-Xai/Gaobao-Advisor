@@ -121,6 +121,30 @@ if phase == "resume":
     else:
         raise AssertionError("TaskRun journal was accepted as checkpoint store")
 
+    link = root / "symlink-checkpoint.sqlite"
+    link.symlink_to(path)
+    try:
+        with open_synthetic_deepagents_checkpointer(
+            link, task_id, profile, "openai:synthetic-test", "a" * 64
+        ):
+            pass
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Symlinked checkpoint was accepted")
+
+    path.chmod(0o644)
+    try:
+        with open_synthetic_deepagents_checkpointer(
+            path, task_id, profile, "openai:synthetic-test", "a" * 64
+        ):
+            pass
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("World-readable checkpoint was accepted")
+    path.chmod(0o600)
+
     os.environ["APP_ENV"] = "production"
     try:
         with open_synthetic_deepagents_checkpointer(path, task_id, profile, "openai:synthetic-test", "a" * 64):
