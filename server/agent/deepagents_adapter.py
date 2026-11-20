@@ -62,6 +62,7 @@ def run_deepagents_research(
     *,
     task_id: str,
     agent_factory: Callable[..., Any] | None = None,
+    lease_guard: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Call the actual Deep Agents runtime, or an injected contract fake in tests.
 
@@ -90,6 +91,10 @@ def run_deepagents_research(
     trace: list[dict[str, Any]] = []
     receipts: list[str] = []
     blocked_attempts = 0
+    ledger: Any | None = None
+    recovered_repeat_once: set[tuple[str, str]] = set()
+    durable_prior = False
+    checkpointer: Any | None = None
     required = {
         ("major_lookup", profile.major),
         ("admission_lookup", profile.school_a),
@@ -98,10 +103,33 @@ def run_deepagents_research(
         ("plan_lookup", profile.school_b),
     }
 
+    def _fresh_sql(tool: str, subject: str) -> dict[str, Any]:
+        if (tool, subject) not in required:
+            raise ValueError("Unapproved synthetic SQL subject")
+        if tool == "major_lookup":
+            return _major({"major_name": subject})
+        args = {
+            "school_name": subject,
+            "major_name": profile.major,
+            "province": profile.province,
+            "year": profile.year,
+        }
+        return _fetch_row("admission" if tool == "admission_lookup" else "plan", args)
+
     def _record(tool: str, subject: str, handler: Callable[[], dict[str, Any]]) -> str:
         nonlocal blocked_attempts
+        if lease_guard is not None:
+            lease_guard()
         with lock:
             key = (tool, subject)
+            if ledger is not None and key in recovered_repeat_once:
+                # Only one identical replay of a previously committed read is
+                # allowed after an OS crash. Recheck the real SQL each time.
+                prior = next((row for kind, row in observations if kind == tool and row == _fresh_sql(tool, subject)), None)
+                if prior is None:
+                    raise ValueError("Recovered SQL evidence differs from source")
+                recovered_repeat_once.remove(key)
+                return json.dumps(prior, ensure_ascii=False, sort_keys=True)
             if key not in required or key in seen or len(observations) >= 5:
                 blocked_attempts += 1
                 raise ValueError("Unapproved or repeated synthetic tool call")
@@ -117,6 +145,10 @@ def run_deepagents_research(
         if observation.get("data_profile") != "SYNTHETIC_DEMO":
             raise ValueError("SQL result not from synthetic dataset")
         with lock:
+            if lease_guard is not None:
+                lease_guard()
+            if ledger is not None:
+                ledger.append_tool(tool, subject, observation)
             observations.append((tool, observation))
             trace.append(
                 {
@@ -178,9 +210,15 @@ def run_deepagents_research(
                 or any(not isinstance(ref, str) for ref in proposed)
                 or len(set(proposed)) != 5
                 or set(proposed) != set(observed_ids)
-                or receipts
+                or (receipts and not (receipts == ["complete"] and ledger is not None and recovered_repeat_once is not None))
             ):
                 raise ValueError("Incomplete or unverified synthetic research receipt")
+            if receipts:
+                return "SYNTHETIC_RECEIPT_ACCEPTED"
+            if lease_guard is not None:
+                lease_guard()
+            if ledger is not None:
+                ledger.append_decision("complete", sources=observed_ids)
             receipts.append("complete")
         return "SYNTHETIC_RECEIPT_ACCEPTED"
 
@@ -189,8 +227,14 @@ def run_deepagents_research(
         if reason_code not in {"missing_record", "subject_conflict", "invalid_evidence"}:
             raise ValueError("Unsupported abstention reason")
         with lock:
+            if receipts == ["abstained"] and ledger is not None:
+                return "SYNTHETIC_ABSTENTION_ACCEPTED"
             if receipts or not any(_reason_is_negative(tool, row, profile) for tool, row in observations):
                 raise ValueError("Refusal without observed negative SQL evidence")
+            if lease_guard is not None:
+                lease_guard()
+            if ledger is not None:
+                ledger.append_decision("abstained", reason=reason_code)
             receipts.append("abstained")
         return "SYNTHETIC_ABSTENTION_ACCEPTED"
 
