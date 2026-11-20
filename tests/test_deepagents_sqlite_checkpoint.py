@@ -78,14 +78,14 @@ with open_synthetic_deepagents_checkpointer(path, task_id, profile, "openai:synt
     compiled = builder.compile(checkpointer=saver)
     if phase == "crash":
         assert prior is False
-        compiled.invoke({"data_profile": "SYNTHETIC_DEMO", "steps": 0}, config=config)
+        compiled.invoke({"data_profile": "SYNTHETIC_DEMO", "steps": 0}, config=config, durability="sync")
         raise AssertionError("Expected the worker process to terminate")
     else:
         assert prior is True
         paused = compiled.get_state(config)
         assert tuple(paused.next) == ("second",), paused.next
         assert paused.values["stage"] == "first-durable"
-        resumed = compiled.invoke(None, config=config)
+        resumed = compiled.invoke(None, config=config, durability="sync")
         assert resumed["steps"] == 2
         assert resumed["stage"] == "second-durable"
         assert marker.read_text(encoding="utf-8") == "first\n"
