@@ -50,10 +50,7 @@ def fixture(run_id: str, arm: str, prompt_tokens: int = 100) -> dict:
 
 
 def pairs(count=2):
-    return [
-        (fixture(f"old-{i}", "baseline"), fixture(f"new-{i}", "evidence_first", 90))
-        for i in range(count)
-    ]
+    return [(fixture(f"old-{i}", "baseline"), fixture(f"new-{i}", "evidence_first", 90)) for i in range(count)]
 
 
 def test_frozen_prompt_variants_differ_without_changing_allowed_tools():

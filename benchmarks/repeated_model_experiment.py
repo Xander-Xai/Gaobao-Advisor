@@ -111,7 +111,9 @@ def compare_repeated_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) 
         "regressions": regressions,
         "holdout_quality_non_regression": no_quality_regression,
         "every_trial_token_reduction": every_trial_token_reduction,
-        "descriptive_candidate": "REVIEW_REQUIRED" if no_quality_regression and every_trial_token_reduction else "REJECT_CANDIDATE",
+        "descriptive_candidate": "REVIEW_REQUIRED"
+        if no_quality_regression and every_trial_token_reduction
+        else "REJECT_CANDIDATE",
         "pairs": details,
         "human_review_complete": False,
         "provenance_independently_verified": False,
@@ -207,7 +209,10 @@ def main(argv: list[str] | None = None) -> int:
     result["execution_plan"] = plan
     output = args.out_dir / "repeated-experiment-summary.json"
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(result["descriptive_candidate"] + " (real-model run declarations; independent billing/human review still required)")
+    print(
+        result["descriptive_candidate"]
+        + " (real-model run declarations; independent billing/human review still required)"
+    )
     return 0
 
 
