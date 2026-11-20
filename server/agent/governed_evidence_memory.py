@@ -36,6 +36,7 @@ class SyntheticEvidenceMemoryStore:
                     memory_key TEXT NOT NULL,
                     source_run_id TEXT NOT NULL UNIQUE,
                     receipt_sha256 TEXT NOT NULL,
+                    published_by TEXT NOT NULL,
                     created_at REAL NOT NULL,
                     expires_at REAL NOT NULL,
                     PRIMARY KEY(owner, memory_key)
@@ -77,6 +78,7 @@ class SyntheticEvidenceMemoryStore:
             "data_profile": "SYNTHETIC_DEMO",
             "source_run_id": row["source_run_id"],
             "source_receipt_sha256": row["receipt_sha256"],
+            "published_by": row["published_by"],
             "created_at": row["created_at"],
             "expires_at": row["expires_at"],
             "historical_comparisons": result["accepted_historical_comparisons"],
@@ -129,8 +131,9 @@ class SyntheticEvidenceMemoryStore:
                     raise TaskRunConflict("Owner reached the synthetic memory reference limit")
                 conn.execute(
                     "INSERT INTO synthetic_evidence_memory "
-                    "(owner,memory_key,source_run_id,receipt_sha256,created_at,expires_at) VALUES (?,?,?,?,?,?)",
-                    (owner, memory_key, run_id, digest, now, now + ttl_seconds),
+                    "(owner,memory_key,source_run_id,receipt_sha256,published_by,created_at,expires_at) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (owner, memory_key, run_id, digest, publisher, now, now + ttl_seconds),
                 )
                 saved = conn.execute(
                     "SELECT * FROM synthetic_evidence_memory WHERE source_run_id=?", (run_id,)
