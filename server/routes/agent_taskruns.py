@@ -120,9 +120,7 @@ async def get_synthetic_portfolio_review(
     """Read the frozen SHA before a separate admin submits a review."""
     store = _store()
     try:
-        return store.get_portfolio_review(
-            run_id, requester=principal.username, admin=principal.role == "admin"
-        )
+        return store.get_portfolio_review(run_id, requester=principal.username, admin=principal.role == "admin")
     except (TaskRunNotFound, ValueError) as exc:
         raise HTTPException(status_code=404, detail="No visible synthetic portfolio review") from exc
     except TaskRunConflict as exc:
