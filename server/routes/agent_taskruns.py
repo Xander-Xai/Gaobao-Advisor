@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from server.admin.auth import AdminPrincipal, require_role
 from server.agent.taskrun_store import (
@@ -42,6 +42,8 @@ class NewSyntheticTaskRun(BaseModel):
 
 class NewSyntheticPortfolioTaskRun(BaseModel):
     """Explicitly non-model, operator-approved multi-candidate research."""
+
+    model_config = ConfigDict(extra="forbid")
 
     portfolio: SyntheticPortfolioRequest
     idempotency_key: str = Field(..., min_length=8, max_length=96, pattern=r"^[A-Za-z0-9_.:-]+$")
