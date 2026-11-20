@@ -25,6 +25,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from benchmarks.decision_card_trace_eval import TRACE_CONTRACT, grade_step_trace
 from scripts.seed_demo_data import DEMO_MAJORS, DEMO_SCHOOLS, DEMO_YEAR
 from server.agent.synthetic_decision_card import DecisionCardProfile, build_synthetic_decision_card
 
@@ -223,11 +224,16 @@ def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -
         )
         assessment = grade_business_case(case, card)
         observed = card["execution"]
+        try:
+            trace_receipt = grade_step_trace(observed)
+        except ValueError:
+            trace_receipt = None  # Never copy malformed or raw provider/tool data.
+        trace_failures = [] if trace_receipt is not None else ["trace_contract_invalid"]
         reports.append(
             {
                 "case_id": case["case_id"],
                 "split": case["split"],
-                "passed": assessment["passed"],
+                "passed": assessment["passed"] and trace_receipt is not None,
                 "safe_abstain": (
                     case["expected_status"] == "needs_review"
                     and card["status"] == "needs_review"
@@ -236,7 +242,10 @@ def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -
                     and not card["schools"]
                     and not card["evidence_ids"]
                 ),
-                "failure_codes": assessment["failure_codes"],
+                "failure_codes": sorted(set(assessment["failure_codes"] + trace_failures)),
+                "execution_status": observed["status"],
+                "execution_reason": observed["reason"],
+                "trace_receipt": trace_receipt,
                 "status": card["status"],
                 "reason": card["reason"],
                 "elapsed_ms": round((time.monotonic() - start) * 1000, 2),
@@ -255,6 +264,8 @@ def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -
         "dataset_sha256": _digest(cases),
         "cases": len(reports),
         "passed": sum(item["passed"] for item in reports),
+        "trace_contract": TRACE_CONTRACT,
+        "trace_validated_cases": sum(item["trace_receipt"] is not None for item in reports),
         "safe_abstentions": sum(item["safe_abstain"] for item in reports),
         "holdout_cases": sum(item["split"] == "holdout" for item in reports),
         "holdout_passed": sum(item["passed"] for item in reports if item["split"] == "holdout"),
@@ -356,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
         controller == "REAL_MODEL_NOT_SCRIPTED"
         and report["cases"] == 8
         and report["holdout_cases"] == 4
+        and report["trace_validated_cases"] == 8
         and report["provider_prompt_tokens"] is not None
         and report["provider_completion_tokens"] is not None
     )
