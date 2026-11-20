@@ -20,6 +20,10 @@ pytest -q tests/test_taskrun_process_crash_recovery.py
 
 CI 新增短期 Artifact 文件 `agent-harness-synthetic-evidence/taskrun-crash-recovery.json`，包括异常退出注入数、只读任务恢复数、旧租约被拒绝数及负面结论。
 
+## 验收状态与回执完整性
+
+在合成 TaskRun journal 中，第二次执行仍须通过 #111 的服务端 SQL 事实复核，不能只凭 Worker 返回的 SUCCEEDED 字符串判断恢复成功。CI 的 `read_only_tasks_recovered` 仅计数成功写入持久化回执、尝试次数为 2 的任务；所有中止、重试和来源检查都属于本地离线实验，不计真实云模型 Token。
+
 ## 严格边界
 
 - 测试确实创建两个真实 OS 子进程，但租约自然到期**没有等待实际时钟**，而是 SQL 故障注入；不能称为真实网络分区或运行时抢占的生产压测。
