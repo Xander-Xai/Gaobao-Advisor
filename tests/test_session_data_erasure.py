@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import sqlite3
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -38,8 +36,10 @@ def seed(session_factory, storage, session_id="synthetic-session-privacy"):
         db.add(Feedback(session_id=session_id, message_index=1, rating="helpful"))
         db.add(Highlight(session_id=session_id, content="private highlight"))
         db.add(QualityScore(
-            conversation_id=session_id, message_id="synthetic-m1", aggregate_score=0.5,
-            judge_model="synthetic-judge"
+            conversation_id=session_id,
+            message_id="synthetic-m1",
+            aggregate_score=0.5,
+            judge_model="synthetic-judge",
         ))
         db.commit()
     report_dir = storage._base / session_id
@@ -48,14 +48,18 @@ def seed(session_factory, storage, session_id="synthetic-session-privacy"):
     return report_dir
 
 
-def test_erasure_covers_sql_and_report_file( isolated):
+def test_erasure_covers_sql_and_report_file(isolated):
     session_factory, storage = isolated
     directory = seed(session_factory, storage)
     result = erase_live_session_data("synthetic-session-privacy", storage)
     assert result["live_data_erased"] is True
     assert result["deleted_row_counts"] == {
-        "quality_scores": 1, "feedback": 1, "highlights": 1,
-        "messages": 1, "conversations": 1, "reports": 1,
+        "quality_scores": 1,
+        "feedback": 1,
+        "highlights": 1,
+        "messages": 1,
+        "conversations": 1,
+        "reports": 1,
     }
     assert not directory.exists()
     assert result["backups_and_external_processors_erased"] is False

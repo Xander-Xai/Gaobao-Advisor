@@ -10,8 +10,8 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from server.auth import require_session_auth
-from server.report.storage import ReportStorage
 from server.deps import get_soul_query_engine
+from server.report.storage import ReportStorage
 from server.soul_query import QueryState
 from server.user_profile import load_profile, save_profile
 

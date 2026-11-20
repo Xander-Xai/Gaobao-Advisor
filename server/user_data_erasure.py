@@ -23,7 +23,12 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
     from db.models import Conversation, ConversationMessage, Feedback, Highlight, QualityScore
 
     staged = reports.stage_session_deletion(session_id)
-    db = get_session()
+    try:
+        db = get_session()
+    except Exception:
+        if staged is not None:
+            reports.restore_staged_session(session_id, staged[0])
+        raise
     removed: dict[str, int] = {}
     try:
         removed["quality_scores"] = db.query(QualityScore).filter(
