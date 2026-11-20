@@ -102,7 +102,7 @@ class MemoryManager:
                 )
             return summary_text
         except Exception as e:
-            logger.warning("Failed to summarize history: %s", e)
+            logger.warning("Failed to summarize history (error type: %s)", type(e).__name__)
             return ""
 
     async def build_memory_messages(self, session_id: str) -> list[dict]:

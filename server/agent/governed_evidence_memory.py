@@ -189,6 +189,37 @@ class SyntheticEvidenceMemoryStore:
             "real_admissions_accuracy": "NOT_MEASURED",
         }
 
+    def prune_expired(self, *, limit: int = 100) -> dict[str, Any]:
+        """Delete expired synthetic memory pointers only, never source/audit rows.
+
+        Maintenance is bounded and transactional, with no PII or source
+        payloads in the returned metrics. The caller must schedule it.
+        """
+        if type(limit) is not int or not 1 <= limit <= 200:
+            raise ValueError("Memory cleanup limit must be 1..200")
+        with self.taskruns._open() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                expired = conn.execute(
+                    "SELECT owner,memory_key FROM synthetic_evidence_memory "
+                    "WHERE expires_at<=? ORDER BY expires_at LIMIT ?",
+                    (time.time(), limit),
+                ).fetchall()
+                conn.executemany(
+                    "DELETE FROM synthetic_evidence_memory WHERE owner=? AND memory_key=? AND expires_at<=?",
+                    ((item["owner"], item["memory_key"], time.time()) for item in expired),
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+        return {
+            "expired_memory_pointers_deleted": len(expired),
+            "source_taskruns_deleted": False,
+            "audit_history_deleted": False,
+            "data_profile": "SYNTHETIC_DEMO",
+        }
+
     def forget(self, run_id: str, *, requester: str, admin: bool = False) -> dict[str, Any]:
         """Delete ONLY the indexed memory reference, never its original receipt."""
         source = self.taskruns.get(run_id, requester=requester, admin=admin)

@@ -52,6 +52,6 @@ def test_oversized_file_and_workspace_entry_count_rejected(work):
         sandbox_command(IMAGE, work, NAME)
     (work / "huge").unlink()
     for index in range(33):
-        (work / ("file-%02d" % index)).write_text("synthetic", encoding="utf-8")
+        (work / (f"file-{index:02d}")).write_text("synthetic", encoding="utf-8")
     with pytest.raises(ValueError, match="too many"):
         sandbox_command(IMAGE, work, NAME)
