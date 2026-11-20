@@ -2,3 +2,5 @@
 # Install only for an explicitly authorized synthetic Deep Agents worker.
 deepagents>=0.7.13,<1.0
 langchain-openai>=1.0,<2.0
+# P18 optional durable checkpoint. >=3.0.1 includes corrected SQLite metadata query handling.
+langgraph-checkpoint-sqlite>=3.0.1,<4.0
