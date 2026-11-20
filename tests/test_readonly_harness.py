@@ -135,10 +135,7 @@ def test_context_compaction_maintains_bounded_history_and_unknown_tokens():
     )
     assert result.status == "completed"
     assert result.history_evictions >= 0
-    assert any(
-        json.loads(item["observation"]).get("observation_truncated")
-        for item in planner.seen_histories[-1]
-    )
+    assert any(json.loads(item["observation"]).get("observation_truncated") for item in planner.seen_histories[-1])
     assert result.max_history_chars <= 1000
     assert result.prompt_tokens is None
     assert result.completion_tokens is None
