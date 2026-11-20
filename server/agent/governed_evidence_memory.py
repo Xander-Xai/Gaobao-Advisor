@@ -148,9 +148,7 @@ class SyntheticEvidenceMemoryStore:
         """Never expose another owner's source; recheck current SQL on every read."""
         self.taskruns.get(run_id, requester=requester, admin=admin)
         with self.taskruns._open() as conn:
-            saved = conn.execute(
-                "SELECT * FROM synthetic_evidence_memory WHERE source_run_id=?", (run_id,)
-            ).fetchone()
+            saved = conn.execute("SELECT * FROM synthetic_evidence_memory WHERE source_run_id=?", (run_id,)).fetchone()
             if saved is None or saved["expires_at"] <= time.time():
                 raise TaskRunNotFound("No active synthetic memory for this task")
             source, memory_key, digest, result = self._source(conn, run_id)
