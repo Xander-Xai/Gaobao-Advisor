@@ -24,6 +24,9 @@ os.environ["SYNTHETIC_TASKRUN_JOURNAL"] = str(root / "taskruns.sqlite")
 os.environ["ENABLE_SYNTHETIC_AGENT_EXPERIMENT"] = "true"
 os.environ["ENABLE_OUTBOUND_FETCH"] = "false"
 os.environ["APP_ENV"] = "development"
+# The E2E deliberately performs more than the public API demo burst quota.
+os.environ["PUBLIC_API_RATE_PER_SECOND"] = "1000"
+os.environ["PUBLIC_API_RATE_BURST"] = "1000"
 os.environ["SESSION_SECRET"] = "governed-memory-test-session-" + "s" * 40
 os.environ["ADMIN_TOKEN_SECRET"] = "governed-memory-test-admin-" + "t" * 40
 
