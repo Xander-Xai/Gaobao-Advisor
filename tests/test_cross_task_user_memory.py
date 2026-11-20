@@ -199,3 +199,71 @@ def test_prompt_context_is_bounded_untrusted_data_not_evidence():
     assert '"score"' not in prompt
     assert "不可信输入" in prompt
     assert service.prompt_context([]) == ""
+
+
+def test_bounded_expiry_prune_physically_deletes_only_expired(client_db):
+    client, factory = client_db
+    token = create_token(client)
+    assert put(client, token, key="preferred_regions", value="广东").status_code == 200
+    assert put(client, token, key="career_goal", value="软件工程").status_code == 200
+    assert put(client, token, key="study_goal", value="提高数学").status_code == 200
+    with factory() as db:
+        for row in db.query(UserMemoryEntry).filter(
+            UserMemoryEntry.memory_key.in_(["preferred_regions", "career_goal"])
+        ):
+            row.expires_at = _utcnow() - timedelta(days=1)
+        db.commit()
+    assert service.prune_expired(limit=1)["expired_entries_deleted"] == 1
+    assert service.prune_expired(limit=1)["expired_entries_deleted"] == 1
+    assert service.prune_expired(limit=1)["expired_entries_deleted"] == 0
+    with factory() as db:
+        assert [row.memory_key for row in db.query(UserMemoryEntry).all()] == ["study_goal"]
+    with pytest.raises(service.MemoryInvalid):
+        service.prune_expired(limit=0)
+
+
+def test_llm_stream_receives_bounded_user_memory_without_token(monkeypatch):
+    from types import SimpleNamespace
+
+    from server.graph.nodes import llm_node as llm
+
+    captured = []
+
+    def fake_create(**kwargs):
+        captured.append(kwargs)
+        return iter([SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))])])
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create)))
+    monkeypatch.setattr(llm, "_get_llm_client", lambda: client)
+    monkeypatch.setattr(llm, "_get_config", lambda: {"model": "synthetic-test-model", "temperature": 0, "max_tokens": 50})
+    monkeypatch.setattr(llm, "_load_system_prompt", lambda: "base prompt")
+    monkeypatch.setattr(llm, "_load_memory_for_session", lambda _session: [])
+    monkeypatch.setattr(llm, "build_llm_context", lambda _state: "current user question")
+    assert list(
+        llm.llm_node_stream(
+            {
+                "session_id": "session-one",
+                "user_memory": [{"key": "preferred_regions", "value": "广州", "version": 1}],
+            }
+        )
+    ) == [("ok", False)]
+    message_text = "\n".join(item["content"] for item in captured[0]["messages"])
+    assert "广州" in message_text
+    assert "不可信输入" in message_text
+    assert "mem1_" not in message_text
+    assert list(llm.llm_node_stream({"session_id": "session-two"})) == [("ok", False)]
+    assert all("广州" not in item["content"] for item in captured[1]["messages"])
+
+
+def test_storage_error_does_not_log_secret_or_sql_details(client_db, monkeypatch, caplog):
+    client, _ = client_db
+
+    def fail():
+        raise RuntimeError("user-memory-secret-canary")
+
+    monkeypatch.setattr(service, "get_session", fail)
+    with caplog.at_level("ERROR"):
+        response = client.post("/api/v1/memory/vault")
+    assert response.status_code == 503
+    assert "user-memory-secret-canary" not in caplog.text + response.text
+    assert "RuntimeError" in caplog.text
