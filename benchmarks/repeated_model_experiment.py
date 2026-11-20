@@ -59,7 +59,7 @@ def compare_repeated_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) 
             common = identity
         if identity != common:
             raise ValueError("Model/data/tool/temperature drift across trials")
-        for arm, report in zip(ARMS, (baseline, candidate)):
+        for arm, report in zip(ARMS, (baseline, candidate), strict=True):
             if report["run_id"] in seen_runs:
                 raise ValueError("A benchmark run cannot be reused across trials")
             seen_runs.add(report["run_id"])
