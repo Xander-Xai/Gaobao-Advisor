@@ -43,6 +43,7 @@ class ReadOnlyTool:
     name: str
     parameters: dict[str, type]
     handler: Callable[[dict[str, Any]], dict[str, Any]]
+    retry_safe: bool = False  # Explicit assurance: invoking again has no external side effects.
 
 
 class Planner(Protocol):
@@ -59,6 +60,7 @@ class HarnessLimits:
     max_context_chars: int = 2400
     max_reported_tokens: int = 6000
     require_provider_usage: bool = False
+    max_recoverable_tool_failures: int = 0  # Off by default; only retry_safe tools qualify.
 
     def __post_init__(self) -> None:
         for value in (
@@ -71,6 +73,11 @@ class HarnessLimits:
         ):
             if type(value) is not int or value <= 0:
                 raise ValueError("Harness limits must be positive integers")
+        if (
+            type(self.max_recoverable_tool_failures) is not int
+            or not 0 <= self.max_recoverable_tool_failures <= self.max_tool_calls
+        ):
+            raise ValueError("Recovery budget must be between zero and total tool calls")
 
 
 @dataclass
@@ -148,6 +155,8 @@ def run_readonly_agent(
         for tool in tools.values()
     ):
         raise ValueError("Only strict string/integer argument schemas are supported")
+    if any(type(tool.retry_safe) is not bool for tool in tools.values()):
+        raise ValueError("Tool retry safety must be explicitly boolean")
 
     schemas = {name: {arg: dtype.__name__ for arg, dtype in tool.parameters.items()} for name, tool in tools.items()}
     history: list[dict[str, Any]] = []
@@ -295,12 +304,28 @@ def run_readonly_agent(
         tool_calls += 1
         sequence.append(spec.name)
         start = time.monotonic()
+        recoverable_error = False
         try:
             with safe_agent_span("agent.tool", {"agent.tool": spec.name}):
                 result = spec.handler(dict(choice.arguments))
-        except Exception:  # noqa: BLE001 - fail closed on all tool errors
+        except Exception:  # noqa: BLE001 - never expose raw provider/tool exceptions
             tool_failures += 1
             reason = "tool_execution_failed"
+            if not spec.retry_safe or tool_failures > limits.max_recoverable_tool_failures:
+                trace.append({**step_meta, "kind": "tool", "tool": spec.name, "result": reason})
+                break
+            # A sanitized failure observation permits a NEW planner decision.
+            # No tool argument values or exception text leave this read-only harness.
+            recoverable_error = True
+            result = {
+                "data_profile": "SYNTHETIC_DEMO",
+                "source_ids": [],
+                "retryable_tool_failure": True,
+                "error_code": "tool_execution_failed",
+            }
+        if not recoverable_error and isinstance(result, dict) and result.get("retryable_tool_failure"):
+            tool_failures += 1
+            reason = "tool_evidence_invalid"
             trace.append({**step_meta, "kind": "tool", "tool": spec.name, "result": reason})
             break
         if not isinstance(result, dict) or result.get("data_profile") != "SYNTHETIC_DEMO":
@@ -332,7 +357,7 @@ def run_readonly_agent(
                 **step_meta,
                 "kind": "tool",
                 "tool": spec.name,
-                "result": "ok",
+                "result": "recoverable_tool_failure" if recoverable_error else "ok",
                 "observed_source_count": len(refs),
                 "elapsed_ms": round((time.monotonic() - start) * 1000, 2),
             }
