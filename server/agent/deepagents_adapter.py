@@ -297,9 +297,7 @@ def run_deepagents_research(
         },
         ensure_ascii=False,
     )
-    invoke_kwargs: dict[str, Any] = {
-        "config": {"configurable": {"thread_id": task_id}, "recursion_limit": 24}
-    }
+    invoke_kwargs: dict[str, Any] = {"config": {"configurable": {"thread_id": task_id}, "recursion_limit": 24}}
     if agent_factory is None and os.getenv("SYNTHETIC_DEEPAGENTS_CHECKPOINT_DB", "").strip():
         # In the opt-in durable mode, flush each graph checkpoint before
         # starting the next step; async checkpoints may be lost on os._exit.
