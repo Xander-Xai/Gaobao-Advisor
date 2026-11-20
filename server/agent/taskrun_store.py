@@ -299,9 +299,7 @@ class SyntheticTaskRunStore:
             "production_release_authorized": False,
         }
 
-    def get_portfolio_review(
-        self, run_id: str, *, requester: str, admin: bool = False
-    ) -> dict[str, Any]:
+    def get_portfolio_review(self, run_id: str, *, requester: str, admin: bool = False) -> dict[str, Any]:
         self._validate_run_id(run_id)
         with self._open() as conn:
             row = conn.execute("SELECT * FROM synthetic_task_runs WHERE run_id=?", (run_id,)).fetchone()
