@@ -83,10 +83,7 @@ def test_cancel_is_owner_scoped_and_never_reverses_completed_results(tmp_path):
 
 def test_cancelling_active_task_releases_exactly_one_owner_quota_slot(tmp_path):
     store = SyntheticTaskRunStore(tmp_path / "journal.db")
-    ids = [
-        store.create(payload(), "deterministic", "demo-owner", f"quota-cancel-{n:02}")["run_id"]
-        for n in range(8)
-    ]
+    ids = [store.create(payload(), "deterministic", "demo-owner", f"quota-cancel-{n:02}")["run_id"] for n in range(8)]
     with pytest.raises(TaskRunConflict, match="quota"):
         store.create(payload(), "deterministic", "demo-owner", "quota-cancel-08")
     store.cancel(ids[0], "demo-owner")
