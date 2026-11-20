@@ -20,7 +20,14 @@ from typing import Any
 from server.agent.synthetic_decision_card import DecisionCardProfile, build_synthetic_decision_card
 from server.agent.taskrun_receipt_verifier import verify_taskrun_receipt
 from server.agent.taskrun_store import SyntheticTaskRunStore, TaskRunConflict
-from server.observability.agent_trace import continue_trace, safe_agent_span
+from server.observability.agent_trace import (
+    continue_trace,
+    initialize_agent_otel,
+    record_taskrun_outcome,
+    safe_agent_span,
+    set_current_span_attribute,
+    shutdown_agent_otel,
+)
 
 
 def _gate_execution(engine: str, *, permit_external_model: bool, model: str | None) -> None:
@@ -46,15 +53,24 @@ def execute_approved_run(
     agent_runner: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Continue persisted synthetic W3C context across worker processes."""
+    engine = store.get(run_id)["engine"]
     with continue_trace(store.get_internal_traceparent(run_id)):
-        with safe_agent_span("agent.taskrun", {"agent.engine": store.get(run_id)["engine"]}):
-            return _execute_approved_run(
-                store,
-                run_id,
-                permit_external_model=permit_external_model,
-                model=model,
-                agent_runner=agent_runner,
-            )
+        with safe_agent_span("agent.taskrun", {"agent.engine": engine}):
+            try:
+                result = _execute_approved_run(
+                    store,
+                    run_id,
+                    permit_external_model=permit_external_model,
+                    model=model,
+                    agent_runner=agent_runner,
+                )
+            except BaseException:
+                record_taskrun_outcome(engine, "ERROR", "unhandled_worker_error")
+                set_current_span_attribute("agent.status", "ERROR")
+                raise
+            record_taskrun_outcome(engine, result.get("status"), result.get("failure_code"))
+            set_current_span_attribute("agent.status", result.get("status"))
+            return result
 
 
 def _execute_approved_run(
@@ -118,17 +134,18 @@ def _execute_approved_run(
         store.assert_active_lease(run_id, token)
         # Do not trust the runner's self-reported status or source labels.
         # Re-read the approved fictional profile against SQL outside the Agent.
-        if engine == "portfolio":
-            from server.agent.synthetic_portfolio import verify_synthetic_portfolio
+        with safe_agent_span("agent.verify", {"agent.engine": engine}):
+            if engine == "portfolio":
+                from server.agent.synthetic_portfolio import verify_synthetic_portfolio
 
-            if not verify_synthetic_portfolio(profile, card):
-                raise ValueError("Portfolio SQL receipt does not match approved evidence")
-            from server.agent.portfolio_sql_oracle import verify_portfolio_sql_truth
+                if not verify_synthetic_portfolio(profile, card):
+                    raise ValueError("Portfolio SQL receipt does not match approved evidence")
+                from server.agent.portfolio_sql_oracle import verify_portfolio_sql_truth
 
-            verify_portfolio_sql_truth(profile, card)
-            status = "SUCCEEDED" if card["eligible_history_count"] > 0 else "NEEDS_REVIEW"
-        else:
-            status = verify_taskrun_receipt(profile, card)
+                verify_portfolio_sql_truth(profile, card)
+                status = "SUCCEEDED" if card["eligible_history_count"] > 0 else "NEEDS_REVIEW"
+            else:
+                status = verify_taskrun_receipt(profile, card)
         store.assert_active_lease(run_id, token)
         failure = None if status == "SUCCEEDED" else "insufficient_verified_evidence"
         return store.finish(run_id, token, status, card, failure)
@@ -155,29 +172,36 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--permit-external-model", action="store_true")
     args = parser.parse_args(argv)
     store = SyntheticTaskRunStore(args.journal)
+    # The Worker is a different OS process from FastAPI: it must initialize
+    # the optional exporter itself or its continued W3C spans stay local.
+    otel_enabled = initialize_agent_otel()
     try:
-        result = execute_approved_run(
-            store,
-            args.run_id,
-            permit_external_model=args.permit_external_model,
-            model=args.model,
+        try:
+            result = execute_approved_run(
+                store,
+                args.run_id,
+                permit_external_model=args.permit_external_model,
+                model=args.model,
+            )
+        except (ValueError, LookupError, RuntimeError) as exc:
+            # Avoid printing potentially private database paths or credentials.
+            parser.error(type(exc).__name__ + ": synthetic task not executable")
+        print(
+            json.dumps(
+                {
+                    "run_id": result["run_id"],
+                    "status": result["status"],
+                    "engine": result["engine"],
+                    "attempts": result["attempts"],
+                    "failure_code": result["failure_code"],
+                },
+                sort_keys=True,
+            )
         )
-    except (ValueError, LookupError, RuntimeError) as exc:
-        # Avoid printing potentially private database paths or credentials.
-        parser.error(type(exc).__name__ + ": synthetic task not executable")
-    print(
-        json.dumps(
-            {
-                "run_id": result["run_id"],
-                "status": result["status"],
-                "engine": result["engine"],
-                "attempts": result["attempts"],
-                "failure_code": result["failure_code"],
-            },
-            sort_keys=True,
-        )
-    )
-    return 0 if result["status"] in {"SUCCEEDED", "NEEDS_REVIEW"} else 1
+        return 0 if result["status"] in {"SUCCEEDED", "NEEDS_REVIEW"} else 1
+    finally:
+        if otel_enabled:
+            shutdown_agent_otel()
 
 
 if __name__ == "__main__":

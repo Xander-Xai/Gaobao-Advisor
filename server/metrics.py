@@ -19,7 +19,11 @@ Usage:
 
 from __future__ import annotations
 
+import os
+import sqlite3
 import time
+from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
@@ -95,30 +99,92 @@ QUALITY_HALLUCINATION_DETECTED = Counter(
 )
 
 
+def _metric_endpoint(request: Request) -> str:
+    """Use the trusted FastAPI route template, never a raw identifier path.
+
+    In middleware the router may not have set scope["route"] yet. Group those
+    requests by a finite application prefix instead of admitting path values
+    that may contain run IDs, arbitrary strings or student information.
+    """
+    route = request.scope.get("route")
+    template = getattr(route, "path", None)
+    if isinstance(template, str) and template.startswith("/") and len(template) <= 160:
+        return template
+    path = request.scope.get("path", "")
+    if path.startswith("/api/v1/admin/agent-"):
+        return "/api/v1/admin/agent-*"
+    if path.startswith("/api/v1/admin/"):
+        return "/api/v1/admin/*"
+    for prefix in ("/api/v1/chat", "/api/v1/data", "/api/v1/profile", "/api/v1/knowledge", "/api/v1/health"):
+        if path == prefix or path.startswith(prefix + "/"):
+            return prefix + "/*"
+    return "other"
+
+
+# A short-lived Worker cannot export its in-memory counter through FastAPI.
+# Keep a separate durable snapshot gauge from its isolated SQLite TaskRun journal.
+AGENT_TASKRUN_STORED = Gauge(
+    "agent_taskrun_stored_jobs",
+    "Current synthetic TaskRun journal rows by finite engine/status",
+    ["engine", "status"],
+)
+_TASKRUN_ENGINES = ("deterministic", "portfolio", "deepagents")
+_TASKRUN_STATES = ("PENDING_APPROVAL", "APPROVED", "RUNNING", "SUCCEEDED", "NEEDS_REVIEW", "FAILED", "CANCELLED")
+
+
+def _refresh_synthetic_taskrun_metrics() -> None:
+    """Read only counts from the opt-in synthetic journal; never read payloads."""
+    if os.getenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "").lower() != "true":
+        return
+    if os.getenv("APP_ENV", "development").lower() == "production":
+        return
+    location = os.getenv("SYNTHETIC_TASKRUN_JOURNAL", "")
+    if not location or not Path(location).is_absolute() or Path(location).is_symlink():
+        return
+    if not Path(location).is_file():
+        return
+    try:
+        address = "file:" + quote(str(Path(location).resolve()), safe="/") + "?mode=ro"
+        with sqlite3.connect(address, uri=True, timeout=0.2) as conn:
+            rows = conn.execute(
+                "SELECT engine, status, COUNT(*) FROM synthetic_task_runs GROUP BY engine, status"
+            ).fetchall()
+    except (sqlite3.Error, OSError):
+        return  # Collector failure must not reveal file paths or break /metrics.
+    counts = {(engine, state): 0 for engine in _TASKRUN_ENGINES for state in _TASKRUN_STATES}
+    for engine, state, count in rows:
+        if (engine, state) in counts:
+            counts[(engine, state)] = count
+    for (engine, state), count in counts.items():
+        AGENT_TASKRUN_STORED.labels(engine=engine, status=state).set(count)
+
+
 # ── Middleware for Automatic Metrics Collection ────────────
 
 
 async def metrics_middleware(request: Request, call_next):
     """Middleware to automatically collect HTTP metrics."""
-    start_time = time.time()
+    start_time = time.monotonic()
 
     try:
         response = await call_next(request)
 
         # Record metrics
-        duration = time.time() - start_time
-        HTTP_REQUESTS.labels(method=request.method, endpoint=request.url.path, status=response.status_code).inc()
+        duration = time.monotonic() - start_time
+        endpoint = _metric_endpoint(request)
+        HTTP_REQUESTS.labels(method=request.method, endpoint=endpoint, status=response.status_code).inc()
 
-        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=request.url.path).observe(duration)
+        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=endpoint).observe(duration)
 
         return response
 
     except Exception:
         # Record error metrics
-        duration = time.time() - start_time
-        HTTP_REQUESTS.labels(method=request.method, endpoint=request.url.path, status=500).inc()
+        duration = time.monotonic() - start_time
+        endpoint = _metric_endpoint(request)
+        HTTP_REQUESTS.labels(method=request.method, endpoint=endpoint, status=500).inc()
 
-        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=request.url.path).observe(duration)
+        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=endpoint).observe(duration)
 
         raise
 
@@ -132,6 +198,7 @@ metrics_app = FastAPI()
 @metrics_app.get("/")
 async def metrics():
     """Expose Prometheus metrics."""
+    _refresh_synthetic_taskrun_metrics()
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
