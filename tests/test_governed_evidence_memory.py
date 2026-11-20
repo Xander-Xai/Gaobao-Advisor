@@ -158,9 +158,17 @@ with TestClient(app) as client:
 
     # A stored pointer is NOT frozen truth. If source SQL changes, reads must fail closed.
     from db.database import get_session
-    from db.models import AdmissionScore
+    from db.models import AdmissionScore, School, Major
     session = get_session()
-    entry = session.query(AdmissionScore).first()
+    school = session.query(School).filter(School.name == DEMO_SCHOOLS[0][0]).one()
+    major = session.query(Major).filter(Major.name == DEMO_MAJORS[0][0]).one()
+    entry = session.query(AdmissionScore).filter(
+        AdmissionScore.school_id == school.id,
+        AdmissionScore.major_id == major.id,
+        AdmissionScore.province == portfolio["province"],
+        AdmissionScore.year == DEMO_YEAR,
+    ).one()
+    target_id = entry.id
     original = entry.min_score
     entry.min_score = original + 1
     session.commit()
@@ -171,7 +179,7 @@ with TestClient(app) as client:
     assert listed.json()["active_count"] == 0 and listed.json()["blocked_stale_count"] == 1
 
     session = get_session()
-    entry = session.query(AdmissionScore).first()
+    entry = session.query(AdmissionScore).filter(AdmissionScore.id == target_id).one()
     entry.min_score = original
     session.commit()
     session.close()
