@@ -49,8 +49,11 @@ def execute_approved_run(
     with continue_trace(store.get_internal_traceparent(run_id)):
         with safe_agent_span("agent.taskrun", {"agent.engine": store.get(run_id)["engine"]}):
             return _execute_approved_run(
-                store, run_id, permit_external_model=permit_external_model,
-                model=model, agent_runner=agent_runner,
+                store,
+                run_id,
+                permit_external_model=permit_external_model,
+                model=model,
+                agent_runner=agent_runner,
             )
 
 

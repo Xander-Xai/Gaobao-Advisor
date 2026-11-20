@@ -54,8 +54,10 @@ class RequestIDMiddleware:
             await send(message)
 
         route = scope.get("path", "")
-        group = "agent_admin" if route.startswith("/api/v1/admin/agent-") else (
-            "public_chat" if route.startswith("/api/v1/chat") else "other"
+        group = (
+            "agent_admin"
+            if route.startswith("/api/v1/admin/agent-")
+            else ("public_chat" if route.startswith("/api/v1/chat") else "other")
         )
         method = scope.get("method", "OTHER")
         method = method if method in {"GET", "POST", "DELETE", "PUT", "PATCH"} else "OTHER"

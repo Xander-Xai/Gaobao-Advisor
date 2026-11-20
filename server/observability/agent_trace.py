@@ -17,10 +17,18 @@ _ENUMS = {
     "http.method": frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "OTHER"}),
     "http.route_group": frozenset({"agent_admin", "public_chat", "other"}),
     "agent.engine": frozenset({"portfolio", "deterministic", "deepagents", "unknown"}),
-    "agent.tool": frozenset({
-        "school_lookup", "major_lookup", "admission_lookup", "plan_lookup",
-        "candidate_lookup", "knowledge_lookup", "portfolio_sql", "unknown"
-    }),
+    "agent.tool": frozenset(
+        {
+            "school_lookup",
+            "major_lookup",
+            "admission_lookup",
+            "plan_lookup",
+            "candidate_lookup",
+            "knowledge_lookup",
+            "portfolio_sql",
+            "unknown",
+        }
+    ),
 }
 _NUMBERS = frozenset({"http.status_code", "agent.model_steps", "agent.tool_calls"})
 _PARENT = re.compile(r"^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
@@ -119,7 +127,11 @@ def initialize_agent_otel() -> bool:
     loopback = target.hostname in {"localhost", "127.0.0.1", "::1"}
     if (
         (target.scheme != "https" and not (target.scheme == "http" and loopback))
-        or not target.hostname or target.username or target.password or target.query or target.fragment
+        or not target.hostname
+        or target.username
+        or target.password
+        or target.query
+        or target.fragment
     ):
         raise ValueError("Unsafe Agent OTLP endpoint")
     try:

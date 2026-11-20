@@ -20,16 +20,18 @@ PARENT = "00-" + "a" * 32 + "-" + "b" * 16 + "-01"
 
 
 def test_observability_ignores_sensitive_and_unbounded_tags():
-    tags = safe_attributes({
-        "http.method": "POST",
-        "http.route_group": "agent_admin",
-        "agent.engine": "portfolio",
-        "agent.tool": "admission_lookup",
-        "agent.tool_calls": 2,
-        "prompt": "secret student",
-        "request_id": "secret-id",
-        "exception": "api-key-secret",
-    })
+    tags = safe_attributes(
+        {
+            "http.method": "POST",
+            "http.route_group": "agent_admin",
+            "agent.engine": "portfolio",
+            "agent.tool": "admission_lookup",
+            "agent.tool_calls": 2,
+            "prompt": "secret student",
+            "request_id": "secret-id",
+            "exception": "api-key-secret",
+        }
+    )
     assert tags == {
         "http.method": "POST",
         "http.route_group": "agent_admin",
@@ -37,19 +39,20 @@ def test_observability_ignores_sensitive_and_unbounded_tags():
         "agent.tool": "admission_lookup",
         "agent.tool_calls": 2,
     }
-    assert safe_attributes({"agent.engine": "not-in-allowlist", "agent.tool_calls": -3}) == {
-        "agent.engine": "unknown"
-    }
+    assert safe_attributes({"agent.engine": "not-in-allowlist", "agent.tool_calls": -3}) == {"agent.engine": "unknown"}
 
 
-@pytest.mark.parametrize("value", [
-    "00-" + "0" * 32 + "-" + "b" * 16 + "-01",
-    "00-" + "a" * 32 + "-" + "0" * 16 + "-01",
-    "00-" + "a" * 32 + "-" + "b" * 16 + "-01-extra",
-    "ff-" + "a" * 32 + "-" + "b" * 16 + "-01",
-    "password:secret",
-    None,
-])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "00-" + "0" * 32 + "-" + "b" * 16 + "-01",
+        "00-" + "a" * 32 + "-" + "0" * 16 + "-01",
+        "00-" + "a" * 32 + "-" + "b" * 16 + "-01-extra",
+        "ff-" + "a" * 32 + "-" + "b" * 16 + "-01",
+        "password:secret",
+        None,
+    ],
+)
 def test_reject_invalid_traceparent(value):
     assert not valid_traceparent(value)
 
