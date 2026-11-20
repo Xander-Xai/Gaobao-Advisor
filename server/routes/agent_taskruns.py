@@ -204,8 +204,8 @@ async def execute_synthetic_taskrun(
         if os.getenv("SYNTHETIC_TASKRUN_USE_PROCESS_SUPERVISOR", "").lower() == "true":
             from server.agent.taskrun_supervisor import supervise_approved_taskrun
 
-            # The local 12s hard deadline is shorter than the HTTP response
-            # deadline. On cancellation the Supervisor terminates only the
+            # The local 8.5s hard deadline plus 5s cleanup is below the
+            # 15s HTTP response deadline. On cancellation the Supervisor terminates only the
             # process group it spawned; no arbitrary kill-by-PID endpoint.
             observed = await asyncio.wait_for(
                 asyncio.to_thread(supervise_approved_taskrun, store, run_id, max_seconds=12.0),
