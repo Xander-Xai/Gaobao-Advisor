@@ -12,13 +12,12 @@ import subprocess
 import sys
 import threading
 import time
-from pathlib import Path
 
 import pytest
 
 from scripts.seed_demo_data import DEMO_MAJORS, DEMO_SCHOOLS, DEMO_YEAR
-from server.agent.taskrun_store import SyntheticTaskRunStore, TaskRunConflict
 from server.agent import taskrun_supervisor
+from server.agent.taskrun_store import SyntheticTaskRunStore, TaskRunConflict
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX process group signals required")
 
