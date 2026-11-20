@@ -68,6 +68,7 @@ jobs:
           python -m benchmarks.taskrun_lifecycle_eval --max-cases 8 --out /tmp/gaobao-agent-evidence/taskrun-lifecycle-8case-baseline.json
           python -m benchmarks.synthetic_portfolio_eval --out /tmp/gaobao-agent-evidence/multicandidate-synthetic-evidence.json
           python -m benchmarks.taskrun_crash_recovery_eval --out /tmp/gaobao-agent-evidence/taskrun-crash-recovery.json
+          python -m benchmarks.portfolio_taskrun_eval --out /tmp/gaobao-agent-evidence/portfolio-taskrun-independent-oracle.json
       - name: Upload synthetic Agent Harness evidence
         if: matrix.python-version == '3.11'
         uses: actions/upload-artifact@v4
