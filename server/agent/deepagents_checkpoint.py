@@ -122,8 +122,7 @@ def open_synthetic_deepagents_checkpointer(
             raise ValueError("Checkpoint task identity is bound to a different model/profile/contract")
         if binding is None:
             conn.execute(
-                "INSERT INTO synthetic_deepagents_bindings (task_id,profile_contract_sha256,created_at) "
-                "VALUES (?,?,?)",
+                "INSERT INTO synthetic_deepagents_bindings (task_id,profile_contract_sha256,created_at) VALUES (?,?,?)",
                 (task_id, digest, time.time()),
             )
         conn.commit()
