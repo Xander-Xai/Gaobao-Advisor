@@ -47,6 +47,16 @@ def execute_approved_run(
     """Claim, execute and commit one approved task, never bypass approval."""
     current = store.get(run_id)
     engine = current["engine"]
+    configured_checkpoint = os.getenv("SYNTHETIC_DEEPAGENTS_CHECKPOINT_DB", "")
+    if (
+        engine == "deepagents"
+        and configured_checkpoint
+        and Path(configured_checkpoint).resolve() == store.path
+    ):
+        # The CLI supplies --journal but does not necessarily export its path
+        # as an environment variable. Refuse mixing graph state with the
+        # business TaskRun CAS journal even in that configuration.
+        raise ValueError("Deep Agents graph checkpoint must not share the TaskRun journal")
     _gate_execution(engine, permit_external_model=permit_external_model, model=model)
     claimed, token = store.claim(run_id, lease_seconds=600 if engine == "deepagents" else 120)
     payload = claimed["payload"]
