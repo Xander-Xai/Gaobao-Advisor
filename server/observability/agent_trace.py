@@ -12,7 +12,9 @@ from urllib.parse import urlparse
 
 from prometheus_client import Counter, Histogram
 
-_OPERATIONS = frozenset({"http.request", "agent.taskrun", "agent.runtime", "agent.planner", "agent.tool", "agent.verify"})
+_OPERATIONS = frozenset(
+    {"http.request", "agent.taskrun", "agent.runtime", "agent.planner", "agent.tool", "agent.verify"}
+)
 _ENUMS = {
     "http.method": frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "OTHER"}),
     "http.route_group": frozenset({"agent_admin", "public_chat", "other"}),
@@ -44,6 +46,7 @@ _FAILURE_CODES = {
     "agent_execution_failed": "execution_failed",
     "insufficient_verified_evidence": "insufficient_evidence",
     "lease_conflict": "lease_conflict",
+    "unhandled_worker_error": "unhandled_worker_error",
 }
 
 

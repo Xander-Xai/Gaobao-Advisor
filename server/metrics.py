@@ -19,7 +19,11 @@ Usage:
 
 from __future__ import annotations
 
+import os
+import sqlite3
 import time
+from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
@@ -117,6 +121,44 @@ def _metric_endpoint(request: Request) -> str:
     return "other"
 
 
+# A short-lived Worker cannot export its in-memory counter through FastAPI.
+# Keep a separate durable snapshot gauge from its isolated SQLite TaskRun journal.
+AGENT_TASKRUN_STORED = Gauge(
+    "agent_taskrun_stored_jobs",
+    "Current synthetic TaskRun journal rows by finite engine/status",
+    ["engine", "status"],
+)
+_TASKRUN_ENGINES = ("deterministic", "portfolio", "deepagents")
+_TASKRUN_STATES = ("PENDING_APPROVAL", "APPROVED", "RUNNING", "SUCCEEDED", "NEEDS_REVIEW", "FAILED", "CANCELLED")
+
+
+def _refresh_synthetic_taskrun_metrics() -> None:
+    """Read only counts from the opt-in synthetic journal; never read payloads."""
+    if os.getenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "").lower() != "true":
+        return
+    if os.getenv("APP_ENV", "development").lower() == "production":
+        return
+    location = os.getenv("SYNTHETIC_TASKRUN_JOURNAL", "")
+    if not location or not Path(location).is_absolute() or Path(location).is_symlink():
+        return
+    if not Path(location).is_file():
+        return
+    try:
+        address = "file:" + quote(str(Path(location).resolve()), safe="/") + "?mode=ro"
+        with sqlite3.connect(address, uri=True, timeout=0.2) as conn:
+            rows = conn.execute(
+                "SELECT engine, status, COUNT(*) FROM synthetic_task_runs GROUP BY engine, status"
+            ).fetchall()
+    except (sqlite3.Error, OSError):
+        return  # Collector failure must not reveal file paths or break /metrics.
+    counts = {(engine, state): 0 for engine in _TASKRUN_ENGINES for state in _TASKRUN_STATES}
+    for engine, state, count in rows:
+        if (engine, state) in counts:
+            counts[(engine, state)] = count
+    for (engine, state), count in counts.items():
+        AGENT_TASKRUN_STORED.labels(engine=engine, status=state).set(count)
+
+
 # ── Middleware for Automatic Metrics Collection ────────────
 
 
@@ -156,6 +198,7 @@ metrics_app = FastAPI()
 @metrics_app.get("/")
 async def metrics():
     """Expose Prometheus metrics."""
+    _refresh_synthetic_taskrun_metrics()
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

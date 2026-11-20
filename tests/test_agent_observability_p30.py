@@ -8,7 +8,7 @@ import pytest
 from starlette.requests import Request
 
 from server.agent import taskrun_worker
-from server.metrics import _metric_endpoint
+from server.metrics import AGENT_TASKRUN_STORED, _metric_endpoint, _refresh_synthetic_taskrun_metrics
 from server.observability.agent_trace import (
     _TASKRUN_ATTEMPTS,
     record_taskrun_outcome,
@@ -35,8 +35,7 @@ def test_taskrun_metrics_use_fixed_label_values_even_on_malicious_error():
     matching = [
         sample
         for sample in _TASKRUN_ATTEMPTS.collect()[0].samples
-        if sample.labels.get("engine") == "deepagents"
-        and sample.labels.get("status") in {"FAILED", "SUCCEEDED"}
+        if sample.labels.get("engine") == "deepagents" and sample.labels.get("status") in {"FAILED", "SUCCEEDED"}
     ]
     assert matching
     assert any(sample.labels["reason"] == "other" for sample in matching)
@@ -105,3 +104,22 @@ def test_worker_wrapper_records_stored_status_not_exception_text(monkeypatch):
         and x.labels.get("reason") == "execution_failed"
     ]
     assert matches
+
+def test_durable_taskrun_metrics_read_journal_without_identity(tmp_path, monkeypatch):
+    from server.agent.taskrun_store import SyntheticTaskRunStore
+    from tests.test_taskrun_store import sample
+
+    path = tmp_path / "synthetic-metrics.sqlite"
+    store = SyntheticTaskRunStore(path)
+    task = store.create(sample(), "deterministic", "operator@example", "metrics-p30")
+    monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "true")
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("SYNTHETIC_TASKRUN_JOURNAL", str(path))
+    _refresh_synthetic_taskrun_metrics()
+    rows = [
+        item
+        for item in AGENT_TASKRUN_STORED.collect()[0].samples
+        if item.labels.get("engine") == "deterministic" and item.labels.get("status") == task["status"]
+    ]
+    assert rows and rows[0].value >= 1
+    assert all("operator@" not in str(item.labels) for item in AGENT_TASKRUN_STORED.collect()[0].samples)

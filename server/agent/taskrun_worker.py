@@ -65,7 +65,7 @@ def execute_approved_run(
                     agent_runner=agent_runner,
                 )
             except BaseException:
-                record_taskrun_outcome(engine, "ERROR", "lease_conflict")
+                record_taskrun_outcome(engine, "ERROR", "unhandled_worker_error")
                 set_current_span_attribute("agent.status", "ERROR")
                 raise
             record_taskrun_outcome(engine, result.get("status"), result.get("failure_code"))
