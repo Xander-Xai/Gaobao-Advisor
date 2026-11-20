@@ -82,9 +82,7 @@ def build_optimization_review(pairs: list[tuple[dict[str, Any], dict[str, Any]]]
         "holdout_provider_token_delta": summary["holdout_provider_token_delta"],
         "regressed_case_ids": summary["regressions"],
         "evaluation_gate": gate,
-        "development_failure_clusters": {
-            arm: dict(sorted(counts.items())) for arm, counts in failures.items()
-        },
+        "development_failure_clusters": {arm: dict(sorted(counts.items())) for arm, counts in failures.items()},
         "development_only_untested_hypotheses": proposals,
         "model_provenance_verified": False,
         "provider_billing_reconciled": False,

@@ -96,9 +96,7 @@ class SyntheticOptimizationReviewStore:
 
     @staticmethod
     def _fetch(conn: sqlite3.Connection, proposal_id: str) -> sqlite3.Row:
-        row = conn.execute(
-            "SELECT * FROM synthetic_optimizer_proposals WHERE proposal_id=?", (proposal_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM synthetic_optimizer_proposals WHERE proposal_id=?", (proposal_id,)).fetchone()
         if row is None:
             raise TaskRunNotFound("Synthetic optimizer proposal not found")
         return row
@@ -248,9 +246,7 @@ class SyntheticOptimizationReviewStore:
                     or actor in {row["submitted_by"], *(item["reviewer"] for item in reviews)}
                 ):
                     raise TaskRunConflict("Independent submit, review and simulated stage roles required")
-                pointer = conn.execute(
-                    "SELECT * FROM synthetic_optimizer_demo_pointer WHERE singleton_id=1"
-                ).fetchone()
+                pointer = conn.execute("SELECT * FROM synthetic_optimizer_demo_pointer WHERE singleton_id=1").fetchone()
                 if pointer["active_proposal_id"] is not None:
                     raise TaskRunConflict("Rollback current demo pointer before another simulation")
                 conn.execute(
@@ -278,9 +274,7 @@ class SyntheticOptimizationReviewStore:
         with self.taskruns._open() as conn:
             try:
                 conn.execute("BEGIN IMMEDIATE")
-                pointer = conn.execute(
-                    "SELECT * FROM synthetic_optimizer_demo_pointer WHERE singleton_id=1"
-                ).fetchone()
+                pointer = conn.execute("SELECT * FROM synthetic_optimizer_demo_pointer WHERE singleton_id=1").fetchone()
                 proposal_id = pointer["active_proposal_id"]
                 if proposal_id is None:
                     raise TaskRunConflict("No demo pointer is active")
