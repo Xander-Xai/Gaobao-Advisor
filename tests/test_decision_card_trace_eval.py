@@ -7,8 +7,6 @@ import json
 import os
 import subprocess
 import sys
-from types import SimpleNamespace
-
 import pytest
 
 from benchmarks.decision_card_trace_eval import (
@@ -25,8 +23,16 @@ from tests.test_repeated_model_experiment import pairs
 
 def example_execution(prompt_tokens: int | None = 100, completion_tokens: int | None = 20) -> dict:
     tools = ["major_lookup", "admission_lookup", "admission_lookup", "plan_lookup", "plan_lookup"]
-    prompt = [20, 20, 20, 20, 10, 10] if prompt_tokens is not None else [None] * 6
-    completion = [4, 4, 3, 3, 3, 3] if completion_tokens is not None else [None] * 6
+    prompt = (
+        [prompt_tokens // 6] * 5 + [prompt_tokens - (prompt_tokens // 6) * 5]
+        if prompt_tokens is not None
+        else [None] * 6
+    )
+    completion = (
+        [completion_tokens // 6] * 5 + [completion_tokens - (completion_tokens // 6) * 5]
+        if completion_tokens is not None
+        else [None] * 6
+    )
     events = [
         {
             "step": i + 1,
