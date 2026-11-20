@@ -14,8 +14,9 @@ import argparse
 import json
 import os
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from benchmarks.decision_card_business_eval import frozen_cases, grade_business_case
 from server.agent.synthetic_decision_card import DecisionCardProfile
@@ -111,7 +112,8 @@ def main(argv: list[str] | None = None) -> int:
             timeout=25.0,
             max_retries=0,
         )
-        factory = lambda: OpenAIReplanningPolicy(client, args.model)
+        def factory() -> OpenAIReplanningPolicy:
+            return OpenAIReplanningPolicy(client, args.model)
     # No external scraping: only verified seeded fictional records are used.
     if os.environ.get("DATABASE_URL", "").startswith(("mysql:", "postgresql:")):
         parser.error("Live DB is not permitted for replanning Eval")
