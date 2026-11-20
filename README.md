@@ -33,6 +33,35 @@
 | 可重复 Eval | 30 条显式合成用例（22 正常、8 负控制）与 24 个独立院校/专业事实断言 |
 | 可选真实模型探针 | `benchmarks/readonly_model_eval.py`，必须显式授权网络和 API 费用，默认 CI 不运行 |
 
+### 模型自主工具选择与业务级对照（P5，默认不调用模型）
+
+前几轮的后台历史决策卡采用 `DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM`；本轮追加**真正可插入模型决策器的同一任务执行链路**，而非把另外的脚本叫成 Agent：
+
+- `server/agent/decision_card_model_planner.py`：真实 OpenAI-compatible 模型可根据先前 SQL 工具观察决定下一步 `major_lookup`、`admission_lookup`、`plan_lookup`，或拒答/结束；绝不允许模型自行执行任意 SQL、Shell、联网、访问真实学校或修改系统数据。
+- 工具参数必须与**事先冻结的合成考生画像精确一致**；重复调用、提前结束、无来源结束、外部工具和提供方 Token 缺失均会拒绝；模型不能直接撰写最终学校分数/位次，卡片仍从实际 SQLite 结果独立生成。
+- `benchmarks/decision_card_business_eval.py`：八个固定合成场景（开发 4、Holdout 4）采用**相同的独立 SQL/ORM 真值评分**，对比确定性基线与可选模型决策。完整成功需通过准确结果、来源哈希与证据完整性；缺失场景要实际观察到证据缺口后拒答，不能靠一律拒答作弊。
+- 报告分别记录任务成功、合理拒答、工具/模型步数、实际 provider-reported Token、耗时和运行失败类别。**合成案例未经真实人工审批，不是现实高考准确率的 Ground Truth。**
+
+可在没有任何外部模型费用的本地/CI 环境复现**确定性基线**：
+
+```bash
+python -m benchmarks.decision_card_business_eval --out /tmp/gaobao-business-baseline.json
+```
+
+**只有明确同意外部模型调用、自己配置提供商 API Key 和限制预算后**才运行真实模型；示例（请先确认密钥与费用）：
+
+```bash
+export OPENAI_API_KEY='your-own-secret'  # 不要提交到仓库或 CI artifact
+# 如使用 OpenAI-compatible 兼容服务，可额外设 OPENAI_API_BASE
+python -m benchmarks.decision_card_business_eval \
+  --mode model --model YOUR_MODEL_ID --permit-external-model \
+  --max-cases 8 --out /tmp/gaobao-business-real-model.json
+```
+
+默认模式完全不导入提供商 SDK；CI 也**不会**自动花钱或使用你的私钥。`tests/test_decision_card_model_planner.py` 的 Fake client 只测协议与真实数据库工具联调，**不能代表实际 LLM 任务成功率**。业务 API 的 `/decision-card` 仍是纯确定性策略、默认关闭且仅运营人员可用；模型版目前为隔离 CLI 实验，未接入面向用户的在线路由。
+
+**关于比较口径**：确定性策略不产生 provider Token，模型 Token 与零模型基线之间不是公平的 LLM 成本优化对照。若要声称 Prompt/Skill 改造降低 Token，必须对**同一模型**、冻结 Holdout 的改造前后版本做多次真实调用、计入失败与价格口径，并通过独立审核后才能落到简历。
+
 ### 有业务约束的合成考生决策卡（P4，默认关闭）
 
 这项增量把此前“查两所学校属于哪个省”的简单演示升级为**需要真实合成数据库多次查询、结果交叉验证和拒答**的任务。仍然属于运营台隔离实验，不面向真实考生。

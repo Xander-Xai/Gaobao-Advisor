@@ -12,7 +12,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from server.agent.readonly_harness import Decision, HarnessLimits, ReadOnlyTool, run_readonly_agent
+from server.agent.readonly_harness import Decision, HarnessLimits, Planner, ReadOnlyTool, run_readonly_agent
 from server.agent.readonly_tools import _require_demo_database, synthetic_readonly_tools
 
 PROFILE = "SYNTHETIC_DEMO"
@@ -174,7 +174,12 @@ class DecisionCardPlanner:
         return Decision("finish", answer=json.dumps({"synthetic_demo": True, "sources": refs}), evidence_ids=refs)
 
 
-def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any]:
+def build_synthetic_decision_card(
+    profile: DecisionCardProfile,
+    planner: Planner | None = None,
+    *,
+    require_provider_usage: bool = False,
+) -> dict[str, Any]:
     """Compose a bounded, source-linked research card from actual database rows."""
     if profile.school_a == profile.school_b or profile.subject_type not in {"物理类", "历史类"}:
         raise ValueError("Invalid fictional decision-card profile")
@@ -215,14 +220,16 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
 
     result = run_readonly_agent(
         "核验合成考生画像的专业门类、两校历年录取数据与对应招生计划，不作录取预测",
-        DecisionCardPlanner(profile),
+        planner if planner is not None else DecisionCardPlanner(profile),
         wrapped,
         HarnessLimits(
-            max_model_steps=6,
+            max_model_steps=8 if planner is not None else 6,
             max_tool_calls=5,
             max_repeated_call=1,
             max_observation_chars=750,
             max_context_chars=4000,
+            max_reported_tokens=7000,
+            require_provider_usage=require_provider_usage,
         ),
     )
     records: dict[tuple[str, str], dict[str, Any]] = {}
@@ -284,6 +291,25 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
         missing.append("缺少指定合成专业的学科门类来源")
     evidence.extend(major.get("source_ids", []))
 
+    # A refusal is safe even without tools, but only *observed negative SQL
+    # evidence* establishes completion of a negative research task.
+    negative_evidence_count = sum(
+        row.get("record_count") != 1
+        or (
+            label == "admission_lookup"
+            and row.get("record_count") == 1
+            and row.get("subject_type") != profile.subject_type
+        )
+        or (
+            label == "plan_lookup"
+            and row.get("record_count") == 1
+            and (
+                row.get("subject_requirement") not in {"不限", "物理必选"}
+                or (row.get("subject_requirement") == "物理必选" and profile.subject_type != "物理类")
+            )
+        )
+        for label, row in captured
+    )
     # No success is possible on missing data, tool failure or fabricated claims.
     completed = (
         result.status == "completed"
@@ -307,7 +333,7 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
         "status": "evidence_complete_historical_only" if completed else "needs_review",
         "reason": result.reason,
         "data_profile": PROFILE,
-        "planner": CONTROLLER,
+        "planner": CONTROLLER if planner is None else "INJECTED_PLANNER_UNVERIFIED",
         "profile": {
             "province": profile.province,
             "score": profile.score,
@@ -318,6 +344,7 @@ def build_synthetic_decision_card(profile: DecisionCardProfile) -> dict[str, Any
         "major_category": major.get("category") if completed else None,
         "schools": schools,
         "missing_evidence": missing if not completed else [],
+        "observed_negative_evidence_count": negative_evidence_count,
         "evidence_ids": evidence if completed else [],
         "manual_checks": [
             "真实考生位次不可由示例分数推断",
