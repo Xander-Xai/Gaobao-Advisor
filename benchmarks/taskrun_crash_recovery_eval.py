@@ -140,10 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     report = evaluate_process_crash()
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(
-        f"synthetic_process_recovery={report['read_only_tasks_recovered']}/"
-        f"{report['process_crashes_injected']}"
-    )
+    print(f"synthetic_process_recovery={report['read_only_tasks_recovered']}/{report['process_crashes_injected']}")
     return 0 if report["read_only_tasks_recovered"] == 1 and report["expired_stale_receipts_blocked"] == 1 else 1
 
 
