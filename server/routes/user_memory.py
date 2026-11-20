@@ -38,7 +38,7 @@ def _call(func, *args, **kwargs):
     except memory.MemoryInvalid as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
-        logger.exception("User memory storage failed (sensitive details redacted)")
+        logger.error("User memory storage failed (error type: %s)", type(exc).__name__)
         raise HTTPException(status_code=503, detail="User memory storage unavailable") from exc
 
 
