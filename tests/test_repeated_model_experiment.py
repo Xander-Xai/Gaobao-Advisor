@@ -167,3 +167,33 @@ def test_subprocess_wrapper_validates_full_report_even_on_case_failures(monkeypa
     monkeypatch.setattr("benchmarks.repeated_model_experiment.subprocess.run", bad_run)
     with pytest.raises(ValueError, match="Inconsistent prompt"):
         _run_arm("frozen-provider-model", "baseline", tmp_path / "report.json", 900)
+
+
+def test_paid_preflight_refuses_nonempty_output_directory_without_calls(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key-not-used")
+    directory = tmp_path / "occupied"
+    directory.mkdir()
+    existing = directory / "trial-1-baseline.json"
+    existing.write_text("do not overwrite", encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        main(
+            [
+                "--model",
+                "test",
+                "--trials",
+                "2",
+                "--out-dir",
+                str(directory),
+                "--execute",
+                "--permit-external-model",
+                "--confirm-provider-charges",
+            ]
+        )
+    assert exc.value.code == 2
+    assert existing.read_text(encoding="utf-8") == "do not overwrite"
+
+
+def test_paid_preflight_rejects_excessive_trials_before_any_provider_call(tmp_path):
+    with pytest.raises(SystemExit) as exc:
+        main(["--model", "test", "--out-dir", str(tmp_path / "runs"), "--trials", "6"])
+    assert exc.value.code == 2
