@@ -23,12 +23,11 @@ from typing import Any
 from openai import OpenAI
 
 from config.loader import load_llm_config
-from server.user_memory import prompt_context
-
 from server.agent.llm_reliability import (
     build_llm_context,
     estimate_messages_tokens,
 )
+from server.user_memory import prompt_context
 
 MODEL = "gpt-4o"  # Default model if config fails
 logger = logging.getLogger(__name__)
