@@ -79,7 +79,7 @@ def _store() -> SyntheticTaskRunStore:
 
 
 @router.post("/runs/{run_id}/memory", status_code=201)
-async def publish_synthetic_evidence_memory(
+def publish_synthetic_evidence_memory(
     run_id: str,
     request: PublishSyntheticEvidenceMemory,
     principal: AdminPrincipal = Depends(require_role("admin")),
@@ -97,7 +97,7 @@ async def publish_synthetic_evidence_memory(
 
 
 @router.get("/runs/{run_id}/memory")
-async def get_synthetic_evidence_memory(
+def get_synthetic_evidence_memory(
     run_id: str,
     principal: AdminPrincipal = Depends(require_role("operator")),
 ) -> dict:
@@ -112,7 +112,7 @@ async def get_synthetic_evidence_memory(
 
 
 @router.get("/evidence-memory")
-async def list_synthetic_evidence_memory(
+def list_synthetic_evidence_memory(
     principal: AdminPrincipal = Depends(require_role("operator")),
 ) -> dict:
     """Read only the current principal's indexed fictional source receipts."""
@@ -120,7 +120,7 @@ async def list_synthetic_evidence_memory(
 
 
 @router.delete("/runs/{run_id}/memory")
-async def forget_synthetic_evidence_memory(
+def forget_synthetic_evidence_memory(
     run_id: str,
     principal: AdminPrincipal = Depends(require_role("operator")),
 ) -> dict:
