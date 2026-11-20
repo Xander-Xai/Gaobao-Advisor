@@ -16,7 +16,7 @@ P16 新增 `server/agent/portfolio_sql_oracle.py`：
 
 ## 失败注入与回归
 
-`tests/test_independent_portfolio_sql_oracle.py` 在隔离子进程中覆盖：有效 5 候选（4 条历史记录、1 条排除）、9 种字段/来源/顺序/权限边界伪造、历史类全部拒答、数据库结果变化，以及**故意让第一道回执验证器返回 True**时仍被第二条 Oracle 拒绝。
+`tests/test_independent_portfolio_sql_oracle.py` 在隔离子进程中覆盖 **13 个可验证场景**：有效 5 候选（4 条历史记录、1 条排除）、9 种字段/来源/顺序/权限边界伪造、历史类全部拒答、数据库结果变化，以及**故意让第一道回执验证器返回 True**时仍被第二条 Oracle 拒绝。
 
 ```bash
 pytest -q tests/test_independent_portfolio_sql_oracle.py tests/test_portfolio_taskrun_eval.py
