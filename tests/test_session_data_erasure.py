@@ -35,12 +35,14 @@ def seed(session_factory, storage, session_id="synthetic-session-privacy"):
         db.add(ConversationMessage(conversation_id=conversation.id, role="user", content="private message"))
         db.add(Feedback(session_id=session_id, message_index=1, rating="helpful"))
         db.add(Highlight(session_id=session_id, content="private highlight"))
-        db.add(QualityScore(
-            conversation_id=session_id,
-            message_id="synthetic-m1",
-            aggregate_score=0.5,
-            judge_model="synthetic-judge",
-        ))
+        db.add(
+            QualityScore(
+                conversation_id=session_id,
+                message_id="synthetic-m1",
+                aggregate_score=0.5,
+                judge_model="synthetic-judge",
+            )
+        )
         db.commit()
     report_dir = storage._base / session_id
     report_dir.mkdir(parents=True)

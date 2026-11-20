@@ -31,26 +31,28 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
         raise
     removed: dict[str, int] = {}
     try:
-        removed["quality_scores"] = db.query(QualityScore).filter(
-            QualityScore.conversation_id == session_id
-        ).delete(synchronize_session=False)
-        removed["feedback"] = db.query(Feedback).filter(
-            Feedback.session_id == session_id
-        ).delete(synchronize_session=False)
-        removed["highlights"] = db.query(Highlight).filter(
-            Highlight.session_id == session_id
-        ).delete(synchronize_session=False)
+        removed["quality_scores"] = (
+            db.query(QualityScore).filter(QualityScore.conversation_id == session_id).delete(synchronize_session=False)
+        )
+        removed["feedback"] = (
+            db.query(Feedback).filter(Feedback.session_id == session_id).delete(synchronize_session=False)
+        )
+        removed["highlights"] = (
+            db.query(Highlight).filter(Highlight.session_id == session_id).delete(synchronize_session=False)
+        )
         session_row = db.query(Conversation).filter(Conversation.session_id == session_id).first()
         if session_row is None:
             removed["messages"] = 0
             removed["conversations"] = 0
         else:
-            removed["messages"] = db.query(ConversationMessage).filter(
-                ConversationMessage.conversation_id == session_row.id
-            ).delete(synchronize_session=False)
-            removed["conversations"] = db.query(Conversation).filter(
-                Conversation.id == session_row.id
-            ).delete(synchronize_session=False)
+            removed["messages"] = (
+                db.query(ConversationMessage)
+                .filter(ConversationMessage.conversation_id == session_row.id)
+                .delete(synchronize_session=False)
+            )
+            removed["conversations"] = (
+                db.query(Conversation).filter(Conversation.id == session_row.id).delete(synchronize_session=False)
+            )
         db.commit()
     except Exception:
         db.rollback()
