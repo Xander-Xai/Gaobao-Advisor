@@ -524,3 +524,38 @@ class QualityTaskOutbox(Base):
 
     def __repr__(self) -> str:
         return f"<QualityTaskOutbox(job={self.job_id}, {self.status})>"
+
+
+class UserMemoryVault(Base):
+    """Independent opt-in cross-task identity; only a SHA-256 token digest is stored."""
+
+    __tablename__ = "user_memory_vaults"
+
+    id = Column(String(32), primary_key=True)
+    token_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_user_mem_token_hash"),
+        Index("ix_user_mem_vault_token", "token_hash"),
+    )
+
+
+class UserMemoryEntry(Base):
+    """User-confirmed preference only; distinct from synthetic task evidence."""
+
+    __tablename__ = "user_memory_entries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vault_id = Column(String(32), ForeignKey("user_memory_vaults.id"), nullable=False)
+    memory_key = Column(String(32), nullable=False)
+    value = Column(String(160), nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("vault_id", "memory_key", name="uq_user_mem_vault_key"),
+        Index("ix_user_mem_expiry", "expires_at"),
+    )
