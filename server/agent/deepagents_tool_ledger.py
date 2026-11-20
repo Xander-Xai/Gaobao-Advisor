@@ -190,8 +190,15 @@ class SyntheticDeepAgentsToolLedger:
                     "INSERT INTO synthetic_deepagents_tool_ledger "
                     "(task_id,event_index,event_kind,event_name,subject,payload_json,event_sha256) "
                     "VALUES (?,?,?,?,?,?,?)",
-                    (self.run_id, index, kind, name, subject, _canonical(payload),
-                     self._digest(index, kind, name, subject, payload)),
+                    (
+                        self.run_id,
+                        index,
+                        kind,
+                        name,
+                        subject,
+                        _canonical(payload),
+                        self._digest(index, kind, name, subject, payload),
+                    ),
                 )
                 conn.commit()
             except Exception:
