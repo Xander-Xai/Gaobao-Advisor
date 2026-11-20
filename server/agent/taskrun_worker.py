@@ -48,11 +48,7 @@ def execute_approved_run(
     current = store.get(run_id)
     engine = current["engine"]
     configured_checkpoint = os.getenv("SYNTHETIC_DEEPAGENTS_CHECKPOINT_DB", "")
-    if (
-        engine == "deepagents"
-        and configured_checkpoint
-        and Path(configured_checkpoint).resolve() == store.path
-    ):
+    if engine == "deepagents" and configured_checkpoint and Path(configured_checkpoint).resolve() == store.path:
         # The CLI supplies --journal but does not necessarily export its path
         # as an environment variable. Refuse mixing graph state with the
         # business TaskRun CAS journal even in that configuration.
