@@ -48,6 +48,11 @@ def test_single_history_record_repacked_without_broken_json():
         bound_history(bounded, 20)
 
 
+def test_compaction_rejects_non_list_source_ids():
+    malformed = [{"tool": "school_lookup", "observation": '{"source_ids":"abc"}', "source_ids": "abc"}]
+    with pytest.raises(ContextBudgetExceeded, match="source IDs"):
+        bound_history(malformed, 40)
+
 def test_tiny_context_budget_is_terminal_and_trace_reconciles():
     planner = Planner([Decision("tool", "school_lookup", {"school_name": "A"}, prompt_tokens=4, completion_tokens=2)])
     result = run_readonly_agent(
