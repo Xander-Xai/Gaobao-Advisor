@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from server.admin.auth import AdminPrincipal, require_role
+from server.agent.governed_evidence_memory import SyntheticEvidenceMemoryStore
 from server.agent.taskrun_store import (
     SyntheticTaskRunStore,
     TaskRunConflict,
@@ -58,6 +59,14 @@ class PortfolioReviewSignoff(BaseModel):
     receipt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class PublishSyntheticEvidenceMemory(BaseModel):
+    """Explicit opt-in for indexing independently rechecked fictional receipts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ttl_seconds: int = Field(default=86400, ge=60, le=30 * 86400)
+
+
 def _store() -> SyntheticTaskRunStore:
     _require_experiment_enabled()
     journal = os.getenv("SYNTHETIC_TASKRUN_JOURNAL", "")
@@ -67,6 +76,60 @@ def _store() -> SyntheticTaskRunStore:
         return SyntheticTaskRunStore(Path(journal))
     except (ValueError, OSError) as exc:
         raise HTTPException(status_code=503, detail="Synthetic TaskRun journal unavailable") from exc
+
+
+@router.post("/runs/{run_id}/memory", status_code=201)
+def publish_synthetic_evidence_memory(
+    run_id: str,
+    request: PublishSyntheticEvidenceMemory,
+    principal: AdminPrincipal = Depends(require_role("admin")),
+) -> dict:
+    """Index a *fictional* two-admin-reviewed receipt; no LLM memory write."""
+    memory = SyntheticEvidenceMemoryStore(_store())
+    try:
+        return memory.publish(run_id, publisher=principal.username, ttl_seconds=request.ttl_seconds)
+    except TaskRunNotFound as exc:
+        raise HTTPException(status_code=404, detail="Synthetic source task not found") from exc
+    except TaskRunConflict as exc:
+        raise HTTPException(status_code=409, detail="Synthetic memory review or provenance gate rejected") from exc
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid synthetic memory request") from exc
+
+
+@router.get("/runs/{run_id}/memory")
+def get_synthetic_evidence_memory(
+    run_id: str,
+    principal: AdminPrincipal = Depends(require_role("operator")),
+) -> dict:
+    """Owner or admin can read, with fresh source/expiry/review checks."""
+    memory = SyntheticEvidenceMemoryStore(_store())
+    try:
+        return memory.get(run_id, requester=principal.username, admin=principal.role == "admin")
+    except (TaskRunNotFound, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="No visible active synthetic memory") from exc
+    except (TaskRunConflict, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=409, detail="Synthetic memory source became stale") from exc
+
+
+@router.get("/evidence-memory")
+def list_synthetic_evidence_memory(
+    principal: AdminPrincipal = Depends(require_role("operator")),
+) -> dict:
+    """Read only the current principal's indexed fictional source receipts."""
+    return SyntheticEvidenceMemoryStore(_store()).list_for_owner(principal.username)
+
+
+@router.delete("/runs/{run_id}/memory")
+def forget_synthetic_evidence_memory(
+    run_id: str,
+    principal: AdminPrincipal = Depends(require_role("operator")),
+) -> dict:
+    """Remove the owner-scoped memory index, not immutable task audit history."""
+    memory = SyntheticEvidenceMemoryStore(_store())
+    try:
+        return memory.forget(run_id, requester=principal.username, admin=principal.role == "admin")
+    except (TaskRunNotFound, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="No visible indexed synthetic memory") from exc
 
 
 @router.post("/runs", status_code=201)
