@@ -47,7 +47,7 @@ class PlanBudget:
         for value in (self.max_plan_rounds, self.max_tool_attempts, self.max_provider_tokens):
             if type(value) is not int or value <= 0:
                 raise ValueError("Invalid positive planning budget")
-        if type(self.max_transient_retries) is not int or not 0 <= self.max_transient_retries <= 2:
+        if type(self.max_transient_retries) is not int or not 0 <= self.max_transient_retries <= 1:
             raise ValueError("Invalid transient retry budget")
 
 
