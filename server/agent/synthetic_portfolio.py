@@ -63,7 +63,11 @@ def _evaluate(request: PortfolioRequest) -> tuple[list[dict[str, Any]], list[dic
         plan = _fetch_row("plan", args)
         calls += 2
         reasons: list[str] = []
-        if category.get("record_count") != 1 or len(category.get("source_ids", [])) != 1:
+        if (
+            category.get("record_count") != 1
+            or not category.get("category")
+            or len(category.get("source_ids", [])) != 1
+        ):
             reasons.append("major_evidence_missing")
         if admission.get("record_count") != 1 or len(admission.get("source_ids", [])) != 1:
             reasons.append("admission_evidence_missing_or_ambiguous")
