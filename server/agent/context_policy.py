@@ -60,7 +60,12 @@ def bound_history(history: list[dict[str, Any]], max_chars: int) -> tuple[list[d
             refs = newest["source_ids"]
         except (KeyError, TypeError, ValueError) as exc:
             raise ContextBudgetExceeded("Malformed context observation") from exc
-        if not isinstance(observed, dict) or observed.get("source_ids") != refs:
+        if (
+            not isinstance(observed, dict)
+            or not isinstance(refs, list)
+            or any(not isinstance(ref, str) for ref in refs)
+            or observed.get("source_ids") != refs
+        ):
             raise ContextBudgetExceeded("Context source IDs do not match observation")
         newest["observation"] = _json(_minimal(refs))
         bounded[-1] = newest

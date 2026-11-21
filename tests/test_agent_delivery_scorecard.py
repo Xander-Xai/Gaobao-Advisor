@@ -55,6 +55,23 @@ def test_invalid_claims_fail_closed(tamper):
         summarize_synthetic_delivery(report)
 
 
+def test_success_only_tool_and_planner_means_exclude_failed_cases():
+    report = complete_run()
+    report["results"][0]["passed"] = False
+    report["results"][0]["tool_calls"] = 2
+    report["results"][0]["model_steps"] = 3
+    report["passed"] = 7
+    report["total_tool_calls"] = 37
+    result = summarize_synthetic_delivery(report)
+    assert result["average_tool_calls_per_passing_case"] == 5.0
+    assert result["average_model_decisions_per_passing_case"] == 6.0
+    assert result["tool_calls_per_success_including_failures"] == round(37 / 7, 4)
+    assert result["model_decisions_per_success_including_failures"] == round(45 / 7, 4)
+    # Tokens per successful delivery intentionally include failed attempts.
+    assert result["provider_declared_tokens_per_passing_case"] == round(960 / 7, 2)
+    assert result["real_user_effective_delivery_rate"] == "NOT_MEASURED"
+
+
 def test_zero_success_does_not_forge_per_success_metric():
     report = complete_run()
     no_success = copy.deepcopy(report)
