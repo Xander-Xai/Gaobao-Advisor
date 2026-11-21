@@ -280,6 +280,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--mode", choices=("baseline", "model"), default="baseline")
     parser.add_argument("--model", help="Explicit OpenAI-compatible model ID")
+    parser.add_argument(
+        "--prompt-variant",
+        choices=("baseline", "evidence_first"),
+        default="baseline",
+        help="Frozen prompt experiment arm; never alters SQL/tools or the business oracle",
+    )
     parser.add_argument("--permit-external-model", action="store_true")
     parser.add_argument("--max-cases", type=int, default=8)
     args = parser.parse_args(argv)
@@ -292,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("OPENAI_API_KEY must be configured for explicit model evaluation")
         from openai import OpenAI
 
-        from server.agent.decision_card_model_planner import DecisionCardModelPlanner
+        from server.agent.decision_card_model_planner import DecisionCardModelPlanner, prompt_for_variant
 
         client = OpenAI(
             api_key=os.environ["OPENAI_API_KEY"],
@@ -301,13 +307,15 @@ def main(argv: list[str] | None = None) -> int:
             max_retries=0,
         )
 
+        frozen_prompt = prompt_for_variant(args.prompt_variant)
+
         def planner_factory(profile: DecisionCardProfile) -> DecisionCardModelPlanner:
-            return DecisionCardModelPlanner(client, args.model, profile)
+            return DecisionCardModelPlanner(client, args.model, profile, system_prompt=frozen_prompt)
 
         controller = "REAL_MODEL_NOT_SCRIPTED"
     else:
-        if args.permit_external_model or args.model:
-            parser.error("Baseline mode must not specify paid-model options")
+        if args.permit_external_model or args.model or args.prompt_variant != "baseline":
+            parser.error("Baseline mode must not specify paid-model options or experimental prompts")
         planner_factory = None
         controller = "DETERMINISTIC_OBSERVATION_POLICY_NOT_LLM"
     cases = frozen_cases()[: args.max_cases]
@@ -324,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
         engine.dispose()
     report["controller"] = controller
     report["model_id"] = args.model if controller == "REAL_MODEL_NOT_SCRIPTED" else None
+    report["prompt_variant"] = args.prompt_variant if controller == "REAL_MODEL_NOT_SCRIPTED" else None
     # Explicit provenance, not proof of provider execution or human review.
     # Never persist API keys, endpoint URLs, raw model text or student data.
     report["run_id"] = "synthetic_eval_" + secrets.token_hex(12)
@@ -331,9 +340,7 @@ def main(argv: list[str] | None = None) -> int:
     report["temperature"] = 0 if controller == "REAL_MODEL_NOT_SCRIPTED" else None
     report["model_prompt_sha256"] = None
     if controller == "REAL_MODEL_NOT_SCRIPTED":
-        from server.agent.decision_card_model_planner import _SYSTEM
-
-        report["model_prompt_sha256"] = hashlib.sha256(_SYSTEM.encode("utf-8")).hexdigest()
+        report["model_prompt_sha256"] = hashlib.sha256(frozen_prompt.encode("utf-8")).hexdigest()
     report["tool_contract_sha256"] = _digest(
         {
             "tools": ["major_lookup", "admission_lookup", "plan_lookup"],

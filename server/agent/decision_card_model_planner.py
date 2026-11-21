@@ -26,15 +26,43 @@ _SYSTEM = (
 )
 
 
+_EVIDENCE_FIRST_SYSTEM = _SYSTEM + (
+    " Follow this explicit evidence-first policy: inspect required_remaining; "
+    "choose one still-missing typed lookup at a time; after each observation check "
+    "whether its record_count and source IDs are valid. On observed missing or "
+    "conflicting evidence, abstain immediately. Only submit an evidence-bound "
+    "finish when required_remaining is empty. Do not infer unsupported facts."
+)
+
+_PROMPT_VARIANTS = {"baseline": _SYSTEM, "evidence_first": _EVIDENCE_FIRST_SYSTEM}
+
+
+def prompt_for_variant(name: str) -> str:
+    """Return a frozen, auditable, business-safe experimental prompt."""
+    if name not in _PROMPT_VARIANTS:
+        raise ValueError("Unknown experimental prompt variant")
+    return _PROMPT_VARIANTS[name]
+
+
 class DecisionCardModelPlanner:
     """Enforce the synthetic business task contract around model-proposed steps."""
 
-    def __init__(self, client: Any, model: str, profile: DecisionCardProfile) -> None:
+    def __init__(
+        self,
+        client: Any,
+        model: str,
+        profile: DecisionCardProfile,
+        *,
+        system_prompt: str | None = None,
+    ) -> None:
         if not isinstance(model, str) or not model.strip() or len(model) > 160:
             raise ValueError("A bounded explicit model ID is required")
         self._client = client
         self._model = model
         self._profile = profile
+        self._system_prompt = _SYSTEM if system_prompt is None else system_prompt
+        if self._system_prompt not in _PROMPT_VARIANTS.values():
+            raise ValueError("Only frozen, business-safe prompt variants are supported")
         major_args = {"major_name": profile.major}
         common = {
             "major_name": profile.major,
@@ -98,7 +126,7 @@ class DecisionCardModelPlanner:
             max_tokens=320,
             response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": _SYSTEM},
+                {"role": "system", "content": self._system_prompt},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False, sort_keys=True)},
             ],
         )
