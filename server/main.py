@@ -17,6 +17,7 @@ from server.middleware.security import SecurityMiddleware
 from server.monitoring import init_sentry
 from server.report.routes import router as report_router
 from server.routes.agent_experiments import router as agent_experiments_router
+from server.routes.agent_optimizer import router as agent_optimizer_router
 from server.routes.agent_taskruns import router as agent_taskruns_router
 from server.routes.chat import router as chat_router
 from server.routes.data import router as data_router
@@ -125,6 +126,7 @@ app.include_router(onboarding_router)
 app.include_router(chat_router)
 app.include_router(agent_experiments_router)
 app.include_router(agent_taskruns_router)
+app.include_router(agent_optimizer_router)
 app.include_router(profile_router)
 app.include_router(data_router)
 app.include_router(knowledge_router)
