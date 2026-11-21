@@ -10,8 +10,14 @@ import pytest
 
 from server.agent.synthetic_replanning import (
     OpenAIReplanningPolicy,
+    PlanBudget,
     _validated_plan,
 )
+
+
+def test_plan_budget_rejects_more_than_one_transient_retry():
+    with pytest.raises(ValueError, match="transient retry"):
+        PlanBudget(max_transient_retries=2)
 
 
 def test_plan_rejects_unapproved_or_repeated_steps():
