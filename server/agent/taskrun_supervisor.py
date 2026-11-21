@@ -42,20 +42,31 @@ def _fixed_worker_command(
     return command
 
 
+def _child_exited_unreaped(proc: subprocess.Popen[bytes]) -> bool:
+    """Observe child exit without reaping it, preserving its process-group ID."""
+    if proc.returncode is not None:
+        return True
+    try:
+        result = os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+    except ChildProcessError:
+        return True
+    return result is not None and result.si_pid != 0
+
+
 def _terminate_owned_group(proc: subprocess.Popen[bytes], *, grace_seconds: float) -> bool:
     """Signal only the process group CREATED by our own Popen(start_new_session).
 
-    Send SIGKILL even if the direct child exits after SIGTERM, to clean up any
-    surviving grandchild that remains in the original owned process group.
+    Do not call Popen.poll() before signaling: poll() reaps an exited leader,
+    while surviving grandchildren may still occupy its process group. WNOWAIT
+    lets us observe exit without releasing the PID/PGID before group cleanup.
     """
-    if proc.poll() is not None:
+    if proc.returncode is not None:
         return False
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except ProcessLookupError:
+        proc.wait(timeout=5)
         return False
-    # Hold the direct child unreaped until after the final group signal so
-    # its PID/PGID cannot be recycled between TERM and KILL.
     time.sleep(grace_seconds)
     try:
         os.killpg(proc.pid, signal.SIGKILL)
@@ -81,8 +92,8 @@ def supervise_approved_taskrun(
     HTTP continues using RBAC to decide who may cancel the TaskRun journal.
     Do not launch two supervisors for the same approved TaskRun.
     """
-    if os.name != "posix" or not hasattr(os, "killpg"):
-        raise RuntimeError("Local process-group cancellation requires POSIX")
+    if os.name != "posix" or not hasattr(os, "killpg") or not hasattr(os, "waitid") or not hasattr(os, "WNOWAIT"):
+        raise RuntimeError("Local process-group cancellation requires POSIX waitid/WNOWAIT support")
     if (
         type(max_seconds) not in {int, float}
         or not 0.1 <= max_seconds <= 600
@@ -119,8 +130,9 @@ def supervise_approved_taskrun(
                 reason = "CANCELLED"
                 terminated = _terminate_owned_group(child, grace_seconds=term_grace_seconds)
                 break
-            if child.poll() is not None:
+            if _child_exited_unreaped(child):
                 reason = "EXITED"
+                terminated = _terminate_owned_group(child, grace_seconds=term_grace_seconds)
                 break
             if time.monotonic() >= deadline:
                 reason = "DEADLINE_EXCEEDED"
@@ -128,7 +140,7 @@ def supervise_approved_taskrun(
                 break
             time.sleep(poll_seconds)
     finally:
-        if child.poll() is None:
+        if child.returncode is None:
             _terminate_owned_group(child, grace_seconds=term_grace_seconds)
         child.wait(timeout=5)
 
