@@ -14,6 +14,7 @@ import re
 from collections import Counter
 from typing import Any
 
+from benchmarks.decision_card_trace_eval import trace_failure_category
 from benchmarks.harness_optimizer import propose_bounded_changes
 from benchmarks.repeated_model_experiment import ARMS, compare_repeated_trials
 
@@ -37,6 +38,8 @@ def build_optimization_review(pairs: list[tuple[dict[str, Any], dict[str, Any]]]
         raise ValueError("Optimization report bundle exceeds synthetic safety budget")
     summary = compare_repeated_trials(pairs)
     failures: dict[str, Counter[str]] = {arm: Counter() for arm in ARMS}
+    trace_failures: dict[str, Counter[str]] = {arm: Counter() for arm in ARMS}
+    trace_covered_cases = 0
     for pair in pairs:
         for arm, report in zip(ARMS, pair, strict=True):
             for case in report["results"]:
@@ -49,6 +52,11 @@ def build_optimization_review(pairs: list[tuple[dict[str, Any], dict[str, Any]]]
                     raise ValueError("Invalid bounded failure categories in development cases")
                 for code in set(codes):
                     failures[arm][code] += 1
+                if report.get("trace_contract") is not None:
+                    trace_covered_cases += 1
+                    reason = trace_failure_category(case)
+                    if reason is not None:
+                        trace_failures[arm][reason] += 1
     baseline_codes = failures[ARMS[0]]
     hypotheses: list[str] = []
     for code in sorted(baseline_codes):
@@ -84,6 +92,10 @@ def build_optimization_review(pairs: list[tuple[dict[str, Any], dict[str, Any]]]
         "evaluation_gate": gate,
         "development_failure_clusters": {arm: dict(sorted(counts.items())) for arm, counts in failures.items()},
         "development_only_untested_hypotheses": proposals,
+        "development_trace_covered_cases": trace_covered_cases,
+        "development_trace_failures_by_arm": {
+            arm: dict(sorted(counts.items())) for arm, counts in trace_failures.items()
+        },
         "model_provenance_verified": False,
         "provider_billing_reconciled": False,
         "independent_human_ground_truth_verified": False,
