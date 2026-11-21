@@ -71,6 +71,7 @@ def test_success_only_tool_and_planner_means_exclude_failed_cases():
     assert result["provider_declared_tokens_per_passing_case"] == round(960 / 7, 2)
     assert result["real_user_effective_delivery_rate"] == "NOT_MEASURED"
 
+
 def test_zero_success_does_not_forge_per_success_metric():
     report = complete_run()
     no_success = copy.deepcopy(report)
