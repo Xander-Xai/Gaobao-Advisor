@@ -92,12 +92,7 @@ def supervise_approved_taskrun(
     HTTP continues using RBAC to decide who may cancel the TaskRun journal.
     Do not launch two supervisors for the same approved TaskRun.
     """
-    if (
-        os.name != "posix"
-        or not hasattr(os, "killpg")
-        or not hasattr(os, "waitid")
-        or not hasattr(os, "WNOWAIT")
-    ):
+    if os.name != "posix" or not hasattr(os, "killpg") or not hasattr(os, "waitid") or not hasattr(os, "WNOWAIT"):
         raise RuntimeError("Local process-group cancellation requires POSIX waitid/WNOWAIT support")
     if (
         type(max_seconds) not in {int, float}
