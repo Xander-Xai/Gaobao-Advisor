@@ -86,12 +86,12 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
             }
         )
     except Exception as exc:
-        logger.warning("memory_update failed: %s", exc)
+        logger.warning("memory_update failed (error type: %s)", type(exc).__name__)
         trace.append(
             {
                 "node": "memory_update",
                 "event": "persist_failed",
-                "error": str(exc)[:200],
+                "error": "persistence_error",
             }
         )
     finally:

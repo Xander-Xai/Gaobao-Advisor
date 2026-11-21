@@ -24,13 +24,23 @@ Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 
 def _validated_workspace(path: Path) -> Path:
+    if path.is_symlink():
+        raise ValueError("Synthetic workspace itself must not be a symlink")
     root = path.resolve(strict=True)
-    if not root.is_dir() or root.is_symlink() or not root.joinpath(_WORKSPACE_MARKER).is_file():
+    marker = root / _WORKSPACE_MARKER
+    if not root.is_dir() or not marker.is_file() or marker.is_symlink():
         raise ValueError("Only explicit synthetic scratch workspaces are permitted")
-    if root.joinpath(_WORKSPACE_MARKER).is_symlink():
-        raise ValueError("Synthetic marker must not be a symlink")
     if root == Path("/") or root == Path.home().resolve() or not root.name.startswith("gaobao-synthetic-"):
         raise ValueError("Refusing host-root or non-scratch workspace")
+    if marker.read_text(encoding="utf-8").strip() != "SYNTHETIC_ONLY":
+        raise ValueError("Synthetic workspace marker has invalid content")
+    # Scratch workspaces should not contain mounts, links, devices or huge files.
+    entries = list(root.iterdir())
+    if len(entries) > 32:
+        raise ValueError("Synthetic workspace contains too many entries")
+    for child in entries:
+        if child.is_symlink() or not child.is_file() or child.stat().st_size > 2 * 1024 * 1024:
+            raise ValueError("Synthetic workspace contains an unsafe entry")
     return root
 
 
