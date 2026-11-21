@@ -19,10 +19,17 @@ _SAFE_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_\-]{1,128}$")
 
 
 def _safe_component(value: str, label: str) -> str:
-    """Return ``value`` if it is a safe single path component, else raise."""
-    if not isinstance(value, str) or not _SAFE_COMPONENT_RE.fullmatch(value):
+    """Return a basename-verified safe component, else raise.
+
+    os.path.basename is an explicit path-traversal sanitizer; the equality
+    check rejects any input that would have been changed by normalization.
+    """
+    if not isinstance(value, str):
         raise ValueError(f"unsafe {label}: must match [A-Za-z0-9_-]{{1,128}}")
-    return value
+    component = os.path.basename(value)
+    if component != value or not _SAFE_COMPONENT_RE.fullmatch(component):
+        raise ValueError(f"unsafe {label}: must match [A-Za-z0-9_-]{{1,128}}")
+    return component
 
 
 class ReportStorage:
