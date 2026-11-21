@@ -53,6 +53,7 @@ def test_compaction_rejects_non_list_source_ids():
     with pytest.raises(ContextBudgetExceeded, match="source IDs"):
         bound_history(malformed, 40)
 
+
 def test_tiny_context_budget_is_terminal_and_trace_reconciles():
     planner = Planner([Decision("tool", "school_lookup", {"school_name": "A"}, prompt_tokens=4, completion_tokens=2)])
     result = run_readonly_agent(
