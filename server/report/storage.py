@@ -56,9 +56,8 @@ class ReportStorage:
     def _report_path(self, session_id: str, report_id: str) -> Path:
         filename = _safe_component(report_id, "report_id")
         candidate = self._session_directory(session_id) / f"{filename}.json"
-        if (
-            candidate.is_symlink()
-            or not candidate.resolve(strict=False).is_relative_to(self._base.resolve(strict=False))
+        if candidate.is_symlink() or not candidate.resolve(strict=False).is_relative_to(
+            self._base.resolve(strict=False)
         ):
             raise ValueError("Unsafe report file path")
         return candidate
