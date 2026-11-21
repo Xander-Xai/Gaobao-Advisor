@@ -83,6 +83,18 @@ class SyntheticTaskRunStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS synthetic_portfolio_reviews (
+                    run_id TEXT NOT NULL,
+                    reviewer TEXT NOT NULL,
+                    verdict TEXT NOT NULL,
+                    receipt_sha256 TEXT NOT NULL,
+                    reviewed_at REAL NOT NULL,
+                    PRIMARY KEY (run_id, reviewer)
+                )
+                """
+            )
 
     @contextmanager
     def _open(self) -> Iterator[sqlite3.Connection]:
@@ -235,6 +247,122 @@ class SyntheticTaskRunStore:
         if row is None or (requester is not None and requester != row["owner"] and not admin):
             raise TaskRunNotFound("No visible synthetic TaskRun")
         return self._public(row)
+
+    @staticmethod
+    def _portfolio_receipt_digest(row: sqlite3.Row) -> str:
+        if row["engine"] != "portfolio" or not row["result_json"]:
+            raise TaskRunConflict("Only completed synthetic portfolio receipts can be reviewed")
+        return hashlib.sha256(
+            _canonical(
+                {
+                    "run_id": row["run_id"],
+                    "request_sha256": row["payload_hash"],
+                    "result": json.loads(row["result_json"]),
+                }
+            ).encode("utf-8")
+        ).hexdigest()
+
+    @classmethod
+    def _review_snapshot(cls, conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
+        digest = cls._portfolio_receipt_digest(row)
+        receipts = conn.execute(
+            "SELECT reviewer,verdict,receipt_sha256,reviewed_at "
+            "FROM synthetic_portfolio_reviews WHERE run_id=? ORDER BY reviewer",
+            (row["run_id"],),
+        ).fetchall()
+        # A mismatching signoff is never silently treated as current evidence.
+        if any(item["receipt_sha256"] != digest for item in receipts):
+            raise TaskRunConflict("Stored review no longer matches the TaskRun receipt")
+        verdicts = [item["verdict"] for item in receipts]
+        if "reject" in verdicts:
+            state = "REJECTED_SYNTHETIC_EVIDENCE"
+        elif len(verdicts) == 2 and verdicts == ["verified_historical_only", "verified_historical_only"]:
+            state = "TWO_ADMIN_SIGNOFFS_SYNTHETIC_ONLY"
+        elif verdicts:
+            state = "PENDING_SECOND_REVIEW"
+        else:
+            state = "PENDING_REVIEW"
+        return {
+            "run_id": row["run_id"],
+            "data_profile": "SYNTHETIC_DEMO",
+            "receipt_sha256": digest,
+            "review_state": state,
+            "signoff_count": len(receipts),
+            "reviewers": [
+                {"reviewed_by": item["reviewer"], "verdict": item["verdict"], "reviewed_at": item["reviewed_at"]}
+                for item in receipts
+            ],
+            # Authentication proves an admin account action, not independent
+            # human expertise, authoritative admissions GT or model quality.
+            "professional_policy_review_complete": False,
+            "real_admissions_ground_truth": False,
+            "production_release_authorized": False,
+        }
+
+    def get_portfolio_review(self, run_id: str, *, requester: str, admin: bool = False) -> dict[str, Any]:
+        self._validate_run_id(run_id)
+        with self._open() as conn:
+            row = conn.execute("SELECT * FROM synthetic_task_runs WHERE run_id=?", (run_id,)).fetchone()
+            if row is None or row["engine"] != "portfolio" or (row["owner"] != requester and not admin):
+                raise TaskRunNotFound("No visible synthetic portfolio review")
+            if row["status"] not in {"SUCCEEDED", "NEEDS_REVIEW"}:
+                raise TaskRunConflict("Portfolio result is not yet reviewable")
+            return self._review_snapshot(conn, row)
+
+    def signoff_portfolio_review(
+        self, run_id: str, *, reviewer: str, verdict: str, receipt_sha256: str
+    ) -> dict[str, Any]:
+        """Called ONLY after a privileged HTTP admin identity is authenticated.
+
+        Maker, execution approver and receipt reviewer must be different.
+        Reviewers cannot change their decisions after committing them.
+        """
+        self._validate_run_id(run_id)
+        if not isinstance(reviewer, str) or not 3 <= len(reviewer) <= 64:
+            raise ValueError("Invalid admin reviewer")
+        if verdict not in {"verified_historical_only", "reject"}:
+            raise ValueError("Unsupported synthetic evidence verdict")
+        if not isinstance(receipt_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", receipt_sha256):
+            raise ValueError("Invalid evidence digest")
+        with self._open() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute("SELECT * FROM synthetic_task_runs WHERE run_id=?", (run_id,)).fetchone()
+                if row is None or row["engine"] != "portfolio":
+                    raise TaskRunNotFound("Synthetic portfolio TaskRun not found")
+                if row["status"] not in {"SUCCEEDED", "NEEDS_REVIEW"}:
+                    raise TaskRunConflict("TaskRun result is not yet reviewable")
+                if reviewer in {row["owner"], row["approved_by"]}:
+                    raise TaskRunConflict("Maker or execution approver cannot review the same receipt")
+                actual = self._portfolio_receipt_digest(row)
+                if actual != receipt_sha256:
+                    raise TaskRunConflict("Stale or forged portfolio evidence digest")
+                existing = conn.execute(
+                    "SELECT verdict FROM synthetic_portfolio_reviews WHERE run_id=? AND reviewer=?",
+                    (run_id, reviewer),
+                ).fetchone()
+                if existing is not None:
+                    if existing["verdict"] != verdict:
+                        raise TaskRunConflict("Review decision is immutable")
+                    result = self._review_snapshot(conn, row)
+                    conn.commit()
+                    return result
+                count = conn.execute(
+                    "SELECT COUNT(*) FROM synthetic_portfolio_reviews WHERE run_id=?", (run_id,)
+                ).fetchone()[0]
+                if count >= 2:
+                    raise TaskRunConflict("Two distinct independent reviewers have already signed")
+                conn.execute(
+                    "INSERT INTO synthetic_portfolio_reviews "
+                    "(run_id,reviewer,verdict,receipt_sha256,reviewed_at) VALUES (?,?,?,?,?)",
+                    (run_id, reviewer, verdict, actual, time.time()),
+                )
+                result = self._review_snapshot(conn, row)
+                conn.commit()
+                return result
+            except Exception:
+                conn.rollback()
+                raise
 
     def approve(self, run_id: str, principal: str) -> dict[str, Any]:
         """Call only after the FastAPI dependency verified role == admin."""

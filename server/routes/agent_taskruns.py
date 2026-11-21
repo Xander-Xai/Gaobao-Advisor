@@ -49,6 +49,15 @@ class NewSyntheticPortfolioTaskRun(BaseModel):
     idempotency_key: str = Field(..., min_length=8, max_length=96, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
+class PortfolioReviewSignoff(BaseModel):
+    """A signed-in administrator reviews a frozen *fictional* receipt hash."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    verdict: Literal["verified_historical_only", "reject"]
+    receipt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 def _store() -> SyntheticTaskRunStore:
     _require_experiment_enabled()
     journal = os.getenv("SYNTHETIC_TASKRUN_JOURNAL", "")
@@ -101,6 +110,44 @@ async def get_synthetic_taskrun(
         return store.get(run_id, requester=principal.username, admin=principal.role == "admin")
     except (TaskRunNotFound, ValueError) as exc:
         raise HTTPException(status_code=404, detail="No visible TaskRun") from exc
+
+
+@router.get("/runs/{run_id}/review")
+async def get_synthetic_portfolio_review(
+    run_id: str,
+    principal: AdminPrincipal = Depends(require_role("operator")),
+) -> dict:
+    """Read the frozen SHA before a separate admin submits a review."""
+    store = _store()
+    try:
+        return store.get_portfolio_review(run_id, requester=principal.username, admin=principal.role == "admin")
+    except (TaskRunNotFound, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="No visible synthetic portfolio review") from exc
+    except TaskRunConflict as exc:
+        raise HTTPException(status_code=409, detail="Synthetic portfolio receipt is not reviewable") from exc
+
+
+@router.post("/runs/{run_id}/review")
+async def signoff_synthetic_portfolio_review(
+    run_id: str,
+    request: PortfolioReviewSignoff,
+    principal: AdminPrincipal = Depends(require_role("admin")),
+) -> dict:
+    """A review declaration, not a certification of real admissions advice."""
+    store = _store()
+    try:
+        return store.signoff_portfolio_review(
+            run_id,
+            reviewer=principal.username,
+            verdict=request.verdict,
+            receipt_sha256=request.receipt_sha256,
+        )
+    except (TaskRunNotFound, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="Synthetic portfolio review not found") from exc
+    except TaskRunConflict as exc:
+        raise HTTPException(
+            status_code=409, detail="Review rejected: stale receipt or separation-of-duties gate"
+        ) from exc
 
 
 @router.post("/runs/{run_id}/cancel")
