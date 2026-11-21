@@ -79,8 +79,16 @@ def execute_approved_run(
             if agent_runner is None:
                 from server.agent.deepagents_adapter import run_deepagents_research
 
-                agent_runner = run_deepagents_research
-            card = agent_runner(profile, model, task_id=run_id)
+                # Lease is checked before every SQL tool and durable receipt
+                # write, not only after the model eventually returns.
+                card = run_deepagents_research(
+                    profile,
+                    model,
+                    task_id=run_id,
+                    lease_guard=lambda: store.assert_active_lease(run_id, token),
+                )
+            else:
+                card = agent_runner(profile, model, task_id=run_id)
         else:
             card = build_synthetic_decision_card(profile)
         # A cancellation during a blocking model/tool call must suppress any

@@ -62,6 +62,7 @@ def run_deepagents_research(
     *,
     task_id: str,
     agent_factory: Callable[..., Any] | None = None,
+    lease_guard: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Call the actual Deep Agents runtime, or an injected contract fake in tests.
 
@@ -90,6 +91,11 @@ def run_deepagents_research(
     trace: list[dict[str, Any]] = []
     receipts: list[str] = []
     blocked_attempts = 0
+    ledger: Any | None = None
+    recovered_repeat_once: set[tuple[str, str]] = set()
+    durable_prior = False
+    recovered_final: str | None = None
+    checkpointer: Any | None = None
     required = {
         ("major_lookup", profile.major),
         ("admission_lookup", profile.school_a),
@@ -98,10 +104,35 @@ def run_deepagents_research(
         ("plan_lookup", profile.school_b),
     }
 
+    def _fresh_sql(tool: str, subject: str) -> dict[str, Any]:
+        if (tool, subject) not in required:
+            raise ValueError("Unapproved synthetic SQL subject")
+        if tool == "major_lookup":
+            return _major({"major_name": subject})
+        args = {
+            "school_name": subject,
+            "major_name": profile.major,
+            "province": profile.province,
+            "year": profile.year,
+        }
+        return _fetch_row("admission" if tool == "admission_lookup" else "plan", args)
+
     def _record(tool: str, subject: str, handler: Callable[[], dict[str, Any]]) -> str:
         nonlocal blocked_attempts
+        if lease_guard is not None:
+            lease_guard()
         with lock:
             key = (tool, subject)
+            if ledger is not None and key in recovered_repeat_once:
+                # Only one identical replay of a previously committed read is
+                # allowed after an OS crash. Recheck the real SQL each time.
+                prior = next(
+                    (row for kind, row in observations if kind == tool and row == _fresh_sql(tool, subject)), None
+                )
+                if prior is None:
+                    raise ValueError("Recovered SQL evidence differs from source")
+                recovered_repeat_once.remove(key)
+                return json.dumps(prior, ensure_ascii=False, sort_keys=True)
             if key not in required or key in seen or len(observations) >= 5:
                 blocked_attempts += 1
                 raise ValueError("Unapproved or repeated synthetic tool call")
@@ -117,6 +148,10 @@ def run_deepagents_research(
         if observation.get("data_profile") != "SYNTHETIC_DEMO":
             raise ValueError("SQL result not from synthetic dataset")
         with lock:
+            if lease_guard is not None:
+                lease_guard()
+            if ledger is not None:
+                ledger.append_tool(tool, subject, observation)
             observations.append((tool, observation))
             trace.append(
                 {
@@ -178,9 +213,15 @@ def run_deepagents_research(
                 or any(not isinstance(ref, str) for ref in proposed)
                 or len(set(proposed)) != 5
                 or set(proposed) != set(observed_ids)
-                or receipts
+                or (receipts and not (receipts == ["complete"] and recovered_final == "complete"))
             ):
                 raise ValueError("Incomplete or unverified synthetic research receipt")
+            if receipts:
+                return "SYNTHETIC_RECEIPT_ACCEPTED"
+            if lease_guard is not None:
+                lease_guard()
+            if ledger is not None:
+                ledger.append_decision("complete", sources=observed_ids)
             receipts.append("complete")
         return "SYNTHETIC_RECEIPT_ACCEPTED"
 
@@ -189,8 +230,19 @@ def run_deepagents_research(
         if reason_code not in {"missing_record", "subject_conflict", "invalid_evidence"}:
             raise ValueError("Unsupported abstention reason")
         with lock:
+            if (
+                receipts == ["abstained"]
+                and recovered_final == "abstained"
+                and ledger is not None
+                and reason_code == ledger.last_abstain_reason
+            ):
+                return "SYNTHETIC_ABSTENTION_ACCEPTED"
             if receipts or not any(_reason_is_negative(tool, row, profile) for tool, row in observations):
                 raise ValueError("Refusal without observed negative SQL evidence")
+            if lease_guard is not None:
+                lease_guard()
+            if ledger is not None:
+                ledger.append_decision("abstained", reason=reason_code)
             receipts.append("abstained")
         return "SYNTHETIC_ABSTENTION_ACCEPTED"
 
@@ -198,6 +250,45 @@ def run_deepagents_research(
     # MCP server that could add unknown tools behind these functions.
     offered = [major_lookup, admission_lookup, plan_lookup, submit_research, abstain_with_evidence]
     checkpoint_stack = ExitStack()
+    optional_checkpoint_path = os.getenv("SYNTHETIC_DEEPAGENTS_CHECKPOINT_DB", "").strip()
+    if optional_checkpoint_path:
+        from server.agent.deepagents_checkpoint import open_synthetic_deepagents_checkpointer
+        from server.agent.deepagents_tool_ledger import SyntheticDeepAgentsToolLedger
+
+        contract = hashlib.sha256((_SYSTEM + _SKILL_PATH.read_text(encoding="utf-8")).encode("utf-8")).hexdigest()
+        try:
+            checkpointer, durable_prior = checkpoint_stack.enter_context(
+                open_synthetic_deepagents_checkpointer(
+                    Path(optional_checkpoint_path), task_id, profile, model_id, contract
+                )
+            )
+            ledger = SyntheticDeepAgentsToolLedger(Path(optional_checkpoint_path), task_id, profile, model_id, contract)
+            restored, recovered_final = ledger.load_verified(
+                _fresh_sql, lambda tool, row: _reason_is_negative(tool, row, profile)
+            )
+            if durable_prior and not restored:
+                raise RuntimeError("Graph checkpoint has no independently verified SQL tool observation")
+            if not durable_prior and (restored or recovered_final is not None):
+                raise RuntimeError("Orphaned SQL ledger has no matching LangGraph state checkpoint")
+            for tool, subject, row in restored:
+                observations.append((tool, row))
+                seen.add((tool, subject))
+                recovered_repeat_once.add((tool, subject))
+                trace.append(
+                    {
+                        "kind": "tool",
+                        "tool": tool,
+                        "result": "recovered_verified",
+                        "evidence_count": len(row.get("source_ids", [])),
+                    }
+                )
+            if recovered_final is not None:
+                receipts.append(recovered_final)
+            if lease_guard is not None:
+                lease_guard()
+        except Exception:
+            checkpoint_stack.close()
+            raise
     if agent_factory is None:
         from deepagents import (
             GeneralPurposeSubagentProfile,
@@ -243,23 +334,8 @@ def run_deepagents_research(
             timeout=20,
             max_retries=0,
         )
-        checkpointer = InMemorySaver()
-        optional_checkpoint_path = os.getenv("SYNTHETIC_DEEPAGENTS_CHECKPOINT_DB", "").strip()
-        if optional_checkpoint_path:
-            from server.agent.deepagents_checkpoint import open_synthetic_deepagents_checkpointer
-
-            contract = hashlib.sha256((_SYSTEM + _SKILL_PATH.read_text(encoding="utf-8")).encode("utf-8")).hexdigest()
-            checkpointer, prior_state = checkpoint_stack.enter_context(
-                open_synthetic_deepagents_checkpointer(
-                    Path(optional_checkpoint_path), task_id, profile, model_id, contract
-                )
-            )
-            if prior_state:
-                # Internal model/tool observation receipts still live in Python
-                # memory. Invoking None here would silently invent resume
-                # guarantees or produce a partial, invalid research receipt.
-                checkpoint_stack.close()
-                raise RuntimeError("Existing Deep Agents checkpoint requires explicit receipt reconstruction")
+        if checkpointer is None:
+            checkpointer = InMemorySaver()
         agent = create_deep_agent(
             model=model,
             tools=offered,
@@ -275,13 +351,17 @@ def run_deepagents_research(
         )
         file_data = create_file_data(_SKILL_PATH.read_text(encoding="utf-8"))
     else:
-        agent = agent_factory(
-            model_id=model_id,
-            tools=offered,
-            system_prompt=_SYSTEM,
-            virtual_filesystem="StateBackend/read_file_only",
-            max_model_calls=9,
-        )
+        factory_args: dict[str, Any] = {
+            "model_id": model_id,
+            "tools": offered,
+            "system_prompt": _SYSTEM,
+            "virtual_filesystem": "StateBackend/read_file_only",
+            "max_model_calls": 9,
+        }
+        if optional_checkpoint_path:
+            factory_args["checkpointer"] = checkpointer
+            factory_args["resume"] = durable_prior
+        agent = agent_factory(**factory_args)
         file_data = {"content": ["SYNTHETIC_SKILL"], "created_at": ""}
 
     query = "Research this frozen, fictional profile using read-only SQL tools only: " + json.dumps(
@@ -298,13 +378,15 @@ def run_deepagents_research(
         ensure_ascii=False,
     )
     invoke_kwargs: dict[str, Any] = {"config": {"configurable": {"thread_id": task_id}, "recursion_limit": 24}}
-    if agent_factory is None and os.getenv("SYNTHETIC_DEEPAGENTS_CHECKPOINT_DB", "").strip():
+    if optional_checkpoint_path:
         # In the opt-in durable mode, flush each graph checkpoint before
         # starting the next step; async checkpoints may be lost on os._exit.
         invoke_kwargs["durability"] = "sync"
     try:
         outcome = agent.invoke(
-            {
+            None
+            if durable_prior
+            else {
                 "messages": [{"role": "user", "content": query}],
                 "files": {"/skills/synthetic-admissions/SKILL.md": file_data},
             },
