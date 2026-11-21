@@ -19,6 +19,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from server.observability.agent_trace import current_traceparent, valid_traceparent
+
 _RUN_RE = re.compile(r"^syn_[0-9a-f]{32}$")
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,96}$")
 _ALLOWED_ENGINES = frozenset({"deterministic", "deepagents", "portfolio"})
@@ -79,10 +81,14 @@ class SyntheticTaskRunStore:
                     failure_code TEXT,
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL,
+                    traceparent TEXT,
                     UNIQUE(owner, idempotency_key)
                 )
                 """
             )
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(synthetic_task_runs)")}
+            if "traceparent" not in columns:
+                conn.execute("ALTER TABLE synthetic_task_runs ADD COLUMN traceparent TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS synthetic_portfolio_reviews (
@@ -198,6 +204,9 @@ class SyntheticTaskRunStore:
 
     def create(self, payload: dict[str, Any], engine: str, owner: str, idempotency_key: str) -> dict[str, Any]:
         self._validate_payload(payload, engine)
+        traceparent = current_traceparent()
+        if traceparent is not None and not valid_traceparent(traceparent):
+            traceparent = None
         if not isinstance(owner, str) or not 3 <= len(owner) <= 64:
             raise ValueError("Invalid task owner")
         if not isinstance(idempotency_key, str) or not _IDEMPOTENCY_RE.fullmatch(idempotency_key):
@@ -229,9 +238,9 @@ class SyntheticTaskRunStore:
                     raise TaskRunConflict("Synthetic TaskRun journal storage quota reached")
                 conn.execute(
                     "INSERT INTO synthetic_task_runs "
-                    "(run_id,owner,idempotency_key,payload_hash,payload_json,engine,status,created_at,updated_at) "
-                    "VALUES (?,?,?,?,? ,?,'PENDING_APPROVAL',?,?)",
-                    (run_id, owner, idempotency_key, digest, _canonical(payload), engine, now, now),
+                    "(run_id,owner,idempotency_key,payload_hash,payload_json,engine,status,created_at,updated_at,traceparent) "
+                    "VALUES (?,?,?,?,? ,?,'PENDING_APPROVAL',?,?,?)",
+                    (run_id, owner, idempotency_key, digest, _canonical(payload), engine, now, now, traceparent),
                 )
                 row = conn.execute("SELECT * FROM synthetic_task_runs WHERE run_id=?", (run_id,)).fetchone()
                 conn.commit()
@@ -247,6 +256,15 @@ class SyntheticTaskRunStore:
         if row is None or (requester is not None and requester != row["owner"] and not admin):
             raise TaskRunNotFound("No visible synthetic TaskRun")
         return self._public(row)
+
+    def get_internal_traceparent(self, run_id: str) -> str | None:
+        """Internal TaskRun trace only; never returned by public APIs."""
+        self._validate_run_id(run_id)
+        with self._open() as conn:
+            row = conn.execute("SELECT traceparent FROM synthetic_task_runs WHERE run_id=?", (run_id,)).fetchone()
+        if row is None:
+            raise TaskRunNotFound("Synthetic TaskRun not found")
+        return row["traceparent"] if valid_traceparent(row["traceparent"]) else None
 
     @staticmethod
     def _portfolio_receipt_digest(row: sqlite3.Row) -> str:

@@ -15,6 +15,7 @@ from server.middleware.ratelimit import RateLimitMiddleware
 from server.middleware.request_id import RequestIDMiddleware
 from server.middleware.security import SecurityMiddleware
 from server.monitoring import init_sentry
+from server.observability.agent_trace import initialize_agent_otel
 from server.report.routes import router as report_router
 from server.routes.agent_experiments import router as agent_experiments_router
 from server.routes.agent_optimizer import router as agent_optimizer_router
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
     ensure_admin_ready()
 
     init_sentry()
+    initialize_agent_otel()
 
     from db.database import IS_SQLITE, init_db
 

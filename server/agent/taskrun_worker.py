@@ -20,6 +20,7 @@ from typing import Any
 from server.agent.synthetic_decision_card import DecisionCardProfile, build_synthetic_decision_card
 from server.agent.taskrun_receipt_verifier import verify_taskrun_receipt
 from server.agent.taskrun_store import SyntheticTaskRunStore, TaskRunConflict
+from server.observability.agent_trace import continue_trace, safe_agent_span
 
 
 def _gate_execution(engine: str, *, permit_external_model: bool, model: str | None) -> None:
@@ -37,6 +38,26 @@ def _gate_execution(engine: str, *, permit_external_model: bool, model: str | No
 
 
 def execute_approved_run(
+    store: SyntheticTaskRunStore,
+    run_id: str,
+    *,
+    permit_external_model: bool = False,
+    model: str | None = None,
+    agent_runner: Callable[..., dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Continue persisted synthetic W3C context across worker processes."""
+    with continue_trace(store.get_internal_traceparent(run_id)):
+        with safe_agent_span("agent.taskrun", {"agent.engine": store.get(run_id)["engine"]}):
+            return _execute_approved_run(
+                store,
+                run_id,
+                permit_external_model=permit_external_model,
+                model=model,
+                agent_runner=agent_runner,
+            )
+
+
+def _execute_approved_run(
     store: SyntheticTaskRunStore,
     run_id: str,
     *,

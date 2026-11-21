@@ -1,0 +1,2 @@
+P26: Optional W3C and OTel tracing for synthetic Agents.
+Default OTLP disabled. Enable using AGENT_OTEL_OTLP_ENDPOINT (HTTPS or loopback HTTP), AGENT_OTEL_SAMPLE_RATE 0..1, and install opentelemetry-sdk + opentelemetry-exporter-otlp-proto-http. Strict finite telemetry attributes; no user identifiers, credentials, prompts, exceptions or tool SQL rows. Traceparent is a correlation ID, never auth. Real OTLP collector deployment and validation are still required. Test with pytest tests/test_agent_trace_propagation.py.

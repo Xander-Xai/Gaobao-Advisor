@@ -17,6 +17,7 @@ from typing import Any, Literal, Protocol
 
 from server.agent.context_policy import ContextBudgetExceeded, bound_history, encode_observation
 from server.agent.synthetic_checkpoint import SQLiteSyntheticCheckpointStore, task_digest
+from server.observability.agent_trace import safe_agent_span
 
 _SOURCE_RE = re.compile(r"^synthetic:[a-z_]+:[0-9a-f]{12}$")
 Outcome = Literal["completed", "abstained", "blocked"]
@@ -191,7 +192,8 @@ def run_readonly_agent(
         model_steps = step
         model_started = time.monotonic()
         try:
-            choice = planner.decide(task, [dict(item) for item in history], schemas)
+            with safe_agent_span("agent.planner"):
+                choice = planner.decide(task, [dict(item) for item in history], schemas)
         except Exception:  # noqa: BLE001 - avoid leaking provider error messages
             usage_known = False  # A failed provider request may still incur billed tokens.
             reason = "planner_failed"
@@ -294,7 +296,8 @@ def run_readonly_agent(
         sequence.append(spec.name)
         start = time.monotonic()
         try:
-            result = spec.handler(dict(choice.arguments))
+            with safe_agent_span("agent.tool", {"agent.tool": spec.name}):
+                result = spec.handler(dict(choice.arguments))
         except Exception:  # noqa: BLE001 - fail closed on all tool errors
             tool_failures += 1
             reason = "tool_execution_failed"
