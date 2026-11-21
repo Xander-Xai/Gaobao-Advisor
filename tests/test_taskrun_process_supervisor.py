@@ -95,7 +95,7 @@ store.approve(task["run_id"], "another-admin")
 finished = supervise_approved_taskrun(store, task["run_id"], max_seconds=15)
 assert finished["status"] in {"SUCCEEDED", "NEEDS_REVIEW"}, finished
 assert finished["supervisor_reason"] == "EXITED", finished
-assert finished["local_process_group_termination_sent"] is False
+assert finished["local_process_group_termination_sent"] is True  # Signal the owned group even if its leader is a zombie.
 assert finished["worker_exit_code"] == 0
 assert finished["requires_lease_recovery"] is False
 assert finished["remote_provider_cancel_confirmed"] is False
