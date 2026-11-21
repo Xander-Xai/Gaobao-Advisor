@@ -44,6 +44,24 @@ ready.write_text("RUNNING", encoding="utf-8")
 time.sleep(40)
 """
 
+_EXITED_WORKER = r"""
+import subprocess
+import sys
+from pathlib import Path
+from server.agent.taskrun_store import SyntheticTaskRunStore
+
+store = SyntheticTaskRunStore(Path(sys.argv[1]))
+store.claim(sys.argv[2], lease_seconds=20)
+subprocess.Popen([
+    sys.executable, "-c",
+    "import time,sys;from pathlib import Path;time.sleep(0.9);Path(sys.argv[1]).write_text('ORPHAN',encoding='utf-8')",
+    sys.argv[4],
+])
+Path(sys.argv[3]).write_text("EXITING", encoding="utf-8")
+# The worker exits while its same-process-group child is still alive.
+"""
+
+
 _NORMAL = r"""
 import os
 import sys
@@ -188,6 +206,38 @@ def test_hard_deadline_kills_local_worker_but_keeps_expired_lease_recovery_expli
     assert store.get(run_id)["attempts"] == 1
     time.sleep(1.05)
     assert not orphan.exists()
+
+
+def test_supervisor_kills_orphaned_grandchild_after_worker_exits(tmp_path, monkeypatch):
+    _enable_synthetic(monkeypatch)
+    store, run_id = _approved_task(tmp_path)
+    ready = tmp_path / "worker-exited.txt"
+    orphan = tmp_path / "orphan-after-exit.txt"
+
+    def exited_command(store, task_id, model, permit_external_model):
+        assert model is None and permit_external_model is False
+        return [
+            sys.executable,
+            "-c",
+            _EXITED_WORKER,
+            str(store.path),
+            task_id,
+            str(ready),
+            str(orphan),
+        ]
+
+    monkeypatch.setattr(taskrun_supervisor, "_fixed_worker_command", exited_command)
+    report = taskrun_supervisor.supervise_approved_taskrun(
+        store, run_id, max_seconds=6, poll_seconds=0.02, term_grace_seconds=0.1
+    )
+    assert ready.exists()
+    assert report["supervisor_reason"] == "EXITED"
+    assert report["local_process_group_termination_sent"] is True
+    assert report["worker_exit_code"] == 0
+    assert report["status"] == "RUNNING"
+    assert report["requires_lease_recovery"] is True
+    time.sleep(1.05)
+    assert not orphan.exists(), "Supervisor left a grandchild after its worker exited"
 
 
 def test_real_fixed_worker_subprocess_completes_fictional_sql_case(tmp_path):
