@@ -155,7 +155,7 @@ async def cancel_synthetic_taskrun(
     run_id: str,
     principal: AdminPrincipal = Depends(require_role("operator")),
 ) -> dict:
-    """Owner or administrator may revoke a task lease, not kill an OS process."""
+    """Owner/admin revokes lease; opt-in local Supervisor also kills its own worker tree."""
     store = _store()
     try:
         return store.cancel(run_id, principal.username, admin=principal.role == "admin")
@@ -201,6 +201,21 @@ async def execute_synthetic_taskrun(
     from server.agent.taskrun_worker import execute_approved_run
 
     try:
+        if os.getenv("SYNTHETIC_TASKRUN_USE_PROCESS_SUPERVISOR", "").lower() == "true":
+            from server.agent.taskrun_supervisor import supervise_approved_taskrun
+
+            # The local 8.5s hard deadline plus 5s cleanup is below the
+            # 15s HTTP response deadline. On cancellation the Supervisor terminates only the
+            # process group it spawned; no arbitrary kill-by-PID endpoint.
+            observed = await asyncio.wait_for(
+                asyncio.to_thread(supervise_approved_taskrun, store, run_id, max_seconds=8.5),
+                timeout=15.0,
+            )
+            if observed["supervisor_reason"] == "DEADLINE_EXCEEDED":
+                raise HTTPException(status_code=504, detail="TaskRun worker reached local execution deadline")
+            if observed["status"] not in {"SUCCEEDED", "NEEDS_REVIEW", "FAILED", "CANCELLED"}:
+                raise HTTPException(status_code=503, detail="TaskRun worker exited; lease recovery required")
+            return store.get(run_id, requester=principal.username, admin=principal.role == "admin")
         return await asyncio.wait_for(
             asyncio.to_thread(execute_approved_run, store, run_id),
             timeout=15.0,
