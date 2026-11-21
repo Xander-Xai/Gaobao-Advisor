@@ -27,6 +27,7 @@ from server.agent.llm_reliability import (
     build_llm_context,
     estimate_messages_tokens,
 )
+from server.user_memory import prompt_context
 
 MODEL = "gpt-4o"  # Default model if config fails
 logger = logging.getLogger(__name__)
@@ -142,6 +143,9 @@ def llm_node(state: dict[str, Any]) -> dict[str, Any]:
 
         # Build message list
         messages: list[dict] = [{"role": "system", "content": system_prompt}]
+        saved_preferences = prompt_context(state.get("user_memory", []))
+        if saved_preferences:
+            messages.append({"role": "system", "content": saved_preferences})
         messages.extend(memory_messages)
         messages.append({"role": "user", "content": user_message})
 
@@ -253,6 +257,9 @@ def llm_node_stream(state: dict[str, Any]) -> Generator[tuple[str, bool], None, 
         memory_messages = _load_memory_for_session(session_id)
 
         messages: list[dict] = [{"role": "system", "content": system_prompt}]
+        saved_preferences = prompt_context(state.get("user_memory", []))
+        if saved_preferences:
+            messages.append({"role": "system", "content": saved_preferences})
         messages.extend(memory_messages)
         messages.append({"role": "user", "content": user_message})
         messages = _maybe_trim(messages)

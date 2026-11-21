@@ -9,6 +9,7 @@ class AdvisorState(TypedDict, total=False):
     # ── Identity & Input ───────────────────────────────────────
     session_id: str
     user_id: str
+    user_memory: list[dict]  # owner-authenticated, explicit cross-task preferences only
     input_text: str
     scene: Literal["gaokao", "kaoyan", "career", "general"]
 

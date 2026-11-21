@@ -180,6 +180,8 @@ def init_db():
         QualityTaskOutbox,
         School,
         SubjectRanking,
+        UserMemoryEntry,
+        UserMemoryVault,
         YiFenYiDuan,
     )
 

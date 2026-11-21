@@ -33,7 +33,7 @@ def _run(db: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return result
 
 
-def test_alembic_upgrade_creates_all_20_tables(tmp_path):
+def test_alembic_upgrade_creates_all_22_tables(tmp_path):
     db = tmp_path / "migrate.db"
     result = _run(db, "upgrade")
     assert result.returncode == 0, result.stderr
@@ -103,7 +103,7 @@ def test_adopt_existing_schema_preserves_data(tmp_path):
     try:
         with engine.connect() as connection:
             assert connection.execute(text("SELECT COUNT(*) FROM schools WHERE name='adopt-marker'")).scalar_one() == 1
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261031_0005"
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261120_0006"
         assert verify_tables(engine, ALL_TABLES) == []
     finally:
         engine.dispose()
