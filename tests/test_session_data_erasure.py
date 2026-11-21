@@ -169,3 +169,9 @@ def test_report_component_requires_full_match(isolated):
     _, storage = isolated
     with pytest.raises(ValueError, match="unsafe report_id"):
         storage.save(Report(id="synthetic-report\n", session_id="synthetic-session"))
+    for invalid in ("../outside", "nested/report", "nested\\\\report"):
+        with pytest.raises(ValueError, match="unsafe report_id"):
+            storage.save(Report(id=invalid, session_id="synthetic-session"))
+    for invalid in ("../outside", "nested/session", "nested\\\\session"):
+        with pytest.raises(ValueError, match="unsafe session_id"):
+            storage.save(Report(id="synthetic-report", session_id=invalid))
