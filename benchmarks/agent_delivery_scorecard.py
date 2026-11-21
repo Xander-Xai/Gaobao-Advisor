@@ -45,6 +45,7 @@ def summarize_synthetic_delivery(report: dict[str, Any]) -> dict[str, Any]:
     ids: set[str] = set()
     passed = 0
     tool_calls = model_steps = 0
+    passed_tool_calls = passed_model_steps = 0
     elapsed: list[float] = []
     failure_codes: Counter[str] = Counter()
     tokens_known = controller == "REAL_MODEL_NOT_SCRIPTED"
@@ -90,6 +91,9 @@ def summarize_synthetic_delivery(report: dict[str, Any]) -> dict[str, Any]:
         passed += int(row["passed"])
         tool_calls += row["tool_calls"]
         model_steps += row["model_steps"]
+        if row["passed"]:
+            passed_tool_calls += row["tool_calls"]
+            passed_model_steps += row["model_steps"]
         elapsed.append(row["elapsed_ms"])
         p, c = row.get("prompt_tokens"), row.get("completion_tokens")
         if tokens_known and (type(p) is not int or type(c) is not int or p < 0 or c < 0):
@@ -131,8 +135,12 @@ def summarize_synthetic_delivery(report: dict[str, Any]) -> dict[str, Any]:
         "synthetic_verified_case_count": passed,
         "synthetic_task_pass_rate": round(passed / count, 4),
         "p95_synthetic_elapsed_ms": _percentile_95(elapsed),
-        "average_tool_calls_per_passing_case": round(tool_calls / passed, 4) if passed else None,
-        "average_model_decisions_per_passing_case": round(model_steps / passed, 4) if passed else None,
+        # Mean among successful cases differs from amortized cost per success
+        # (which deliberately includes failed attempts in the numerator).
+        "average_tool_calls_per_passing_case": round(passed_tool_calls / passed, 4) if passed else None,
+        "average_model_decisions_per_passing_case": round(passed_model_steps / passed, 4) if passed else None,
+        "tool_calls_per_success_including_failures": round(tool_calls / passed, 4) if passed else None,
+        "model_decisions_per_success_including_failures": round(model_steps / passed, 4) if passed else None,
         "tool_contract_success_rate": round(successes / attempts, 4) if has_verified_trace and attempts else None,
         "total_provider_declared_tokens": prompt_tokens + completion_tokens if tokens_known else None,
         "provider_declared_tokens_per_passing_case": round((prompt_tokens + completion_tokens) / passed, 2)
