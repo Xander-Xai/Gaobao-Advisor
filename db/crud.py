@@ -409,7 +409,7 @@ def get_or_create_conversation(db: Session, session_id: str) -> Conversation:
     return conv
 
 
-def save_message(db: Session, session_id: str, role: str, content: str) -> None:
+def save_message(db: Session, session_id: str, role: str, content: str, *, commit: bool = True) -> None:
     """保存一条对话消息。"""
     conv = get_or_create_conversation(db, session_id)
     msg = ConversationMessage(
@@ -418,10 +418,11 @@ def save_message(db: Session, session_id: str, role: str, content: str) -> None:
         content=content,
     )
     db.add(msg)
-    db.commit()
+    if commit:
+        db.commit()
 
 
-def save_slots(db: Session, session_id: str, slots: dict) -> None:
+def save_slots(db: Session, session_id: str, slots: dict, *, commit: bool = True) -> None:
     """更新对话的槽位信息。"""
     conv = get_or_create_conversation(db, session_id)
     conv.slots_json = json.dumps(slots, ensure_ascii=False)
@@ -436,7 +437,8 @@ def save_slots(db: Session, session_id: str, slots: dict) -> None:
     conv.province = _val(slots.get("province"))
     conv.score_rank = _val(slots.get("score_rank") or slots.get("score"))
     conv.subject = _val(slots.get("subject"))
-    db.commit()
+    if commit:
+        db.commit()
 
 
 def load_conversation_history(db: Session, session_id: str) -> list[dict]:

@@ -13,6 +13,7 @@ Migration notes:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import threading
@@ -20,7 +21,7 @@ import time
 from collections.abc import Generator
 from typing import Any
 
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from config.loader import load_llm_config
 from server.agent.llm_reliability import (
@@ -276,3 +277,70 @@ def llm_node_stream(state: dict[str, Any]) -> Generator[tuple[str, bool], None, 
         fallback = state.get("template_reply") or _FALLBACK_REPLY
         for char in fallback:
             yield (char, True)  # Degraded: stream fallback reply with degraded flag
+
+
+# ── Final-answer candidate for the public SSE route ──────────────────
+
+
+async def generate_chat_candidate(state: dict[str, Any]) -> tuple[str, bool]:
+    """Build a complete, *unpublished* LLM draft.
+
+    Buffering is intentional: unverified model tokens must not reach the
+    client before source/quality validation and database persistence. Unlike
+    the legacy synchronous generator this uses async network I/O and can be
+    cancelled on client disconnect. Any partial output is discarded on error.
+    """
+    cfg = _get_config()
+    key = str(cfg.get("api_key") or "").strip()
+    fallback = state.get("template_reply") or _FALLBACK_REPLY
+    if not key:
+        return fallback, True
+
+    history = await asyncio.to_thread(_load_memory_for_session, state.get("session_id", ""))
+    messages = [{"role": "system", "content": _load_system_prompt()}]
+    messages.extend(history)
+    messages.append({"role": "user", "content": build_llm_context(state)})
+    messages = _maybe_trim(messages)
+
+    async with AsyncOpenAI(
+        api_key=key,
+        base_url=cfg.get("base_url"),
+        timeout=cfg.get("timeout", 120.0),
+        max_retries=0,
+    ) as client:
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                stream = await client.chat.completions.create(
+                    model=cfg["model"],
+                    messages=messages,
+                    temperature=cfg.get("temperature", 0.7),
+                    max_tokens=cfg.get("max_tokens") or 2000,
+                    stream=True,
+                )
+                chunks: list[str] = []
+                total_chars = 0
+                async for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        piece = chunk.choices[0].delta.content
+                        total_chars += len(piece)
+                        if total_chars > 16000:
+                            raise ValueError("LLM draft exceeds final-answer budget")
+                        chunks.append(piece)
+                reply = "".join(chunks).strip()
+                if not reply:
+                    raise ValueError("LLM draft is empty")
+                return reply, False
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                status = getattr(exc, "status_code", None)
+                retry = status in RETRYABLE_STATUS_CODES and attempt < MAX_RETRIES
+                logger.warning(
+                    "Chat LLM candidate failed (type=%s, retry=%s)",
+                    type(exc).__name__,
+                    retry,
+                )
+                if not retry:
+                    break
+                await asyncio.sleep(BASE_DELAY * (2**attempt))
+    return fallback, True
