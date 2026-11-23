@@ -22,9 +22,7 @@ def _mock_finalization_io(monkeypatch):
     monkeypatch.setattr(
         chat,
         "memory_node",
-        lambda state: {
-            "trace": [*state.get("trace", []), {"node": "memory_update", "event": "persisted"}]
-        },
+        lambda state: {"trace": [*state.get("trace", []), {"node": "memory_update", "event": "persisted"}]},
     )
     monkeypatch.setattr(chat, "quality_judge_node", lambda state: {"quality_grade": "pass"})
 
@@ -43,6 +41,7 @@ class _FakeGraph:
 async def test_uses_llm_when_key_configured(monkeypatch) -> None:
     monkeypatch.setattr(chat, "get_advisor_graph", lambda: _FakeGraph())
     monkeypatch.setattr(chat, "load_llm_config", lambda: {"api_key": "sk-test"})
+
     async def _candidate(state):
         return "模型答复", False
 
