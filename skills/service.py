@@ -240,10 +240,10 @@ class SkillService:
         }
         if scene != Scene.GAOKAO and sections:
             raise ValueError("Domain skills cannot be disclosed to unrelated scenes")
-        if any(not isinstance(name, str) or name not in allowed for name in sections) or (
-            len(set(sections)) != len(sections)
-        ):
-            raise ValueError("Unknown or duplicate skill section")
+        if any(not isinstance(name, str) or name not in allowed for name in sections):
+            raise ValueError("Unknown skill section")
+        if len(set(sections)) != len(sections):
+            raise ValueError("Duplicate skill section")
         parts = [self._safety_rules]
         parts.extend(allowed[name] for name in sections if allowed[name].strip())
         content = "\n\n---\n\n".join(parts)
