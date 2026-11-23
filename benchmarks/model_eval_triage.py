@@ -12,12 +12,23 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from benchmarks.decision_card_business_eval import _digest, frozen_cases
 from benchmarks.model_run_comparison import _validate
 
 
 def summarize_model_failures(report: dict[str, Any]) -> dict[str, Any]:
     """Explain which frozen synthetic tasks failed, without promoting the run."""
     _validate(report)
+    # An eight-row run with four holdout rows is not necessarily our frozen
+    # eight-task benchmark. Bind the declared run to the exact shipped suite,
+    # without mistaking a matching self-reported digest for provider attestation.
+    expected_cases = frozen_cases()
+    if report["dataset_sha256"] != _digest(expected_cases):
+        raise ValueError("Model report does not match the frozen synthetic suite digest")
+    expected_identity = {case["case_id"]: case["split"] for case in expected_cases}
+    actual_identity = {row["case_id"]: row["split"] for row in report["results"]}
+    if actual_identity != expected_identity:
+        raise ValueError("Model report case IDs or development/holdout splits changed")
     by_split: dict[str, dict[str, Any]] = {}
     failures = Counter()
     for split in ("development", "holdout"):
@@ -42,6 +53,8 @@ def summarize_model_failures(report: dict[str, Any]) -> dict[str, Any]:
         "run_id": report["run_id"],
         "model_id": report["model_id"],
         "dataset_sha256": report["dataset_sha256"],
+        "frozen_case_identity_checked": True,
+        "frozen_suite_digest_checked": True,
         "by_split": by_split,
         "failure_code_counts": dict(sorted(failures.items())),
         "provenance_independently_verified": False,
