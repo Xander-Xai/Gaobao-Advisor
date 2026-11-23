@@ -17,9 +17,7 @@ from benchmarks.decision_card_business_eval import frozen_cases
 
 
 def _digest(value: Any) -> str:
-    return hashlib.sha256(
-        json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def evaluate_case_coverage(cases: list[dict[str, Any]]) -> dict[str, Any]:
@@ -41,7 +39,8 @@ def evaluate_case_coverage(cases: list[dict[str, Any]]) -> dict[str, Any]:
         if not isinstance(case_id, str) or not case_id or case_id in ids:
             raise ValueError("Missing or duplicate case_id")
         if split not in {"holdout", "development"} or label not in {
-            "needs_review", "evidence_complete_historical_only"
+            "needs_review",
+            "evidence_complete_historical_only",
         }:
             raise ValueError("Unknown split or expected business status")
         if case.get("data_profile") != "SYNTHETIC_DEMO":
@@ -70,12 +69,8 @@ def evaluate_case_coverage(cases: list[dict[str, Any]]) -> dict[str, Any]:
         "dataset_profile": "SYNTHETIC_DEMO",
         "dataset_sha256": _digest(cases),
         "sample_count": len(cases),
-        "split_status_counts": {
-            split: dict(sorted(counter.items())) for split, counter in sorted(splits.items())
-        },
-        "distinct_dimension_counts": {
-            field: len(values) for field, values in sorted(dimensions.items())
-        },
+        "split_status_counts": {split: dict(sorted(counter.items())) for split, counter in sorted(splits.items())},
+        "distinct_dimension_counts": {field: len(values) for field, values in sorted(dimensions.items())},
         "coverage_gaps": sorted(gaps),
         "independent_human_review": False,
         "real_admissions_accuracy": "NOT_MEASURED",
