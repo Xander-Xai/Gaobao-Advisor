@@ -205,9 +205,12 @@ def _load_memory_for_session(session_id: str) -> list[dict]:
         db.close()
 
 
-def _chat_context_options() -> dict[str, int]:
+def _chat_context_options(*, compaction_enabled: bool = False) -> dict[str, int]:
+    # Preserve the legacy 20-round window unless semantic compaction is
+    # explicitly enabled. In compact mode keep a tighter 10-round tail.
+    default_rounds = "10" if compaction_enabled else str(MAX_HISTORY_ROUNDS)
     return {
-        "keep_recent_rounds": int(os.getenv("GAOBAO_CHAT_KEEP_RECENT_ROUNDS", "10")),
+        "keep_recent_rounds": int(os.getenv("GAOBAO_CHAT_KEEP_RECENT_ROUNDS", default_rounds)),
         "max_estimated_tokens": int(os.getenv("GAOBAO_CHAT_INPUT_EST_TOKENS", "8000")),
     }
 
@@ -219,9 +222,12 @@ def _build_chat_context_sync(state: dict[str, Any], system_prompt: str):
 
 async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
     history = await asyncio.to_thread(_load_memory_for_session, state.get("session_id", ""))
-    options = _chat_context_options()
+    compaction_enabled = os.getenv("GAOBAO_CHAT_COMPACTION_ENABLED", "false").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+    options = _chat_context_options(compaction_enabled=compaction_enabled)
     current = build_llm_context(state)
-    if os.getenv("GAOBAO_CHAT_COMPACTION_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+    if compaction_enabled:
         # Explicit opt-in: this may call the configured LLM a second time.
         # Keep the original SQL history intact; do not persist model summaries
         # as authoritative admissions facts or long-term user preferences.
