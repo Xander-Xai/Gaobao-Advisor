@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 import secrets
 
 from fastapi import APIRouter, Header, HTTPException
@@ -70,6 +71,28 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
     return slots, extract_query_state(stored)
 
 
+_ASSERTED_NUMBER = re.compile(r"(?<![0-9])(\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?|\\d{4,7})\\s*(?:分|位次|%|元/月|元/年|万元|万人)")
+_EVIDENCE_NUMBER = re.compile(r"(?<![0-9])\\d+(?:\\.\\d+)?(?![0-9])")
+
+
+def _unsupported_numbers(state: dict, candidate: str) -> bool:
+    """Cheap evidence containment gate, NOT semantic fact verification.
+
+    A forged '根据/来源' marker cannot certify an unseen numeric value. This
+    intentionally errs toward rejecting unverifiable statistics. Having a
+    number somewhere in evidence still does NOT prove a claim about a
+    particular school; human/semantic review remains necessary.
+    """
+    raw = [str(state.get("input_text") or "")]
+    for key in ("slots", "data_query_results", "rag_chunks"):
+        raw.append(json.dumps(state.get(key) or {}, ensure_ascii=False, default=str))
+    observed = {m.group(0) for m in _EVIDENCE_NUMBER.finditer("\\n".join(raw).replace(",", ""))}
+    return any(
+        m.group(1).replace(",", "") not in observed
+        for m in _ASSERTED_NUMBER.finditer(candidate)
+    )
+
+
 def _deterministic_gate_issues(state: dict, candidate: str) -> list[str]:
     """Return stable, redacted reason codes; never treat a marker as proof."""
     draft = dict(state)
@@ -82,6 +105,8 @@ def _deterministic_gate_issues(state: dict, candidate: str) -> list[str]:
         issues.append("UNATTRIBUTED_NUMBER")
     if draft.get("should_rewrite"):
         issues.append("ANTI_PATTERN")
+    if _unsupported_numbers(state, candidate):
+        issues.append("UNVERIFIED_NUMERIC_CLAIM")
     return issues
 
 
