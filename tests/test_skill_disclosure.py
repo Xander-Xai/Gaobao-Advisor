@@ -36,6 +36,8 @@ def test_reject_unknown_duplicate_and_cross_scene(tmp_path):
         svc.build_disclosed_context("general", ["heuristics"])
     with pytest.raises(ValueError):
         svc.build_disclosed_context("gaokao", ["heuristics", "heuristics"])
+    with pytest.raises(ValueError):
+        svc.build_disclosed_context("gaokao", [{"unhashable": "payload"}])
 
 
 def test_budget_never_silently_drops_safety(tmp_path):
