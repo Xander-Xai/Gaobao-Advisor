@@ -223,7 +223,10 @@ def _build_chat_context_sync(state: dict[str, Any], system_prompt: str):
 async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
     history = await asyncio.to_thread(_load_memory_for_session, state.get("session_id", ""))
     compaction_enabled = os.getenv("GAOBAO_CHAT_COMPACTION_ENABLED", "false").strip().lower() in {
-        "1", "true", "yes", "on"
+        "1",
+        "true",
+        "yes",
+        "on",
     }
     options = _chat_context_options(compaction_enabled=compaction_enabled)
     current = build_llm_context(state)
@@ -235,7 +238,9 @@ async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
 
         manager = DefaultMemoryManager()
         return await build_compacted_chat_context(
-            history, system_prompt, current,
+            history,
+            system_prompt,
+            current,
             summarizer=manager._summarize_history,
             **options,
         )
@@ -332,7 +337,9 @@ async def generate_chat_candidate(state: dict[str, Any]) -> tuple[str, bool]:
     messages = context.messages
     logger.info(
         "Chat context prepared (status=%s, omitted=%d, estimate=%d)",
-        context.status, context.omitted_messages, context.estimated_tokens,
+        context.status,
+        context.omitted_messages,
+        context.estimated_tokens,
     )
 
     async with AsyncOpenAI(
