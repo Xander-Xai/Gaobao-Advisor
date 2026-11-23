@@ -80,7 +80,6 @@ def test_review_triage_rejects_unknown_ticket(admin_client):
     assert result.status_code == 404
 
 
-
 def test_review_ticket_and_delivered_message_share_transaction(admin_factory, monkeypatch):
     from db.models import Conversation, ConversationMessage, QualityScore
     from server.graph.nodes import memory as memory_module
