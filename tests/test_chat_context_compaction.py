@@ -154,7 +154,9 @@ async def test_public_async_candidate_uses_compaction_when_opted_in(monkeypatch)
     from server.agent.memory_manager import DefaultMemoryManager
     from server.graph.nodes import llm_node
 
-    history = _history(6, size=100)
+    # The default semantic trigger is 2,000 estimated tokens. Make the
+    # older eight messages exceed that trigger, without exceeding summary cap.
+    history = _history(6, size=700)
     seen = []
 
     class FakeCompletions:
