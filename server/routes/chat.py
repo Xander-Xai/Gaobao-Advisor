@@ -71,8 +71,8 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
     return slots, extract_query_state(stored)
 
 
-_ASSERTED_NUMBER = re.compile(r"(?<![0-9])(\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?|\\d{4,7})\\s*(?:分|位次|%|元/月|元/年|万元|万人)")
-_EVIDENCE_NUMBER = re.compile(r"(?<![0-9])\\d+(?:\\.\\d+)?(?![0-9])")
+_ASSERTED_NUMBER = re.compile(r"(?<![0-9])(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d{4,7})\s*(?:分|位次|%|元/月|元/年|万元|万人)")
+_EVIDENCE_NUMBER = re.compile(r"(?<![0-9])\d+(?:\.\d+)?(?![0-9])")
 
 
 def _unsupported_numbers(state: dict, candidate: str) -> bool:
@@ -86,7 +86,7 @@ def _unsupported_numbers(state: dict, candidate: str) -> bool:
     raw = [str(state.get("input_text") or "")]
     for key in ("slots", "data_query_results", "rag_chunks"):
         raw.append(json.dumps(state.get(key) or {}, ensure_ascii=False, default=str))
-    observed = {m.group(0) for m in _EVIDENCE_NUMBER.finditer("\\n".join(raw).replace(",", ""))}
+    observed = {m.group(0) for m in _EVIDENCE_NUMBER.finditer("\n".join(raw).replace(",", ""))}
     return any(
         m.group(1).replace(",", "") not in observed
         for m in _ASSERTED_NUMBER.finditer(candidate)
