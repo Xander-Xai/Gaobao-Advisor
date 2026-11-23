@@ -1,8 +1,7 @@
 """Regression tests for the /chat Phase-2 answer path.
 
-The graph always produces a grounded template (offline-safe). The SSE handler
-must still use the LLM when a key is configured, and must fall back to that
-template on failure instead of dropping to a generic message.
+The preparation graph produces an offline-safe template. The finalization
+phase must verify/persist the final answer before emitting any model text.
 """
 
 from __future__ import annotations
@@ -16,6 +15,18 @@ import server.routes.chat as chat
 
 def _events(raw: list[str]) -> list[dict]:
     return [json.loads(line[6:]) for line in raw if line.startswith("data: ")]
+
+
+@pytest.fixture(autouse=True)
+def _mock_finalization_io(monkeypatch):
+    monkeypatch.setattr(
+        chat,
+        "memory_node",
+        lambda state: {
+            "trace": [*state.get("trace", []), {"node": "memory_update", "event": "persisted"}]
+        },
+    )
+    monkeypatch.setattr(chat, "quality_judge_node", lambda state: {"quality_grade": "pass"})
 
 
 class _FakeGraph:
@@ -32,7 +43,10 @@ class _FakeGraph:
 async def test_uses_llm_when_key_configured(monkeypatch) -> None:
     monkeypatch.setattr(chat, "get_advisor_graph", lambda: _FakeGraph())
     monkeypatch.setattr(chat, "load_llm_config", lambda: {"api_key": "sk-test"})
-    monkeypatch.setattr(chat, "llm_node_stream", lambda state: iter([("模型答复", False)]))
+    async def _candidate(state):
+        return "模型答复", False
+
+    monkeypatch.setattr(chat, "generate_chat_candidate", _candidate)
 
     raw = [line async for line in chat._sse_generator("session-1234", "gaokao", "问题", None)]
     events = _events(raw)
@@ -50,11 +64,11 @@ async def test_uses_grounded_template_without_key(monkeypatch) -> None:
 
     called = {"count": 0}
 
-    def _stream(state):
+    async def _candidate(state):
         called["count"] += 1
-        yield ("模型答复", False)
+        return "模型答复", False
 
-    monkeypatch.setattr(chat, "llm_node_stream", _stream)
+    monkeypatch.setattr(chat, "generate_chat_candidate", _candidate)
 
     raw = [line async for line in chat._sse_generator("session-1234", "gaokao", "问题", None)]
     events = _events(raw)
