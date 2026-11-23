@@ -79,7 +79,13 @@ def _assemble(
 
     def render() -> list[dict[str, str]]:
         warning = [{"role": "user", "content": _MISSING_HISTORY}] if truncated else []
-        return [{"role": "system", "content": system_prompt}, *warning, *summary_item, *kept, {"role": "user", "content": current_prompt}]
+        return [
+            {"role": "system", "content": system_prompt},
+            *warning,
+            *summary_item,
+            *kept,
+            {"role": "user", "content": current_prompt},
+        ]
 
     while kept and estimate_messages_tokens(render()) > max_estimated_tokens:
         # Never truncate a serialized evidence payload/current question.
@@ -138,6 +144,7 @@ async def build_compacted_chat_context(
     summarizer: Callable[[list[dict[str, str]]], Awaitable[str]] | None = None,
     keep_recent_rounds: int = 10,
     summary_trigger_tokens: int = 2000,
+    max_summary_estimated_tokens: int = 10000,
     max_estimated_tokens: int = 8000,
 ) -> ChatContext:
     """Optional async semantic compaction; summary is never trusted as evidence."""
@@ -145,6 +152,8 @@ async def build_compacted_chat_context(
         raise ChatContextError("Invalid recent conversation limit")
     if type(summary_trigger_tokens) is not int or summary_trigger_tokens <= 0:
         raise ChatContextError("Invalid summarization threshold")
+    if type(max_summary_estimated_tokens) is not int or max_summary_estimated_tokens <= 0:
+        raise ChatContextError("Invalid summary input budget")
     safe = _validate_history(history)
     keep = keep_recent_rounds * 2
     older, recent = safe[:-keep], safe[-keep:]
@@ -152,7 +161,7 @@ async def build_compacted_chat_context(
     if not older or estimate_messages_tokens(older) <= summary_trigger_tokens:
         return _assemble(safe, system_prompt, current_prompt, max_estimated_tokens=max_estimated_tokens)
     summary = ""
-    if summarizer is not None:
+    if summarizer is not None and estimate_messages_tokens(older) <= max_summary_estimated_tokens:
         try:
             value = await summarizer(older)
             summary = value.strip() if isinstance(value, str) else ""
