@@ -211,7 +211,11 @@ def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str,
                 if not isinstance(item, dict):
                     errors.append("invalid_school_record")
                     continue
-                true_row = rows.get(item.get("school_name"))
+                school_name = item.get("school_name")
+                if not isinstance(school_name, str):
+                    errors.append("invalid_school_identity")
+                    continue
+                true_row = rows.get(school_name)
                 if true_row is None or any(item.get(field) != value for field, value in true_row.items()):
                     errors.append("factual_mismatch")
                     break
