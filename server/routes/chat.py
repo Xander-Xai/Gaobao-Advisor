@@ -95,10 +95,7 @@ def _finalize_chat_answer(state: dict, candidate: str, *, model_generated: bool)
 
     checked = check(candidate)
     degraded = False
-    if model_generated and (
-        checked.get("should_rewrite")
-        or "（数据来源待补全）" in checked.get("reply", "")
-    ):
+    if model_generated and (checked.get("should_rewrite") or "（数据来源待补全）" in checked.get("reply", "")):
         # Do not stream a failing draft or recursively call a potentially
         # unreliable LLM. This is an explicit bounded fallback, not a rewrite.
         checked = check(fallback)
@@ -118,8 +115,7 @@ def _finalize_chat_answer(state: dict, candidate: str, *, model_generated: bool)
     checked["atomic_memory"] = True
     checked.update(memory_node(checked))
     if not any(
-        event.get("node") == "memory_update" and event.get("event") == "persisted"
-        for event in checked.get("trace", [])
+        event.get("node") == "memory_update" and event.get("event") == "persisted" for event in checked.get("trace", [])
     ):
         raise RuntimeError("Final-answer persistence failed")
     return checked, degraded
@@ -218,7 +214,7 @@ async def _sse_generator(
         yield f"data: {json.dumps({'type': 'degraded', 'message': degraded_message})}\n\n"
     final_reply = final.get("reply") or ""
     for i in range(0, len(final_reply), 20):
-        yield f"data: {json.dumps({'type': 'token', 'content': final_reply[i:i + 20]})}\n\n"
+        yield f"data: {json.dumps({'type': 'token', 'content': final_reply[i : i + 20]})}\n\n"
 
     yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': f'{session_id}-response', 'session_token': create_session_token(session_id)})}\n\n"
 
