@@ -31,3 +31,14 @@ The triage report separates frozen development and holdout populations, named fa
 Metadata from an artifact is **self-declared provenance**, not independent provider attestation. This tool sets `provenance_independently_verified=false`, `production_deployment_authorized=false` and `real_admissions_accuracy=NOT_MEASURED`.
 
 The eight-case fixture is small and synthetic. Human admissions expert review, appropriately licensed real-world data, repeated provider trials and production acceptance remain separate requirements.
+
+## Frozen-suite coverage audit (no provider)
+
+The independent `benchmarks.business_eval_coverage` command inspects all eight frozen cases before a model comparison. It reports development/holdout label balance and the number of distinct schools, provinces, majors, subject types and years, along with explicit gaps. The current suite uses **one synthetic major, one subject type and one year**, so its success rate must not be generalized to all applications or actual admissions.
+
+```bash
+python -m benchmarks.business_eval_coverage --out /tmp/synthetic-case-coverage.json
+pytest -q tests/test_business_eval_coverage.py
+```
+
+This coverage audit cannot create missing human annotations or establish model performance. It only makes the evaluation population and its limitations visible.
