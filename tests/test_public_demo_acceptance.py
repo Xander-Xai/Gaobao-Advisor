@@ -437,8 +437,8 @@ class TestExcludedAssetsAbsent:
 
     def test_tracked_file_count_is_bounded(self) -> None:
         """A clean public repo should be a few hundred files, not thousands."""
-        # Added read-only benchmark code is intentionally tracked. Retain a
-        # finite repo-size bound; forbidden assets remain checked separately.
+        # Added review/eval code is intentionally tracked. Retain a finite
+        # size guard while checking forbidden assets separately above.
         assert 50 < len(_tracked_files()) < 750
 
 
