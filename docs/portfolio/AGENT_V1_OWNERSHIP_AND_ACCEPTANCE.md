@@ -30,12 +30,13 @@
 | GB-P0-03 | Context / Prompt / Skills 有效性 A/B | 同模型/同任务/同工具和价格快照，候选改动与基线分开保存；质量安全不退化后才能讨论 token 变化 | **PARTIAL**；既有实验工具，真实重复运行和独立 Holdout 仍缺 |
 | GB-P0-04 | 决策卡面向用户的业务质量闭环 | 关键事实必须来自 SQL，缺失数据拒答；真实模型回复与最终展示卡逐字段交叉验证，合成环境先验 | **PARTIAL**；隔离运营侧决策卡不等于公共 chat 已由模型自主编排 |
 | GB-P1-05 | Trace/评测回放/单任务 FinOps | 一条任务可关联 Trace、工具序列、状态、模型用量与真实账单，对照失败 Bad Case | **PARTIAL**；Provider 账单与端到端使用成本未验收 |
-| GB-P1-06 | Skills 渐进式披露/负向记忆 | 合成只读任务中按需加载、记录审核拒绝规则并保证跨任务引用权限；A/B 验证无泄露和无重复错误 | **PARTIAL**；Skill 文件存在不等于动态能力加载/生产个人记忆 |
+| GB-P1-06 | Skills 渐进式披露/负向记忆 | 合成只读任务中按需加载、记录审核拒绝规则并保证跨任务引用权限；A/B 验证无泄露和无重复错误 | **REFERENCE_IMPLEMENTED**：`skills/service.py::build_disclosed_context` + `tests/test_skill_disclosure.py` 提供 opt-in 按需上下文披露（强制安全规则、领域约束、预算拒绝）；**尚未接入线上路径/真实 A/B**，不等于动态工具注册或生产个人记忆 |
 | GB-P1-07 | 可选沙箱及灰度发布 | 攻击测试无越权挂载/网络/凭证；真实模型灰度有退出和回滚证据 | **PARTIAL**；隔离 CLI 实验不等于线上灰度 |
 
 ## 当前可执行验证
 
 ```bash
+pytest -q tests/test_skill_disclosure.py --no-cov -o addopts=''
 pytest -q tests/test_readonly_harness.py tests/test_decision_card_business_eval.py
 python -m benchmarks.readonly_harness_eval --out /tmp/gb-readonly-eval.json
 python -m benchmarks.decision_card_business_eval --out /tmp/gb-decision-baseline.json
