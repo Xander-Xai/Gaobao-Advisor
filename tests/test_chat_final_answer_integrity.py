@@ -319,7 +319,6 @@ async def test_rewrite_opt_in_and_one_provider_call(monkeypatch):
     assert fake_calls[0]["stream"] is False
 
 
-
 def test_unscored_judge_does_not_emit_fake_metrics_or_quality_record(monkeypatch):
     from db import database
     from quality.judge.scorecard import DimensionScore, JudgeResult
