@@ -150,3 +150,173 @@ def test_memory_atomic_final_turn_commits_once(monkeypatch):
     assert all(call.kwargs.get("commit") is False for call in msg.call_args_list)
     assert slots.call_args.kwargs.get("commit") is False
     db.commit.assert_called_once()
+
+
+def test_judge_rejection_falls_back_and_discards_untrusted_score(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        chat,
+        "quality_judge_node",
+        lambda state: {
+            "quality_grade": "fail",
+            "quality_scored": True,
+            "quality_scores": {"factual": 5},
+            "aggregate_score": 5.0,
+            "hallucination_flags": ["contradiction"],
+        },
+    )
+    monkeypatch.setattr(
+        chat,
+        "memory_node",
+        lambda state: (
+            captured.append(dict(state))
+            or {"trace": [*state.get("trace", []), {"node": "memory_update", "event": "persisted"}]}
+        ),
+    )
+    state = {"reply": "保守模板", "template_reply": "保守模板", "input_text": "问题", "trace": []}
+    final, degraded = chat._finalize_chat_answer(state, "看似正常的模型回答。", model_generated=True)
+    assert degraded
+    assert "保守模板" in final["reply"]
+    assert "看似正常的模型回答" not in final["reply"]
+    assert final["quality_scored"] is False
+    assert final["aggregate_score"] is None
+    assert final["review_reason_codes"] == ["JUDGE_REJECTED"]
+    assert captured[0]["reply"] == final["reply"]
+
+
+def test_unscored_judge_never_certifies_model_candidate(monkeypatch):
+    recorded = []
+    monkeypatch.setattr(
+        chat,
+        "quality_judge_node",
+        lambda state: {"quality_grade": "unscored", "quality_scored": False},
+    )
+    monkeypatch.setattr(
+        chat,
+        "memory_node",
+        lambda state: (
+            recorded.append(state["reply"])
+            or {"trace": [*state.get("trace", []), {"node": "memory_update", "event": "persisted"}]}
+        ),
+    )
+    state = {"reply": "可信模板", "template_reply": "可信模板", "input_text": "问题", "trace": []}
+    final, degraded = chat._finalize_chat_answer(state, "模型未知答案", model_generated=True)
+    assert degraded
+    assert final["review_reason_codes"] == ["JUDGE_UNAVAILABLE"]
+    assert "模型未知答案" not in recorded[0]
+
+
+@pytest.mark.asyncio
+async def test_single_rewrite_passes_new_candidate_through_final_gate(monkeypatch):
+    from server.quality import chat_repair
+
+    persisted = []
+    calls = []
+    _mock_finalizers(monkeypatch, persisted)
+
+    class FakeGraph:
+        def invoke(self, state):
+            return {
+                "reply": "本地模板",
+                "template_reply": "本地模板",
+                "reply_source": "template",
+                "trace": [],
+            }
+
+    async def initial_candidate(state):
+        return "我保证今年这所学校录取线是666分。", False
+
+    async def corrected(state, draft, reasons):
+        calls.append((draft, reasons))
+        return "缺少可靠招生数据，当前无法核验，请查询官方招生公告。"
+
+    monkeypatch.setattr(chat, "get_advisor_graph", lambda: FakeGraph())
+    monkeypatch.setattr(chat, "_load_chat_state", lambda session_id, slots: ({}, {}))
+    monkeypatch.setattr(chat, "load_llm_config", lambda: {"api_key": "test-configured"})
+    monkeypatch.setattr(chat, "generate_chat_candidate", initial_candidate)
+    monkeypatch.setattr(chat, "generate_chat_rewrite", corrected)
+    monkeypatch.setattr(chat, "chat_rewrite_enabled", lambda: True)
+
+    data = [item async for item in chat._sse_generator("test-rewrite", "gaokao", "问题", None)]
+    events = [json.loads(line[6:]) for line in data if line.startswith("data: ")]
+    delivered = "".join(e["content"] for e in events if e["type"] == "token")
+    assert len(calls) == 1
+    assert calls[0][1] == ["UNATTRIBUTED_NUMBER"]
+    assert "官方招生公告" in delivered
+    assert "666" not in delivered
+    assert persisted == [(delivered, True)]
+    assert not any(e["type"] == "review" for e in events)
+
+
+@pytest.mark.asyncio
+async def test_rewrite_that_still_invents_numbers_requires_review(monkeypatch):
+    persisted = []
+    _mock_finalizers(monkeypatch, persisted)
+
+    class FakeGraph:
+        def invoke(self, state):
+            return {
+                "reply": "保守模板",
+                "template_reply": "保守模板",
+                "reply_source": "template",
+                "trace": [],
+            }
+
+    async def candidate(state):
+        return "学校录取线为666分。", False
+
+    async def bad_rewrite(state, draft, reasons):
+        return "根据我的消息，学校录取线为999分。"
+
+    monkeypatch.setattr(chat, "get_advisor_graph", lambda: FakeGraph())
+    monkeypatch.setattr(chat, "_load_chat_state", lambda sid, slots: ({}, {}))
+    monkeypatch.setattr(chat, "load_llm_config", lambda: {"api_key": "test-configured"})
+    monkeypatch.setattr(chat, "generate_chat_candidate", candidate)
+    monkeypatch.setattr(chat, "generate_chat_rewrite", bad_rewrite)
+    monkeypatch.setattr(chat, "chat_rewrite_enabled", lambda: True)
+    raw = [item async for item in chat._sse_generator("test-unsafe-rewrite", "gaokao", "问题", None)]
+    events = [json.loads(line[6:]) for line in raw if line.startswith("data: ")]
+    delivered = "".join(e["content"] for e in events if e["type"] == "token")
+    assert "保守模板" in delivered
+    assert "999" not in delivered
+    assert any(e["type"] == "review" and e["status"] == "required" for e in events)
+    assert persisted == [(delivered, True)]
+
+
+@pytest.mark.asyncio
+async def test_rewrite_opt_in_and_one_provider_call(monkeypatch):
+    from server.quality import chat_repair
+
+    fake_calls = []
+
+    class ChatCompletions:
+        async def create(self, **kwargs):
+            fake_calls.append(kwargs)
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="已清除无法核验的数字。"))]
+            )
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            self.chat = SimpleNamespace(completions=ChatCompletions())
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+    monkeypatch.setenv("CHAT_REWRITE_ENABLED", "false")
+    monkeypatch.setattr(chat_repair, "load_llm_config", lambda: {"api_key": "test", "model": "fake"})
+    monkeypatch.setattr(chat_repair, "AsyncOpenAI", Client)
+    assert await chat_repair.generate_chat_rewrite({"input_text": "问题"}, "666分", ["UNATTRIBUTED_NUMBER"]) is None
+    assert fake_calls == []
+
+    monkeypatch.setenv("CHAT_REWRITE_ENABLED", "true")
+    assert (
+        await chat_repair.generate_chat_rewrite({"input_text": "问题"}, "666分", ["UNATTRIBUTED_NUMBER"])
+        == "已清除无法核验的数字。"
+    )
+    assert len(fake_calls) == 1
+    assert fake_calls[0]["stream"] is False
