@@ -165,6 +165,10 @@ async def build_compacted_chat_context(
         try:
             value = await summarizer(older)
             summary = value.strip() if isinstance(value, str) else ""
+            if len(summary) > 4000:
+                # An arbitrary prefix of a long summary is not a complete
+                # account of the older task. Use explicit partial-history mode.
+                summary = ""
         except Exception as exc:
             logger.warning("Session compaction unavailable (type=%s)", type(exc).__name__)
     if not summary:
