@@ -199,12 +199,10 @@ def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str,
             # two distinct requested schools.  A duplicated school row could
             # otherwise pass every per-row field check while the top-level
             # source list still contains evidence for both schools.
-            actual_names = [
-                item.get("school_name") if isinstance(item, dict) else None
-                for item in schools
-            ]
+            actual_names = [item.get("school_name") if isinstance(item, dict) else None for item in schools]
             if not all(isinstance(name, str) for name in actual_names) or set(actual_names) != {
-                profile.school_a, profile.school_b
+                profile.school_a,
+                profile.school_b,
             }:
                 errors.append("school_identity_mismatch")
             for item in schools:
