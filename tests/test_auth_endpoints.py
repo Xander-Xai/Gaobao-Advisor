@@ -4,6 +4,8 @@ import json
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.testclient import TestClient
@@ -23,6 +25,21 @@ class _FakeGraph:
 
 
 class TestChatTokenIssuance:
+    @pytest.fixture(autouse=True)
+    def _stub_finalization_io(self, monkeypatch):
+        # These authentication tests stub the Graph and do not initialize DB
+        # tables; persistence is covered by separate chat-integrity tests.
+        monkeypatch.setattr(
+            "server.routes.chat.memory_node",
+            lambda state: {
+                "trace": [*state.get("trace", []), {"node": "memory_update", "event": "persisted"}]
+            },
+        )
+        monkeypatch.setattr(
+            "server.routes.chat.quality_judge_node",
+            lambda state: {"quality_grade": "pass"},
+        )
+
     def test_chat_returns_session_token_in_done_event(self, monkeypatch):
         """Chat SSE response should include a session_token in the done event."""
         from server.auth import create_session_token
