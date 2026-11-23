@@ -8,6 +8,8 @@
 
 > **代码归属：** 基于上游早期 MIT 许可代码继续二次开发与工程加固，保留原始许可声明；具体见 [第三方归属说明](THIRD_PARTY_NOTICES.md)。
 
+**V1.0 项目责任与验收**：[全栈 Harness/Eval 责任清单](docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md)。本项目来自另一段更近期任职阶段，与同一前任职阶段的客服 Agent / 化妆品 RAG 分开陈述。持续独立维护的新模块只有在 PR 合并并取得对应验收后才计为仓库默认分支的能力，不能倒填为过去企业生产部署。
+
 > **数据边界先行：** 仓库默认只附带程序生成的 **SYNTHETIC_DEMO** 合成演示数据，不对应任何真实院校、专业或录取结果，**不可用于真实志愿决策**。真实数据导入能力保留在源码中，使用者需自行提供合法授权数据。
 
 [![CI](https://github.com/Xander-Xai/gaobao-advisor/actions/workflows/ci.yml/badge.svg)](https://github.com/Xander-Xai/gaobao-advisor/actions/workflows/ci.yml)
