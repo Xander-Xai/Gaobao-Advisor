@@ -21,9 +21,18 @@
 
 ---
 
+## 仓库状态怎么查
+
+默认分支为 `master`。实时核对 [`master` 提交](https://github.com/Xander-Xai/Gaobao-Advisor/commits/master/) · [Pull Requests](https://github.com/Xander-Xai/Gaobao-Advisor/pulls) · [Issues](https://github.com/Xander-Xai/Gaobao-Advisor/issues) · [Actions](https://github.com/Xander-Xai/Gaobao-Advisor/actions?query=branch%3Amaster) · [Releases](https://github.com/Xander-Xai/Gaobao-Advisor/releases)。
+以同一提交核对代码、测试和 Actions。PR 正文中的历史决策与 CI 回执仅对应当时的提交。
+
+- 公共问答先校验并持久化最终答复，再通过 SSE 推送，见 [架构时序](docs/architecture/README.md)和 [PR #139](https://github.com/Xander-Xai/Gaobao-Advisor/pull/139)。
+- SQL/RAG 串并行对照是合成评测，见 [实验记录](docs/performance/sql-rag-parallelization-gate-20261124.md)和 [PR #141](https://github.com/Xander-Xai/Gaobao-Advisor/pull/141)。决策卡独立判分会拒绝重复或替换院校，见 [PR #142](https://github.com/Xander-Xai/Gaobao-Advisor/pull/142)。
+- Java Gateway/Catalog 随 [PR #89](https://github.com/Xander-Xai/Gaobao-Advisor/pull/89) 合入，属于可选部署。该 PR 正文的 `Draft / Owner HOLD` 是合并前记录。
+
 ## Agent Harness / Eval 实验
 
-与现有 17 节点业务图**分离**的只读执行层，位于 `server/agent/readonly_harness.py`、`readonly_model_planner.py` 和 `readonly_tools.py`。这里实现的是 **Planner → Tool → Observation → Finish/Abstain** 的受约束循环，不是把业务 LangGraph 节点数当成“工具步长”。
+与[公共问答业务图](docs/architecture/README.md)**分离**的只读执行层，位于 `server/agent/readonly_harness.py`、`readonly_model_planner.py` 和 `readonly_tools.py`。这里实现的是 **Planner → Tool → Observation → Finish/Abstain** 的受约束循环，不是把业务 LangGraph 节点数当成“工具步长”。
 
 | 可验证能力 | 代码与验收 |
 |---|---|
@@ -363,18 +372,18 @@ profile，不改变默认行为。
 
 ---
 
-## 验收与生产状态（2026-11-07 复核）
+## 2026-11-07 验收快照
 
 | 维度 | 状态 |
 |---|---|
 | Code Complete（`master`） | 已交付：Python/FastAPI + LangGraph + Vue 3 +.SQLite/MySQL 可选 profile |
-| 自动化测试（`master` CI） | PASS：Python 3.10/3.11、前端、Compose E2E、CodeQL、Secret Scan（见 Actions） |
+| 该基线的自动化测试 | PASS：Python 3.10/3.11、前端、Compose E2E、CodeQL、Secret Scan（见 Actions） |
 | 功能分支验收（PR #89） | 已合入 `master`（`7c87686`）；合并后主 CI、CodeQL、Java Services 全绿，但仅为合成数据短时观测 |
 | 性能基准 | **部分达标**：`python-overview` 聚合已优化（16→9 次往返，PR #93），仓库内基准 `benchmarks/overview_perf_bench.py` 同配置 50 并发 median -45%、RPS +75%；短时合成数据结果不等于容量或 SLA，见 [性能文档](docs/performance/java-python-load.md) |
 | 公网生产 | **NO-GO**：无 TLS、真实数据授权、专用 SELECT-only 凭据、跨主机 HA、容量/SLA 与隐私审批 |
 
 **区分：** `Code Complete ≠ Acceptance PASS ≠ Production Ready`。CI 绿只能证明
-自动化检查通过，不能替代真实负载、真实数据与生产运行验证。当前仓库治理与风险
+自动化检查通过，不能替代真实负载、真实数据与生产运行验证。该日期的仓库治理与风险
 记录见 [docs/governance/repository-status-2026-11-07.md](docs/governance/repository-status-2026-11-07.md)。
 
 ---

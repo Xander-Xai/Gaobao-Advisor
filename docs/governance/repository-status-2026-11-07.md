@@ -1,14 +1,13 @@
 # 仓库状态与治理收尾（2026-11-07）
 
-> **本文件是仓库状态的权威说明位置。** 其他文档只描述本仓库自身的技术事实，
-> PR/Issue/分支等易过期的 GitHub 状态一律以本文为准并从本文链接。
-> 文档只记录可复查的事实，不替代 CI 证据；历史审计结论保持不变。
+> **历史快照（2026-11-07）。** 下文的分支、PR、Issue、告警计数和 CI 结果对应当日基线。
+> 实时状态请从 [仓库状态怎么查](../../README.md#仓库状态怎么查)进入 GitHub 核对。
 
 - 基线：`master` `1d1ff02`（PR #89 与 #101 已合并）
 - Open PR：0 · Open Issues：0 · Dependabot Open Alerts：0
 - 远程分支：`master`；本地历史分支 `release/unified-public-gaobao`（保留）
 
-## 1. 技术架构（当前真实关系）
+## 1. 当日基线的技术架构
 
 `master`（已交付）：Python FastAPI + LangGraph 单状态图（17 节点）+ Vue 3 SPA +
 SQLite 默认 / MySQL 8.4 + Redis 7 + Worker 可选 profile。调用路径：
@@ -96,7 +95,7 @@ GitHub 曾报 19 条 Open Alerts（2 Critical / 5 High / 其余 Medium-Low）。
 
 ## 9. 合并前快照（历史记录，2026-11-07 早）
 
-以下为 PR #89 合并前的状态记录，保留以便追溯当时的判断；**当前状态以上文为准**：
+以下为 PR #89 合并前的状态记录，保留以便追溯当时的判断；**2026-11-07 的状态以上文为准**：
 
 - 当时基线：`master` `caf7c13`；PR #89 head `616d71c`（Draft / Owner HOLD）。
 - 冲突修复候选分支 `resolve/pr89-conflicts`（`da2f219`）以普通 Fast-forward
