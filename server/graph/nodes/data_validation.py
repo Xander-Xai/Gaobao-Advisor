@@ -3,6 +3,7 @@
 Compare only independent records describing the SAME school and admissions
 cohort. Scores from different schools cannot be cross-validation samples.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -43,29 +44,36 @@ def validate_data_node(state: dict[str, Any]) -> dict[str, Any]:
         sources = {}
         for row in group:
             source = str(row.get("data_source") or row.get("source") or "unverified_synthetic_sql")
-            sources.setdefault(source, {
-                "source": source,
-                "min_score": row.get("min_score"),
-                "min_rank": row.get("min_rank"),
-            })
+            sources.setdefault(
+                source,
+                {
+                    "source": source,
+                    "min_score": row.get("min_score"),
+                    "min_rank": row.get("min_rank"),
+                },
+            )
         report = checker.cross_validate(list(sources.values()))
         if not report:
             continue
         single = len(sources) < 2
         single_source_count += int(single)
-        checks.append({
-            "school": key[0],
-            "confidence": "低" if single else report.get("confidence", "低"),
-            "source_count": len(sources),
-            "note": "仅单一数据来源，未经独立交叉验证" if single else report.get("note", ""),
-        })
+        checks.append(
+            {
+                "school": key[0],
+                "confidence": "低" if single else report.get("confidence", "低"),
+                "source_count": len(sources),
+                "note": "仅单一数据来源，未经独立交叉验证" if single else report.get("note", ""),
+            }
+        )
 
-    trace.append({
-        "node": "validate_data",
-        "event": "provenance_checked",
-        "school_count": len(checks),
-        "single_source_count": single_source_count,
-    })
+    trace.append(
+        {
+            "node": "validate_data",
+            "event": "provenance_checked",
+            "school_count": len(checks),
+            "single_source_count": single_source_count,
+        }
+    )
     return {
         "validation": {
             "school_checks": checks,
