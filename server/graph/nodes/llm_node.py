@@ -24,6 +24,7 @@ from typing import Any
 from openai import AsyncOpenAI, OpenAI
 
 from config.loader import load_llm_config
+from server.agent.chat_context import build_chat_context, build_compacted_chat_context
 from server.agent.llm_reliability import (
     build_llm_context,
     estimate_messages_tokens,
@@ -128,26 +129,19 @@ def llm_node(state: dict[str, Any]) -> dict[str, Any]:
         client = _get_llm_client()
         system_prompt = _load_system_prompt()
 
-        # Load conversation memory from DB
-        memory_messages = _load_memory_for_session(session_id)
-        if memory_messages:
-            trace.append(
-                {
-                    "node": "llm_reason",
-                    "event": "memory_loaded",
-                    "memory_messages": len(memory_messages),
-                }
-            )
-
-        user_message = build_llm_context(state)
-
-        # Build message list
-        messages: list[dict] = [{"role": "system", "content": system_prompt}]
-        messages.extend(memory_messages)
-        messages.append({"role": "user", "content": user_message})
-
-        # Trim if needed
-        messages = _maybe_trim(messages)
+        # The legacy synchronous graph path uses the same bounded policy,
+        # without implicitly paying for an additional summary-model call.
+        context = _build_chat_context_sync(state, system_prompt)
+        messages = context.messages
+        trace.append(
+            {
+                "node": "llm_reason",
+                "event": "memory_loaded",
+                "session_id_present": bool(session_id),
+                "context_status": context.status,
+                "history_messages_omitted": context.omitted_messages,
+            }
+        )
 
         token_count = estimate_messages_tokens(messages)
         trace.append(
@@ -204,9 +198,42 @@ def _load_memory_for_session(session_id: str) -> list[dict]:
     try:
         return load_conversation_history(db, session_id)
     except Exception:
-        return []
+        # Never silently turn a failed history read into a seemingly complete
+        # new conversation; the caller must use the grounded fallback.
+        raise RuntimeError("Conversation history unavailable") from None
     finally:
         db.close()
+
+
+def _chat_context_options() -> dict[str, int]:
+    return {
+        "keep_recent_rounds": int(os.getenv("GAOBAO_CHAT_KEEP_RECENT_ROUNDS", "10")),
+        "max_estimated_tokens": int(os.getenv("GAOBAO_CHAT_INPUT_EST_TOKENS", "8000")),
+    }
+
+
+def _build_chat_context_sync(state: dict[str, Any], system_prompt: str):
+    history = _load_memory_for_session(state.get("session_id", ""))
+    return build_chat_context(history, system_prompt, build_llm_context(state), **_chat_context_options())
+
+
+async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
+    history = await asyncio.to_thread(_load_memory_for_session, state.get("session_id", ""))
+    options = _chat_context_options()
+    current = build_llm_context(state)
+    if os.getenv("GAOBAO_CHAT_COMPACTION_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+        # Explicit opt-in: this may call the configured LLM a second time.
+        # Keep the original SQL history intact; do not persist model summaries
+        # as authoritative admissions facts or long-term user preferences.
+        from server.agent.memory_manager import DefaultMemoryManager
+
+        manager = DefaultMemoryManager()
+        return await build_compacted_chat_context(
+            history, system_prompt, current,
+            summarizer=manager._summarize_history,
+            **options,
+        )
+    return build_chat_context(history, system_prompt, current, **options)
 
 
 def _maybe_trim(messages: list[dict]) -> list[dict]:
@@ -247,16 +274,9 @@ def llm_node_stream(state: dict[str, Any]) -> Generator[tuple[str, bool], None, 
     try:
         client = _get_llm_client()
         system_prompt = _load_system_prompt()
-        user_message = build_llm_context(state)
 
-        # Load memory
-        session_id = state.get("session_id", "")
-        memory_messages = _load_memory_for_session(session_id)
-
-        messages: list[dict] = [{"role": "system", "content": system_prompt}]
-        messages.extend(memory_messages)
-        messages.append({"role": "user", "content": user_message})
-        messages = _maybe_trim(messages)
+        context = _build_chat_context_sync(state, system_prompt)
+        messages = context.messages
 
         stream = _sync_retry(
             lambda: client.chat.completions.create(
@@ -296,11 +316,18 @@ async def generate_chat_candidate(state: dict[str, Any]) -> tuple[str, bool]:
     if not key:
         return fallback, True
 
-    history = await asyncio.to_thread(_load_memory_for_session, state.get("session_id", ""))
-    messages = [{"role": "system", "content": _load_system_prompt()}]
-    messages.extend(history)
-    messages.append({"role": "user", "content": build_llm_context(state)})
-    messages = _maybe_trim(messages)
+    try:
+        context = await _build_chat_context_async(state, _load_system_prompt())
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("Chat context unavailable (type=%s)", type(exc).__name__)
+        return fallback, True
+    messages = context.messages
+    logger.info(
+        "Chat context prepared (status=%s, omitted=%d, estimate=%d)",
+        context.status, context.omitted_messages, context.estimated_tokens,
+    )
 
     async with AsyncOpenAI(
         api_key=key,
