@@ -13,6 +13,7 @@ from langgraph.graph import END, StateGraph
 
 from server.graph.nodes.check import profile_check_node
 from server.graph.nodes.data_nodes import data_query_node
+from server.graph.nodes.data_validation import validate_data_node
 from server.graph.nodes.extract import slot_extract_node
 from server.graph.nodes.feedback_node import feedback_node
 from server.graph.nodes.intent import intent_detect_node
@@ -52,8 +53,13 @@ def _profile_has_data(state: AdvisorState) -> str:
     return "incomplete"
 
 
-def build_advisor_graph():
-    """Build and compile the advisor StateGraph."""
+def build_advisor_graph(*, finalize: bool = True):
+    """Build the full graph or a preparation-only graph for SSE finalization.
+
+    The API must evaluate and persist the *actual* final model answer, not a
+    template saved before the model runs. The legacy full graph remains usable
+    by offline callers and existing graph-level regression tests.
+    """
     graph = StateGraph(AdvisorState)
 
     # ── Register nodes (llm_reason removed) ─────────────────────
@@ -65,15 +71,17 @@ def build_advisor_graph():
     graph.add_node("question_generate", question_generate_node)
     graph.add_node("quality_orchestrate", quality_orchestrate_node)
     graph.add_node("data_query", data_query_node)
+    graph.add_node("validate_data", validate_data_node)
     graph.add_node("rag_retrieve", rag_retrieve_node)
     graph.add_node("reason", reason_node)
     graph.add_node("structure_output", structure_output_node)
     graph.add_node("render_reply", render_reply_node)
-    graph.add_node("source_attribution", source_attribution_node)
-    graph.add_node("quality_post_check", quality_post_check_node)
-    graph.add_node("quality_judge", quality_judge_node)
-    graph.add_node("feedback", feedback_node)
-    graph.add_node("memory_update", memory_update_node)
+    if finalize:
+        graph.add_node("source_attribution", source_attribution_node)
+        graph.add_node("quality_post_check", quality_post_check_node)
+        graph.add_node("quality_judge", quality_judge_node)
+        graph.add_node("feedback", feedback_node)
+        graph.add_node("memory_update", memory_update_node)
 
     # ── Entry point ───────────────────────────────────────────
     graph.set_entry_point("security_scan")
@@ -100,18 +108,22 @@ def build_advisor_graph():
 
     # ── Full pipeline: structure_output → render (no llm_reason) ──
     graph.add_edge("quality_orchestrate", "data_query")
-    graph.add_edge("data_query", "rag_retrieve")
+    graph.add_edge("data_query", "validate_data")
+    graph.add_edge("validate_data", "rag_retrieve")
     graph.add_edge("rag_retrieve", "reason")
     graph.add_edge("reason", "structure_output")
     graph.add_edge("structure_output", "render_reply")
 
     # ── Converge: render → source_attribution → quality_post_check → quality_judge → memory → END ────
-    graph.add_edge("render_reply", "source_attribution")
-    graph.add_edge("source_attribution", "quality_post_check")
-    graph.add_edge("quality_post_check", "quality_judge")
-    graph.add_edge("quality_judge", "feedback")
-    graph.add_edge("feedback", "memory_update")
-    graph.add_edge("memory_update", END)
+    if finalize:
+        graph.add_edge("render_reply", "source_attribution")
+        graph.add_edge("source_attribution", "quality_post_check")
+        graph.add_edge("quality_post_check", "quality_judge")
+        graph.add_edge("quality_judge", "feedback")
+        graph.add_edge("feedback", "memory_update")
+        graph.add_edge("memory_update", END)
+    else:
+        graph.add_edge("render_reply", END)
 
     return graph.compile()
 
@@ -126,3 +138,14 @@ def get_advisor_graph():
     if _advisor_graph is None:
         _advisor_graph = build_advisor_graph()
     return _advisor_graph
+
+
+_chat_preparation_graph = None
+
+
+def get_chat_preparation_graph():
+    """Return the graph without quality/persistence finalizers for SSE use."""
+    global _chat_preparation_graph
+    if _chat_preparation_graph is None:
+        _chat_preparation_graph = build_advisor_graph(finalize=False)
+    return _chat_preparation_graph
