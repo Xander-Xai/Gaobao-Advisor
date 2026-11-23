@@ -69,13 +69,6 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
     return slots, extract_query_state(stored)
 
 
-def _has_structured_evidence(state: dict) -> bool:
-    data = state.get("data_query_results") or {}
-    return isinstance(data, dict) and any(
-        bool(value) for key, value in data.items() if key != "error"
-    )
-
-
 def _finalize_chat_answer(state: dict, candidate: str, *, model_generated: bool) -> tuple[dict, bool]:
     """Verify the exact answer, then persist it once before SSE publishes it.
 
@@ -161,7 +154,7 @@ async def _sse_generator(
         result = await asyncio.to_thread(graph.invoke, initial_state)
     except Exception:
         logger.exception("Chat preparation graph failed")
-        yield f"data: {json.dumps({'type': 'error', 'code': 'GRAPH_FAILED', 'message': '服务暂时不可用，请稍后重试'})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'error', 'code': 'GRAPH_FAILED', 'message': '服务暂时不可用，请稍后重试'})}\n\n"
         return
 
     reply = result.get("reply") or ""
@@ -201,7 +194,7 @@ async def _sse_generator(
         raise
     except Exception:
         logger.exception("Chat finalization/persistence failed")
-        yield f"data: {json.dumps({'type': 'error', 'code': 'FINALIZATION_FAILED', 'message': '回答校验或保存失败，请稍后重试'})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'error', 'code': 'FINALIZATION_FAILED', 'message': '回答校验或保存失败，请稍后重试'})}\n\n"
         return
 
     if quality_degraded:
@@ -209,25 +202,25 @@ async def _sse_generator(
         degraded_message = "模型回答未通过来源或质量规则检查，已使用本地模板"
 
     if final.get("slots"):
-        yield f"data: {json.dumps({'type': 'slots', 'data': final['slots']})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'slots', 'data': final['slots']})}\n\n"
     if final.get("emotion_state"):
-        yield f"data: {json.dumps({'type': 'emotion', 'state': final['emotion_state']})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'emotion', 'state': final['emotion_state']})}\n\n"
     if final.get("structured_result"):
-        yield f"data: {json.dumps({'type': 'structured', 'result': final['structured_result']})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'structured', 'result': final['structured_result']})}\n\n"
     if final.get("rag_state") == "RAG_ENABLED" and final.get("rag_sources"):
-        yield f"data: {json.dumps({'type': 'sources', 'data': final['rag_sources'], 'has_evidence': True})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'sources', 'data': final['rag_sources'], 'has_evidence': True})}\n\n"
     elif final.get("rag_state") == "RAG_ENABLED":
-        yield f"data: {json.dumps({'type': 'rag_status', 'state': 'NO_EVIDENCE', 'reason': final.get('rag_reason', '')})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'rag_status', 'state': 'NO_EVIDENCE', 'reason': final.get('rag_reason', '')})}\n\n"
     elif final.get("rag_state") in ("RAG_DISABLED", "RAG_ERROR"):
-        yield f"data: {json.dumps({'type': 'rag_status', 'state': final['rag_state'], 'reason': final.get('rag_reason', '')})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'rag_status', 'state': final['rag_state'], 'reason': final.get('rag_reason', '')})}\n\n"
 
     if degraded:
-        yield f"data: {json.dumps({'type': 'degraded', 'message': degraded_message})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'degraded', 'message': degraded_message})}\n\n"
     final_reply = final.get("reply") or ""
     for i in range(0, len(final_reply), 20):
-        yield f"data: {json.dumps({'type': 'token', 'content': final_reply[i:i + 20]})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'token', 'content': final_reply[i:i + 20]})}\n\n"
 
-    yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': f'{session_id}-response', 'session_token': create_session_token(session_id)})}\\n\\n"
+    yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': f'{session_id}-response', 'session_token': create_session_token(session_id)})}\n\n"
 
 
 @router.post("/chat")
