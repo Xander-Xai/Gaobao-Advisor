@@ -1,4 +1,5 @@
 """Regression checks for final answer integrity and read-only SQL provenance."""
+
 from __future__ import annotations
 
 import json
@@ -135,13 +136,15 @@ def test_memory_atomic_final_turn_commits_once(monkeypatch):
     monkeypatch.setattr(memory_module, "save_message", msg)
     monkeypatch.setattr(memory_module, "save_slots", slots)
 
-    result = memory_module.memory_node({
-        "session_id": "test-atomic",
-        "input_text": "本轮用户提问",
-        "reply": "最终已校验回答",
-        "slots": {},
-        "atomic_memory": True,
-    })
+    result = memory_module.memory_node(
+        {
+            "session_id": "test-atomic",
+            "input_text": "本轮用户提问",
+            "reply": "最终已校验回答",
+            "slots": {},
+            "atomic_memory": True,
+        }
+    )
     assert result["trace"][-1]["event"] == "persisted"
     assert msg.call_count == 2
     assert all(call.kwargs.get("commit") is False for call in msg.call_args_list)
