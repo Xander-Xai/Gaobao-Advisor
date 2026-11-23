@@ -37,7 +37,7 @@ user memory, SQL evidence storage, or production-grade privacy compliance.
 ```bash
 # Off by default: no extra model calls or old-conversation transfer for summary.
 export GAOBAO_CHAT_COMPACTION_ENABLED=true
-# Default: 10 recent user/assistant rounds before optional summarization.
+# Default: 10 recent rounds with compaction enabled, 20 rounds when disabled.
 export GAOBAO_CHAT_KEEP_RECENT_ROUNDS=10
 # Default: approximate 8000 input tokens. This is a heuristic, not the
 # provider tokenizer or a model capability guarantee.
