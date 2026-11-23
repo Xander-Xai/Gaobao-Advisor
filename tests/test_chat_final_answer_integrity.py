@@ -291,9 +291,7 @@ async def test_rewrite_opt_in_and_one_provider_call(monkeypatch):
     class ChatCompletions:
         async def create(self, **kwargs):
             fake_calls.append(kwargs)
-            return SimpleNamespace(
-                choices=[SimpleNamespace(message=SimpleNamespace(content="已清除无法核验的数字。"))]
-            )
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="已清除无法核验的数字。"))])
 
     class Client:
         def __init__(self, **kwargs):
