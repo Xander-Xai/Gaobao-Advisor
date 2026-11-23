@@ -86,21 +86,19 @@ def evaluate_chat_gate() -> dict:
     for case in CASES:
         actual = _deterministic_gate_issues(case["state"], case["candidate"])
         expected = case["expected"]
-        results.append({
-            "case_id": case["case_id"],
-            "passed": actual == expected,
-            "observed_reason_codes": actual,
-            "expected_reason_codes": expected,
-        })
-    limitation_accepted = not _deterministic_gate_issues(
-        KNOWN_LIMITATION["state"], KNOWN_LIMITATION["candidate"]
-    )
+        results.append(
+            {
+                "case_id": case["case_id"],
+                "passed": actual == expected,
+                "observed_reason_codes": actual,
+                "expected_reason_codes": expected,
+            }
+        )
+    limitation_accepted = not _deterministic_gate_issues(KNOWN_LIMITATION["state"], KNOWN_LIMITATION["candidate"])
     return {
         "contract": _CONTRACT,
         "data_profile": "SYNTHETIC_DEMO",
-        "case_digest": hashlib.sha256(
-            json.dumps(CASES, sort_keys=True, ensure_ascii=False).encode()
-        ).hexdigest(),
+        "case_digest": hashlib.sha256(json.dumps(CASES, sort_keys=True, ensure_ascii=False).encode()).hexdigest(),
         "cases": len(results),
         "contract_passed": sum(item["passed"] for item in results),
         "all_contract_cases_passed": all(item["passed"] for item in results),
