@@ -58,6 +58,7 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
         trace.append({"node": "memory_update", "event": "skipped_no_session_id"})
         return {"trace": trace}
 
+    ticket_id = None
     db = get_session()
     try:
         conv = get_or_create_conversation(db, session_id)
@@ -169,6 +170,6 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
         db.close()
 
     result = {"trace": trace}
-    if trace and trace[-1].get("event") == "persisted" and state.get("atomic_memory") and state.get("review_required"):
+    if ticket_id and trace and trace[-1].get("event") == "persisted":
         result["review_ticket_id"] = ticket_id
     return result
