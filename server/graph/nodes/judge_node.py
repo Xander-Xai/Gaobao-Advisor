@@ -37,17 +37,18 @@ def quality_judge_node(state: dict) -> dict:
     try:
         from server.metrics import record_hallucination, record_judge_score
 
-        for dim, score in result.scores.items():
-            record_judge_score(dim, score)
-        for flag in result.hallucination_flags:
-            flag_type = flag.split(":")[0] if ":" in flag else "unknown"
-            record_hallucination(flag_type)
+        if scored:
+            for dim, score in result.scores.items():
+                record_judge_score(dim, score)
+            for flag in result.hallucination_flags:
+                flag_type = flag.split(":")[0] if ":" in flag else "unknown"
+                record_hallucination(flag_type)
     except Exception:
         logger.warning("Failed to record judge metrics", exc_info=True)
 
     # Persist to DB
     try:
-        if state.get("defer_quality_persistence"):
+        if state.get("defer_quality_persistence") or not scored:
             raise _DeferredPersistence()
         from db.database import SessionLocal
         from db.models import QualityScore
