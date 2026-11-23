@@ -73,7 +73,8 @@ def _assemble(
         raise ChatContextError("Current task must not be empty")
 
     kept = list(history)
-    truncated = missing_history or omitted > 0
+    # A successful summary represents older messages; it is not a silent loss.
+    truncated = missing_history
     summary_item = [{"role": "user", "content": _UNTRUSTED_SUMMARY + summary[:4000]}] if summary else []
 
     def render() -> list[dict[str, str]]:
