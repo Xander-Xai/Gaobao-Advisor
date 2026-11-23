@@ -35,9 +35,7 @@ def summarize_model_failures(report: dict[str, Any]) -> dict[str, Any]:
                 {"case_id": r["case_id"], "failure_codes": sorted(set(r["failure_codes"]))}
                 for r in sorted(failed, key=lambda row: row["case_id"])
             ],
-            "provider_tokens_reported": sum(
-                r["prompt_tokens"] + r["completion_tokens"] for r in rows
-            ),
+            "provider_tokens_reported": sum(r["prompt_tokens"] + r["completion_tokens"] for r in rows),
         }
     return {
         "kind": "DECLARED_SYNTHETIC_MODEL_FAILURE_TRIAGE",
