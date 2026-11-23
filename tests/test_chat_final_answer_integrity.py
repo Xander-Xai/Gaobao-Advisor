@@ -208,8 +208,6 @@ def test_unscored_judge_never_certifies_model_candidate(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_single_rewrite_passes_new_candidate_through_final_gate(monkeypatch):
-    from server.quality import chat_repair
-
     persisted = []
     calls = []
     _mock_finalizers(monkeypatch, persisted)
@@ -241,7 +239,8 @@ async def test_single_rewrite_passes_new_candidate_through_final_gate(monkeypatc
     events = [json.loads(line[6:]) for line in data if line.startswith("data: ")]
     delivered = "".join(e["content"] for e in events if e["type"] == "token")
     assert len(calls) == 1
-    assert calls[0][1] == ["UNATTRIBUTED_NUMBER"]
+    assert "UNATTRIBUTED_NUMBER" in calls[0][1]
+    assert "UNVERIFIED_NUMERIC_CLAIM" in calls[0][1]
     assert "官方招生公告" in delivered
     assert "666" not in delivered
     assert persisted == [(delivered, True)]
