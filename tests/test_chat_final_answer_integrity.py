@@ -321,10 +321,10 @@ async def test_rewrite_opt_in_and_one_provider_call(monkeypatch):
 
 
 def test_unscored_judge_does_not_emit_fake_metrics_or_quality_record(monkeypatch):
-    from quality.judge.scorecard import DimensionScore, JudgeResult
-    from server.graph.nodes import judge_node
-    from server import metrics
     from db import database
+    from quality.judge.scorecard import DimensionScore, JudgeResult
+    from server import metrics
+    from server.graph.nodes import judge_node
 
     calls = []
     unscored = JudgeResult(
