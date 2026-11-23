@@ -26,7 +26,7 @@ pytest -q tests/test_model_eval_triage.py
 
 ## Output and evidence boundary
 
-The triage report separates frozen development and holdout populations, named failed cases, failure codes, safe abstentions and model-reported Token totals. It first checks the existing model-run comparison contract to reject deterministic baseline submissions and malformed/incomplete data.
+The triage report separates frozen development and holdout populations, named failed cases, failure codes, safe abstentions and model-reported Token totals. It first checks the existing model-run comparison contract to reject deterministic baseline submissions and malformed/incomplete data. It additionally matches the report against the **exact frozen eight-case suite**: the canonical suite digest, every Case ID, and each development/holdout assignment must agree. Eight arbitrary synthetic rows are not accepted as this benchmark. Matching metadata is a consistency check, **not independent verification that the provider was called or that an independent human approved the cases**.
 
 Metadata from an artifact is **self-declared provenance**, not independent provider attestation. This tool sets `provenance_independently_verified=false`, `production_deployment_authorized=false` and `real_admissions_accuracy=NOT_MEASURED`.
 
