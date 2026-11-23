@@ -23,6 +23,7 @@ class AdvisorState(TypedDict, total=False):
     # Conversation.slots_json; it must be a declared channel or LangGraph
     # drops it between nodes.
     _query_state: dict
+    atomic_memory: bool  # use one transaction for public final user+assistant+slot state
 
     # ── Quality pipeline ───────────────────────────────────────
     emotion_state: str
