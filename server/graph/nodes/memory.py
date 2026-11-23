@@ -10,6 +10,8 @@ persistence side and flagging whether summarization is needed.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from typing import Any
 
@@ -77,6 +79,32 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
             canonical["_query_state"] = query_state
         if atomic:
             save_slots(db, session_id, canonical, commit=False)
+            if state.get("quality_scored") and reply:
+                # Persist only the quality measurement for the *delivered*
+                # reply, in the same transaction as conversation + slots.
+                # Stable content digest; do not persist raw model critique or
+                # discarded candidate text in the review record.
+                from db.models import QualityScore
+
+                scores = state.get("quality_scores") or {}
+                flags = [
+                    str(flag).split(":", 1)[0][:48]
+                    for flag in (state.get("hallucination_flags") or [])[:20]
+                ]
+                db.add(
+                    QualityScore(
+                        conversation_id=session_id,
+                        message_id=hashlib.sha256(reply.encode("utf-8")).hexdigest()[:32],
+                        factual_score=scores.get("factual"),
+                        relevance_score=scores.get("relevance"),
+                        helpfulness_score=scores.get("helpfulness"),
+                        style_score=scores.get("style"),
+                        aggregate_score=float(state.get("aggregate_score") or 0),
+                        hallucination_flags=json.dumps(flags),
+                        judge_model=str(state.get("judge_model") or "unknown")[:64],
+                        judge_latency_ms=state.get("judge_latency_ms"),
+                    )
+                )
             db.commit()
         else:
             save_slots(db, session_id, canonical)
