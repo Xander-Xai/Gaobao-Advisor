@@ -91,7 +91,7 @@ def test_context_budget_and_wrong_scene_fail_closed(tmp_path):
     _review(store)
     with pytest.raises(SkillContextBudgetExceeded):
         build_reviewed_synthetic_context(
-            skills, store, owner="tenant-demo-owner", max_chars=15
+            skills, store, owner="tenant-demo-owner", max_chars=16
         )
     with pytest.raises(ValueError):
         build_reviewed_synthetic_context(
