@@ -300,7 +300,7 @@ async def _sse_generator(
     if degraded:
         yield f"data: {json.dumps({'type': 'degraded', 'message': degraded_message})}\n\n"
     if final.get("review_required"):
-        yield f"data: {json.dumps({'type': 'review', 'status': 'required', 'reason_codes': final['review_reason_codes'], 'message': '当前模型草稿未通过自动核验，已返回保守答复；如需实际决策请人工核验官方来源'})}\n\n"
+        yield f"data: {json.dumps({'type': 'review', 'status': 'required', 'reason_codes': final['review_reason_codes'], 'review_ticket_id': final.get('review_ticket_id'), 'message': '当前模型草稿未通过自动核验，已返回保守答复；如需实际决策请人工核验官方来源'})}\n\n"
     final_reply = final.get("reply") or ""
     for i in range(0, len(final_reply), 20):
         yield f"data: {json.dumps({'type': 'token', 'content': final_reply[i : i + 20]})}\n\n"
