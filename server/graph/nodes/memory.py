@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import secrets
 from typing import Any
 
 from db.crud import get_or_create_conversation, load_conversation_slots, save_message, save_slots
@@ -105,6 +106,36 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
                         judge_latency_ms=state.get("judge_latency_ms"),
                     )
                 )
+            if state.get("review_required") and reply:
+                # Privacy-safe, append-only operator-triage ticket. Raw user
+                # text, profile, discarded LLM draft and session ID never enter
+                # the audit ticket. Review acknowledgement is NOT factual
+                # certification or approval to reuse a rejected answer.
+                from db.models import OperationAuditLog
+
+                ticket_id = secrets.token_hex(16)
+                db.add(
+                    OperationAuditLog(
+                        actor="chat-finalizer",
+                        role="service",
+                        action="chat.review_required",
+                        resource_type="chat_review",
+                        resource_id=ticket_id,
+                        outcome="PENDING",
+                        detail_json=json.dumps(
+                            {
+                                "reason_codes": [
+                                    str(code)[:48] for code in (state.get("review_reason_codes") or [])[:10]
+                                ],
+                                "delivered_reply_sha256": hashlib.sha256(reply.encode("utf-8")).hexdigest(),
+                                "rewrite_attempts": min(int(state.get("rewrite_attempts") or 0), 1),
+                                "data_profile": "SYNTHETIC_DEMO",
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ),
+                    )
+                )
             db.commit()
         else:
             save_slots(db, session_id, canonical)
@@ -137,4 +168,7 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
     finally:
         db.close()
 
-    return {"trace": trace}
+    result = {"trace": trace}
+    if trace and trace[-1].get("event") == "persisted" and state.get("atomic_memory") and state.get("review_required"):
+        result["review_ticket_id"] = ticket_id
+    return result
