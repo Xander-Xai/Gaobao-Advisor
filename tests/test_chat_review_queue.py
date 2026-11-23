@@ -78,3 +78,79 @@ def test_review_triage_rejects_unknown_ticket(admin_client):
         headers=auth_header(admin),
     )
     assert result.status_code == 404
+
+
+
+def test_review_ticket_and_delivered_message_share_transaction(admin_factory, monkeypatch):
+    from db.models import Conversation, ConversationMessage, QualityScore
+    from server.graph.nodes import memory as memory_module
+
+    monkeypatch.setattr(memory_module, "get_session", admin_factory)
+    session_id = "synthetic-review-transaction"
+    question = "合成测试用户的问题"
+    answer = "无法核验此合成数据，请到官方渠道确认。"
+    result = memory_module.memory_node(
+        {
+            "session_id": session_id,
+            "input_text": question,
+            "reply": answer,
+            "slots": {"province": "示例省·甲"},
+            "atomic_memory": True,
+            "quality_scored": False,
+            "review_required": True,
+            "review_reason_codes": ["JUDGE_UNAVAILABLE"],
+            "rewrite_attempts": 1,
+        }
+    )
+    assert result["trace"][-1]["event"] == "persisted"
+    assert result["review_ticket_id"]
+
+    db = admin_factory()
+    try:
+        conversation = db.query(Conversation).filter_by(session_id=session_id).one()
+        msgs = db.query(ConversationMessage).filter_by(conversation_id=conversation.id).all()
+        assert [(m.role, m.content) for m in msgs] == [("user", question), ("assistant", answer)]
+        audit = (
+            db.query(OperationAuditLog)
+            .filter_by(action="chat.review_required", resource_id=result["review_ticket_id"])
+            .one()
+        )
+        assert "JUDGE_UNAVAILABLE" in audit.detail_json
+        assert question not in audit.detail_json
+        assert answer not in audit.detail_json
+        assert session_id not in audit.detail_json
+        assert db.query(QualityScore).filter_by(conversation_id=session_id).count() == 0
+    finally:
+        db.close()
+
+
+def test_atomic_persistence_error_rolls_back_both_messages(admin_factory, monkeypatch):
+    from db.models import Conversation, ConversationMessage, OperationAuditLog
+    from server.graph.nodes import memory as memory_module
+
+    monkeypatch.setattr(memory_module, "get_session", admin_factory)
+
+    def fail_slots(*args, **kwargs):
+        raise RuntimeError("synthetic database fault")
+
+    monkeypatch.setattr(memory_module, "save_slots", fail_slots)
+    session_id = "synthetic-rollback-turn"
+    result = memory_module.memory_node(
+        {
+            "session_id": session_id,
+            "input_text": "问题",
+            "reply": "不得交付的失败答案",
+            "atomic_memory": True,
+            "review_required": True,
+            "review_reason_codes": ["UNATTRIBUTED_NUMBER"],
+        }
+    )
+    assert result["trace"][-1]["event"] == "persist_failed"
+    assert "review_ticket_id" not in result
+    db = admin_factory()
+    try:
+        conversation = db.query(Conversation).filter_by(session_id=session_id).one()
+        assert db.query(ConversationMessage).filter_by(conversation_id=conversation.id).count() == 0
+        assert db.query(OperationAuditLog).filter_by(action="chat.review_required").count() == 0
+    finally:
+        db.close()
