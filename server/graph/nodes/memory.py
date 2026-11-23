@@ -89,10 +89,7 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
                 from db.models import QualityScore
 
                 scores = state.get("quality_scores") or {}
-                flags = [
-                    str(flag).split(":", 1)[0][:48]
-                    for flag in (state.get("hallucination_flags") or [])[:20]
-                ]
+                flags = [str(flag).split(":", 1)[0][:48] for flag in (state.get("hallucination_flags") or [])[:20]]
                 db.add(
                     QualityScore(
                         conversation_id=session_id,
