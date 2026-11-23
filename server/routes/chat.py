@@ -87,10 +87,7 @@ def _unsupported_numbers(state: dict, candidate: str) -> bool:
     for key in ("slots", "data_query_results", "rag_chunks"):
         raw.append(json.dumps(state.get(key) or {}, ensure_ascii=False, default=str))
     observed = {m.group(0) for m in _EVIDENCE_NUMBER.finditer("\n".join(raw).replace(",", ""))}
-    return any(
-        m.group(1).replace(",", "") not in observed
-        for m in _ASSERTED_NUMBER.finditer(candidate)
-    )
+    return any(m.group(1).replace(",", "") not in observed for m in _ASSERTED_NUMBER.finditer(candidate))
 
 
 def _deterministic_gate_issues(state: dict, candidate: str) -> list[str]:
@@ -150,10 +147,14 @@ def _finalize_chat_answer(
         # Scoring is computed on the proposed final answer, without writing a
         # quality row before its owning conversation message exists.
         checked.update(quality_judge_node({**checked, "defer_quality_persistence": True}))
-        if model_generated and not degraded and (
-            checked.get("quality_grade") in {"fail", "unscored"}
-            or checked.get("hallucination_flags")
-            or checked.get("judge_needs_rewrite")
+        if (
+            model_generated
+            and not degraded
+            and (
+                checked.get("quality_grade") in {"fail", "unscored"}
+                or checked.get("hallucination_flags")
+                or checked.get("judge_needs_rewrite")
+            )
         ):
             review_reasons.append(
                 "JUDGE_UNAVAILABLE" if checked.get("quality_grade") == "unscored" else "JUDGE_REJECTED"
