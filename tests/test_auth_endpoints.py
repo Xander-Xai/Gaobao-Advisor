@@ -31,9 +31,7 @@ class TestChatTokenIssuance:
         # tables; persistence is covered by separate chat-integrity tests.
         monkeypatch.setattr(
             "server.routes.chat.memory_node",
-            lambda state: {
-                "trace": [*state.get("trace", []), {"node": "memory_update", "event": "persisted"}]
-            },
+            lambda state: {"trace": [*state.get("trace", []), {"node": "memory_update", "event": "persisted"}]},
         )
         monkeypatch.setattr(
             "server.routes.chat.quality_judge_node",
