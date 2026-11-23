@@ -126,11 +126,13 @@ def _finalize_chat_answer(
         # quality row before its owning conversation message exists.
         checked.update(quality_judge_node({**checked, "defer_quality_persistence": True}))
         if model_generated and not degraded and (
-            checked.get("quality_grade") == "fail"
+            checked.get("quality_grade") in {"fail", "unscored"}
             or checked.get("hallucination_flags")
             or checked.get("judge_needs_rewrite")
         ):
-            review_reasons.append("JUDGE_REJECTED")
+            review_reasons.append(
+                "JUDGE_UNAVAILABLE" if checked.get("quality_grade") == "unscored" else "JUDGE_REJECTED"
+            )
             checked = check(fallback)
             degraded = True
             # The rejected model score must not be reported as the delivered
