@@ -21,6 +21,8 @@
 
 ---
 
+**2026 Agent 求职定位与验收责任：**[最近阶段：Agent Harness、业务 Eval、Context 与 AI 全栈](docs/portfolio/2026-agent-interview-positioning.md)。任职时间线与公开代码继续维护的时间线分别核实。
+
 ## 仓库状态怎么查
 
 默认分支为 `master`。实时核对 [`master` 提交](https://github.com/Xander-Xai/Gaobao-Advisor/commits/master/) · [Pull Requests](https://github.com/Xander-Xai/Gaobao-Advisor/pulls) · [Issues](https://github.com/Xander-Xai/Gaobao-Advisor/issues) · [Actions](https://github.com/Xander-Xai/Gaobao-Advisor/actions?query=branch%3Amaster) · [Releases](https://github.com/Xander-Xai/Gaobao-Advisor/releases)。
