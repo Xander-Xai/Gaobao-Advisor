@@ -13,9 +13,14 @@ from config.loader import load_llm_config
 from db.database import get_session
 from db.models import Highlight
 from server.auth import create_session_token, require_session_auth, verify_session_token
-from server.graph.graph import get_advisor_graph
-from server.graph.nodes.llm_node import llm_node_stream
+from server.graph.graph import get_chat_preparation_graph as get_advisor_graph
+from server.graph.nodes.feedback_node import feedback_node
+from server.graph.nodes.judge_node import quality_judge_node
+from server.graph.nodes.llm_node import generate_chat_candidate
+from server.graph.nodes.memory import memory_node
+from server.graph.nodes.post_check import quality_post_check_node
 from server.graph.nodes.render import _DISCLAIMER
+from server.graph.nodes.source_attribution import source_attribution_node
 from slots.persistence import extract_query_state, flatten_slots
 
 logger = logging.getLogger(__name__)
@@ -64,20 +69,80 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
     return slots, extract_query_state(stored)
 
 
+def _has_structured_evidence(state: dict) -> bool:
+    data = state.get("data_query_results") or {}
+    return isinstance(data, dict) and any(
+        bool(value) for key, value in data.items() if key != "error"
+    )
+
+
+def _finalize_chat_answer(state: dict, candidate: str, *, model_generated: bool) -> tuple[dict, bool]:
+    """Verify the exact answer, then persist it once before SSE publishes it.
+
+    A deterministic answer/fallback is deliberately preferred to a risky model
+    completion. The LLM-as-Judge is diagnostic: a 50-point *unscored* fallback
+    must not be mistaken for evidence of safety or a verified business result.
+    """
+    final = dict(state)
+    fallback = final.get("template_reply") or final.get("reply") or "当前信息不足，无法完成分析。"
+    if not candidate.strip():
+        candidate, model_generated = fallback, False
+
+    if model_generated and final.get("knowledge_query") and not final.get("rag_evidence"):
+        # A SQL score row does not establish the text of an admissions policy.
+        candidate = "当前知识库未收录足够的政策或规则依据，无法验证该问题。请查阅当地教育考试院官方公告。"
+        model_generated = False
+
+    def check(text: str) -> dict:
+        draft = dict(final)
+        draft["reply"] = text if "声明：以上分析基于" in text else text + _DISCLAIMER
+        draft.update(source_attribution_node(draft))
+        draft.update(quality_post_check_node(draft))
+        return draft
+
+    checked = check(candidate)
+    degraded = False
+    if model_generated and (
+        checked.get("should_rewrite")
+        or "（数据来源待补全）" in checked.get("reply", "")
+    ):
+        # Do not stream a failing draft or recursively call a potentially
+        # unreliable LLM. This is an explicit bounded fallback, not a rewrite.
+        checked = check(fallback)
+        degraded = True
+
+    try:
+        checked.update(quality_judge_node(checked))
+        checked.update(feedback_node(checked))
+    except Exception:
+        logger.exception("Final-answer quality evaluation failed")
+        # If quality evaluation crashes there is no validated model result.
+        if model_generated and not degraded:
+            checked = check(fallback)
+            degraded = True
+        checked["quality_grade"] = "unscored"
+
+    checked["atomic_memory"] = True
+    checked.update(memory_node(checked))
+    if not any(
+        event.get("node") == "memory_update" and event.get("event") == "persisted"
+        for event in checked.get("trace", [])
+    ):
+        raise RuntimeError("Final-answer persistence failed")
+    return checked, degraded
+
+
 async def _sse_generator(
     session_id: str,
     scene: str,
     message: str,
     existing_slots: dict | None,
 ):
-    """Yield SSE events for a chat response via the LangGraph pipeline.
+    """Prepare graph state, generate a candidate and validate/persist before SSE.
 
-    Two-phase streaming:
-    1. Run graph up to LLM node (yields metadata: slots, emotion, structured)
-    2. Stream LLM tokens in real-time via llm_node_stream
-
-    The final 'done' event returns a session_token for Bearer auth
-    on subsequent requests (profile/voice endpoints).
+    The graph used here ends at render_reply. This endpoint alone owns the
+    final source gate, quality evaluation and durable conversation turn. No
+    unchecked provider chunks are ever emitted to the browser.
     """
     graph = get_advisor_graph()
     persisted_slots, query_state = await asyncio.to_thread(_load_chat_state, session_id, existing_slots)
@@ -92,69 +157,77 @@ async def _sse_generator(
     if query_state:
         initial_state["_query_state"] = query_state
 
-    # Phase 1: Run graph (synchronous, offloaded to thread)
     try:
         result = await asyncio.to_thread(graph.invoke, initial_state)
     except Exception:
-        logger.exception("Phase 1 graph.invoke failed for session %s", session_id)
-        yield f"data: {json.dumps({'type': 'error', 'code': 'GRAPH_FAILED', 'message': '服务暂时不可用，请稍后重试'})}\n\n"
+        logger.exception("Chat preparation graph failed")
+        yield f"data: {json.dumps({'type': 'error', 'code': 'GRAPH_FAILED', 'message': '服务暂时不可用，请稍后重试'})}\\n\\n"
         return
 
-    # Emit updated slots
-    if result.get("slots"):
-        yield f"data: {json.dumps({'type': 'slots', 'data': result['slots']})}\n\n"
-
-    # Emit emotion state
-    if result.get("emotion_state"):
-        yield f"data: {json.dumps({'type': 'emotion', 'state': result['emotion_state']})}\n\n"
-
-    # Emit structured result if present
-    if result.get("structured_result"):
-        yield f"data: {json.dumps({'type': 'structured', 'result': result['structured_result']})}\n\n"
-
-    # Emit retrieval evidence/citations so the client can show sources, and
-    # report degraded retrieval explicitly instead of hiding it. A healthy
-    # corpus with no matching chunk is its own state (NO_EVIDENCE) — distinct
-    # from RAG_DISABLED (switched off) and RAG_ERROR (broken/missing corpus).
-    if result.get("rag_state") == "RAG_ENABLED" and result.get("rag_sources"):
-        yield f"data: {json.dumps({'type': 'sources', 'data': result['rag_sources'], 'has_evidence': True})}\n\n"
-    elif result.get("rag_state") == "RAG_ENABLED":
-        yield f"data: {json.dumps({'type': 'rag_status', 'state': 'NO_EVIDENCE', 'reason': result.get('rag_reason', '')})}\n\n"
-    elif result.get("rag_state") in ("RAG_DISABLED", "RAG_ERROR"):
-        yield f"data: {json.dumps({'type': 'rag_status', 'state': result['rag_state'], 'reason': result.get('rag_reason', '')})}\n\n"
-
-    # Phase 2: build the answer.
-    # Question/security replies are final and must not be rewritten. The
-    # grounded template is used offline; when a key is configured the model
-    # streams instead (the template remains the failure fallback).
-    reply = result.get("reply")
+    reply = result.get("reply") or ""
     is_template = result.get("reply_source") == "template"
     llm_configured = bool(str(load_llm_config().get("api_key", "")).strip())
+    degraded = False
+    degraded_message = ""
 
-    if reply and not (is_template and llm_configured):
-        if is_template:
-            yield f"data: {json.dumps({'type': 'degraded', 'message': '未配置 LLM Key，已使用基于结构化数据的确定性模板答复'})}\n\n"
-        chunk_size = 20
-        for i in range(0, len(reply), chunk_size):
-            chunk = reply[i : i + chunk_size]
-            yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
-    else:
-        full_reply = []
-        degraded = False
-        for token, is_degraded in llm_node_stream(result):
-            full_reply.append(token)
-            degraded = is_degraded
-            yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-        result["reply"] = "".join(full_reply)
-        if degraded:
-            yield f"data: {json.dumps({'type': 'degraded', 'message': 'AI 服务暂时不稳定，已启用降级回复'})}\n\n"
+    if is_template and llm_configured:
+        if result.get("knowledge_query") and not result.get("rag_evidence"):
+            reply = "当前知识库未收录足够的政策或规则依据，无法验证该问题。请查阅当地教育考试院官方公告。"
+            degraded = True
+            degraded_message = "缺少可验证的知识依据，已停止模型生成"
+        else:
+            try:
+                reply, degraded = await generate_chat_candidate(result)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Chat candidate generation failed")
+                reply = result.get("template_reply") or result.get("reply") or ""
+                degraded = True
+            if degraded:
+                degraded_message = "模型生成失败，已使用本地确定性模板"
+    elif is_template:
+        degraded = True
+        degraded_message = "未配置 LLM Key，已使用基于结构化数据的确定性模板答复"
 
-    # Every answer carries the synthetic-data boundary, including LLM output.
-    if result.get("reply") and "声明：以上分析基于" not in result["reply"]:
-        result["reply"] += _DISCLAIMER
-        yield f"data: {json.dumps({'type': 'token', 'content': _DISCLAIMER})}\n\n"
+    try:
+        final, quality_degraded = await asyncio.to_thread(
+            _finalize_chat_answer,
+            result,
+            reply,
+            model_generated=is_template and llm_configured and not degraded,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception("Chat finalization/persistence failed")
+        yield f"data: {json.dumps({'type': 'error', 'code': 'FINALIZATION_FAILED', 'message': '回答校验或保存失败，请稍后重试'})}\\n\\n"
+        return
 
-    yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': f'{session_id}-response', 'session_token': create_session_token(session_id)})}\n\n"
+    if quality_degraded:
+        degraded = True
+        degraded_message = "模型回答未通过来源或质量规则检查，已使用本地模板"
+
+    if final.get("slots"):
+        yield f"data: {json.dumps({'type': 'slots', 'data': final['slots']})}\\n\\n"
+    if final.get("emotion_state"):
+        yield f"data: {json.dumps({'type': 'emotion', 'state': final['emotion_state']})}\\n\\n"
+    if final.get("structured_result"):
+        yield f"data: {json.dumps({'type': 'structured', 'result': final['structured_result']})}\\n\\n"
+    if final.get("rag_state") == "RAG_ENABLED" and final.get("rag_sources"):
+        yield f"data: {json.dumps({'type': 'sources', 'data': final['rag_sources'], 'has_evidence': True})}\\n\\n"
+    elif final.get("rag_state") == "RAG_ENABLED":
+        yield f"data: {json.dumps({'type': 'rag_status', 'state': 'NO_EVIDENCE', 'reason': final.get('rag_reason', '')})}\\n\\n"
+    elif final.get("rag_state") in ("RAG_DISABLED", "RAG_ERROR"):
+        yield f"data: {json.dumps({'type': 'rag_status', 'state': final['rag_state'], 'reason': final.get('rag_reason', '')})}\\n\\n"
+
+    if degraded:
+        yield f"data: {json.dumps({'type': 'degraded', 'message': degraded_message})}\\n\\n"
+    final_reply = final.get("reply") or ""
+    for i in range(0, len(final_reply), 20):
+        yield f"data: {json.dumps({'type': 'token', 'content': final_reply[i:i + 20]})}\\n\\n"
+
+    yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': f'{session_id}-response', 'session_token': create_session_token(session_id)})}\\n\\n"
 
 
 @router.post("/chat")
