@@ -317,3 +317,33 @@ async def test_rewrite_opt_in_and_one_provider_call(monkeypatch):
     )
     assert len(fake_calls) == 1
     assert fake_calls[0]["stream"] is False
+
+
+
+def test_unscored_judge_does_not_emit_fake_metrics_or_quality_record(monkeypatch):
+    from quality.judge.scorecard import DimensionScore, JudgeResult
+    from server.graph.nodes import judge_node
+    from server import metrics
+    from db import database
+
+    calls = []
+    unscored = JudgeResult(
+        scores={"factual": 50.0, "relevance": 50.0, "helpfulness": 50.0, "style": 50.0},
+        aggregate_score=50.0,
+        dimensions=[DimensionScore(dimension="factual", score=50.0, unscored=True)],
+        hallucination_flags=[],
+        judge_model="missing",
+        latency_ms=0,
+    )
+
+    class StubJudge:
+        def evaluate_sync(self, query, reply, context):
+            return unscored
+
+    monkeypatch.setattr(judge_node, "QualityJudge", lambda: StubJudge())
+    monkeypatch.setattr(metrics, "record_judge_score", lambda *args: calls.append(args))
+    monkeypatch.setattr(database, "SessionLocal", lambda: (_ for _ in ()).throw(AssertionError("unexpected DB")))
+    result = judge_node.quality_judge_node({"reply": "暂无可验证依据", "input_text": "问题", "session_id": "fake"})
+    assert result["quality_grade"] == "unscored"
+    assert result["quality_scored"] is False
+    assert calls == []
