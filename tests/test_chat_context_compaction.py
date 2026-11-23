@@ -98,6 +98,54 @@ async def test_small_history_does_not_call_summarizer():
     assert out.messages[1:-1] == history
 
 
+
+@pytest.mark.asyncio
+async def test_oversize_summary_input_is_not_sent_to_provider():
+    summarize = AsyncMock(return_value="should never be called")
+    out = await build_compacted_chat_context(
+        _history(5, size=1000),
+        "POLICY",
+        "CURRENT",
+        summarizer=summarize,
+        keep_recent_rounds=2,
+        summary_trigger_tokens=1,
+        max_summary_estimated_tokens=50,
+    )
+    summarize.assert_not_awaited()
+    assert out.status == "COMPACTION_UNAVAILABLE"
+    assert "上下文不完整" in out.messages[1]["content"]
+
+
+def test_sync_and_legacy_stream_use_identical_context_policy(monkeypatch):
+    from server.graph.nodes import llm_node
+
+    seen = []
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            seen.append(kwargs)
+            if kwargs.get("stream"):
+                return iter([SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="OK"))])])
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="OK"))])
+
+    fake = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    monkeypatch.setattr(llm_node, "_get_llm_client", lambda: fake)
+    monkeypatch.setattr(llm_node, "_get_config", lambda: {"model": "fake-model"})
+    monkeypatch.setattr(llm_node, "_load_memory_for_session", lambda session_id: _history(25))
+    monkeypatch.setenv("GAOBAO_CHAT_KEEP_RECENT_ROUNDS", "3")
+    state = {"session_id": "synthetic-test", "reasoning": "当前可信来源 ID: ref-123"}
+
+    sync_out = llm_node.llm_node(state)
+    stream_out = list(llm_node.llm_node_stream(state))
+    assert sync_out["reply"] == "OK"
+    assert stream_out == [("OK", False)]
+    assert len(seen) == 2
+    assert seen[0]["messages"] == seen[1]["messages"]
+    assert "上下文不完整" in seen[0]["messages"][1]["content"]
+    assert seen[0]["messages"][-1]["content"].find("ref-123") != -1
+
+
+
 @pytest.mark.asyncio
 async def test_public_async_candidate_uses_compaction_when_opted_in(monkeypatch):
     from server.agent.memory_manager import DefaultMemoryManager
