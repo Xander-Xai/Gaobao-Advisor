@@ -93,13 +93,15 @@ def _probe(*, repeat: int, warmup: int) -> dict:
             duration = (time.perf_counter() - started) * 1000
             return duration, _signature(sql, rag), "error" not in (sql.get("data_query_results") or {})
 
-        for _ in range(warmup):
-            run_serial()
         serial_ms: list[float] = []
         parallel_ms: list[float] = []
         equivalent = True
         sql_ok = True
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            # Warm both execution modes, not just the serial baseline.
+            for _ in range(warmup):
+                run_serial()
+                run_parallel(pool)
             for i in range(repeat):
                 # Alternate measurement order to reduce warm-cache bias.
                 first, second = (run_serial(), run_parallel(pool)) if i % 2 == 0 else (run_parallel(pool), run_serial())
