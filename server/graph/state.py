@@ -40,6 +40,8 @@ class AdvisorState(TypedDict, total=False):
     rag_sources: list[dict]  # citations for retrieved chunks
     rag_reason: str  # explanation when state != RAG_ENABLED or no evidence
     knowledge_query: bool  # input is a knowledge question (routing signal)
+    validation: dict  # post-SQL per-school provenance checks; never cross-compare different schools
+    major_risk: dict  # pre-generation major risk hint
 
     # ── Reasoning & Output ────────────────────────────────────
     reasoning: str
