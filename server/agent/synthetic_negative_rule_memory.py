@@ -12,6 +12,7 @@ import re
 import sqlite3
 import time
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
 
 ALLOWED_RULES = frozenset(
@@ -80,10 +81,15 @@ class SyntheticNegativeRuleMemory:
                 """
             )
 
-    def _db(self) -> sqlite3.Connection:
+    @contextmanager
+    def _db(self):
         conn = sqlite3.connect(self.path, timeout=5)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def propose(
         self,
