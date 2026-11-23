@@ -34,8 +34,7 @@ def _card(names, rows, refs):
         "status": "evidence_complete_historical_only",
         "data_profile": "SYNTHETIC_DEMO",
         "schools": [
-            {"school_name": name, **rows[name]}
-            if name in rows else {"school_name": name, "evidence_ids": []}
+            {"school_name": name, **rows[name]} if name in rows else {"school_name": name, "evidence_ids": []}
             for name in names
         ],
         "evidence_ids": refs,
@@ -44,18 +43,20 @@ def _card(names, rows, refs):
 
 def test_distinct_requested_schools_with_complete_independent_sources_pass():
     case, rows, refs, a, b = _fixture()
-    with patch("benchmarks.decision_card_business_eval.independent_sql_oracle", return_value=(
-        "evidence_complete_historical_only", rows
-    )):
+    with patch(
+        "benchmarks.decision_card_business_eval.independent_sql_oracle",
+        return_value=("evidence_complete_historical_only", rows),
+    ):
         assessment = grade_business_case(case, _card([a, b], rows, refs))
     assert assessment == {"passed": True, "failure_codes": []}
 
 
 def test_duplicate_school_does_not_pass_with_both_schools_top_level_sources():
     case, rows, refs, a, _ = _fixture()
-    with patch("benchmarks.decision_card_business_eval.independent_sql_oracle", return_value=(
-        "evidence_complete_historical_only", rows
-    )):
+    with patch(
+        "benchmarks.decision_card_business_eval.independent_sql_oracle",
+        return_value=("evidence_complete_historical_only", rows),
+    ):
         assessment = grade_business_case(case, _card([a, a], rows, refs))
     assert assessment["passed"] is False
     assert "school_identity_mismatch" in assessment["failure_codes"]
@@ -63,9 +64,10 @@ def test_duplicate_school_does_not_pass_with_both_schools_top_level_sources():
 
 def test_substituted_school_is_not_accepted_as_requested_comparison():
     case, rows, refs, a, _ = _fixture()
-    with patch("benchmarks.decision_card_business_eval.independent_sql_oracle", return_value=(
-        "evidence_complete_historical_only", rows
-    )):
+    with patch(
+        "benchmarks.decision_card_business_eval.independent_sql_oracle",
+        return_value=("evidence_complete_historical_only", rows),
+    ):
         assessment = grade_business_case(case, _card([a, "unrequested-school"], rows, refs))
     assert assessment["passed"] is False
     assert "school_identity_mismatch" in assessment["failure_codes"]
@@ -75,9 +77,10 @@ def test_malformed_school_row_fails_closed_instead_of_crashing():
     case, rows, refs, a, _ = _fixture()
     card = _card([a, a], rows, refs)
     card["schools"][1] = {"school_name": [], "evidence_ids": []}
-    with patch("benchmarks.decision_card_business_eval.independent_sql_oracle", return_value=(
-        "evidence_complete_historical_only", rows
-    )):
+    with patch(
+        "benchmarks.decision_card_business_eval.independent_sql_oracle",
+        return_value=("evidence_complete_historical_only", rows),
+    ):
         assessment = grade_business_case(case, card)
     assert assessment["passed"] is False
     assert "school_identity_mismatch" in assessment["failure_codes"]
