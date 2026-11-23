@@ -10,17 +10,19 @@ from benchmarks.model_eval_triage import summarize_model_failures
 def _report():
     rows = []
     for i in range(8):
-        rows.append({
-            "case_id": f"case-{i}",
-            "split": "holdout" if i < 4 else "development",
-            "passed": True,
-            "safe_abstain": i % 2 == 0,
-            "failure_codes": [],
-            "prompt_tokens": 100,
-            "completion_tokens": 20,
-            "tool_calls": 5,
-            "elapsed_ms": 50.0,
-        })
+        rows.append(
+            {
+                "case_id": f"case-{i}",
+                "split": "holdout" if i < 4 else "development",
+                "passed": True,
+                "safe_abstain": i % 2 == 0,
+                "failure_codes": [],
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "tool_calls": 5,
+                "elapsed_ms": 50.0,
+            }
+        )
     return {
         "controller": "REAL_MODEL_NOT_SCRIPTED",
         "evaluation_contract": "SYNTHETIC_DECISION_CARD_V1",
