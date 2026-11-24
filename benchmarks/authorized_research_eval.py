@@ -56,7 +56,13 @@ def _hash(value: Any) -> bool:
 
 def _scope(value: Any) -> None:
     if not isinstance(value, dict) or set(value) != {
-        "school_ids", "major_id", "province", "subject_type", "batch", "year_from", "year_to"
+        "school_ids",
+        "major_id",
+        "province",
+        "subject_type",
+        "batch",
+        "year_from",
+        "year_to",
     }:
         raise ValueError("Invalid scope fields")
     if not isinstance(value["school_ids"], (tuple, list)):
@@ -65,9 +71,11 @@ def _scope(value: Any) -> None:
 
 
 def validate_manifest(manifest: Any) -> list[dict]:
-    if not isinstance(manifest, dict) or set(manifest) != {
-        "schema", "dataset_ref", "review_ref", "cases"
-    } or manifest["schema"] != SCHEMA:
+    if (
+        not isinstance(manifest, dict)
+        or set(manifest) != {"schema", "dataset_ref", "review_ref", "cases"}
+        or manifest["schema"] != SCHEMA
+    ):
         raise ValueError("Invalid gold manifest")
     for field in ("dataset_ref", "review_ref"):
         if not isinstance(manifest[field], str) or not 1 <= len(manifest[field].strip()) <= 200:
@@ -79,8 +87,14 @@ def validate_manifest(manifest: Any) -> list[dict]:
     scopes = set()
     for case in cases:
         if not isinstance(case, dict) or set(case) != {
-            "case_id", "split", "scope", "expected_status", "expected_coverage",
-            "expected_analysis_sha256", "expected_evidence_sha256", "source_ref"
+            "case_id",
+            "split",
+            "scope",
+            "expected_status",
+            "expected_coverage",
+            "expected_analysis_sha256",
+            "expected_evidence_sha256",
+            "source_ref",
         }:
             raise ValueError("Invalid gold case")
         key = case["case_id"]
@@ -99,9 +113,10 @@ def validate_manifest(manifest: Any) -> list[dict]:
         if not isinstance(case["source_ref"], str) or not 1 <= len(case["source_ref"].strip()) <= 200:
             raise ValueError("Independent source reference required")
         if case["expected_status"] == "BLOCKED":
-            if any(case[field] is not None for field in (
-                "expected_coverage", "expected_analysis_sha256", "expected_evidence_sha256"
-            )):
+            if any(
+                case[field] is not None
+                for field in ("expected_coverage", "expected_analysis_sha256", "expected_evidence_sha256")
+            ):
                 raise ValueError("Blocked case cannot carry a verified gold result")
         else:
             coverage = case["expected_coverage"]
@@ -112,8 +127,8 @@ def validate_manifest(manifest: Any) -> list[dict]:
                     raise ValueError("Invalid coverage labels")
                 for values in dim.values():
                     if not isinstance(values, list) or any(
-                        not isinstance(pair, list) or len(pair) != 2
-                        or any(type(x) is not int for x in pair) for pair in values
+                        not isinstance(pair, list) or len(pair) != 2 or any(type(x) is not int for x in pair)
+                        for pair in values
                     ):
                         raise ValueError("Invalid coverage coordinates")
             partial = any(values for dim in coverage.values() for values in dim.values())
@@ -200,7 +215,8 @@ def evaluate(manifest: Any, receipts: Any) -> dict:
             "passed": sum(item["passed"] for item in items),
             "provider_usage_declared": (
                 {key: sum(item["usage"][key] for item in items) for key in ("input_tokens", "output_tokens")}
-                if usage_complete else None
+                if usage_complete
+                else None
             ),
         }
     return {

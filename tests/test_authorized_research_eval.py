@@ -37,16 +37,18 @@ def fixture():
         }
         evidence = {"admission-history": [{"id": i}], "enrollment-plans": []}
         analysis = {"groups": [{"records": i + 1}]}
-        cases.append({
-            "case_id": key,
-            "split": "development" if i < 2 else "holdout",
-            "scope": scope,
-            "expected_status": status,
-            "expected_coverage": coverage,
-            "expected_evidence_sha256": digest(evidence),
-            "expected_analysis_sha256": digest(analysis),
-            "source_ref": f"fixture-review-{i}",
-        })
+        cases.append(
+            {
+                "case_id": key,
+                "split": "development" if i < 2 else "holdout",
+                "scope": scope,
+                "expected_status": status,
+                "expected_coverage": coverage,
+                "expected_evidence_sha256": digest(evidence),
+                "expected_analysis_sha256": digest(analysis),
+                "source_ref": f"fixture-review-{i}",
+            }
+        )
         receipts[key] = {
             "schema": "admissions-research/v1",
             "task_id": "research_" + format(i, "032x"),
