@@ -215,6 +215,7 @@ class SessionCompactionStore:
             ids = (
                 db.query(SessionCompactionSnapshot.conversation_id)
                 .filter(SessionCompactionSnapshot.expires_at <= _utcnow())
+                .order_by(SessionCompactionSnapshot.expires_at)
                 .limit(limit)
                 .all()
             )
