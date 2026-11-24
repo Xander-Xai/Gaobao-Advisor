@@ -116,24 +116,31 @@ def test_idle_bucket_evicted_after_refill(monkeypatch):
 
 
 def test_industrial_middleware_fails_closed_without_local_fallback(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
-    from server.admin.limits import SecurityBackendUnavailable
-    from server.middleware.ratelimit import RateLimitMiddleware, RedisTokenBucketLimiter
+    from server.middleware.ratelimit import RateLimitMiddleware
 
     monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
     monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")
     monkeypatch.setenv("SESSION_SECRET", "test-secret")
-    decisions = iter([True, False])
+    decisions = iter([1, 0])
 
-    def admit(self, ip):
-        try:
-            return next(decisions)
-        except StopIteration as exc:
-            raise SecurityBackendUnavailable("test outage") from exc
+    class FakeRedis:
+        def eval(self, *args):
+            try:
+                return next(decisions)
+            except StopIteration as exc:
+                raise ConnectionError("test outage") from exc
 
-    monkeypatch.setattr(RedisTokenBucketLimiter, "allow", admit)
+    # Unit CI deliberately omits the optional Redis package. Exercise the real
+    # limiter and middleware; the separate Redis smoke tests execute the Lua.
+    monkeypatch.setitem(
+        sys.modules, "redis", SimpleNamespace(Redis=SimpleNamespace(from_url=lambda *a, **kw: FakeRedis()))
+    )
     app = FastAPI()
     app.add_middleware(RateLimitMiddleware)
 
