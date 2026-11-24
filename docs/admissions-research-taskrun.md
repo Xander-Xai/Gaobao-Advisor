@@ -1,0 +1,45 @@
+# Approved admissions research TaskRun (operator-only)
+
+The synthetic journal is an isolated evaluation fixture, not a second business research runtime. The private business journal is the sole proposed authority for approved business research and accepts an explicitly authorized data reference and immutable model/image/scope. This separation is deliberate: the synthetic read-only recovery policy permits bounded replay, while approved paid research must never automatically replay. Do not merge their storage or expose the synthetic engine as a production fallback. Both stores now reject the other schema under a SQLite write transaction, even if environment variables are missing; a configured private journal path is reserved before synthetic initialization. The proposed business dispatch layer invokes the same journal claim/execute path rather than creating another lifecycle.
+The operator API creates and inspects the run; a different admin approves its
+exact request digest. Only a separately invoked worker can spend model tokens
+or start a sandbox. No browser click triggers model calls.
+
+Configure ADMISSIONS_RESEARCH_ENABLED=true, ADMISSIONS_RESEARCH_DATASET_REF
+(an operator-approved identifier; not independently verified provenance),
+ADMISSIONS_RESEARCH_JOURNAL (absolute SQLite path in a worker-owned 0700
+directory), DATABASE_URL (authorized data source), OPENAI_API_KEY, and the
+existing Deep Agents and immutable local Docker image. Keep credentials
+and private data outside Git. API routes:
+POST /api/v1/admin/admissions-research/runs, GET /runs/{id},
+POST /runs/{id}/approve (spec_sha256), POST /runs/{id}/cancel under the same
+prefix. Maker cannot approve their own run. Worker:
+
+```bash
+python -m server.agent.admissions_research_taskrun --run-id research_<id> --authorize-model-call
+```
+
+Worker checks lease before every model step and before/after SQL and sandbox
+execution. Cancellation stops future actions and publication, not an already
+in-flight provider call. Expired leases are not automatically replayed.
+The journal retains coverage, verified aggregate and hashes, not raw SQL rows
+or provider secrets. This is a private local operator workflow, not anonymous
+chat, distributed queue, hard process cancellation or production deployment.
+Admin RBAC and actual source authorization are deployment requirements.
+Fixture tests do not constitute real-data or paid-provider acceptance.
+
+The worker independently recomputes descriptive statistics from the captured SQL
+history, checks the sandbox input digest, immutable image and cleanup flag, and
+recomputes coverage before publishing. A verified aggregate is available as a
+private no-store text response from GET /runs/{id}/report, using the same
+owner/admin access rule as run inspection. Failed, expired or cancelled runs
+cannot produce a report. No raw rows, personal data, or approval reference are
+included. This is not a browser UI or a production/provider acceptance result.
+
+A failed sandbox program may be repaired once by the Deep Agents planner when
+the error is execution_failed, invalid_analysis_output or oracle_mismatch and
+container cleanup was verified. The retry uses the same captured SQL snapshot,
+image and task lease. Timeout, isolation/cleanup failure, exhausted budget or
+successful execution cannot trigger a retry. The model sees only the fixed
+error code and retry eligibility; the receipt records attempts. This is bounded
+reflection, not unrestricted replanning or automatic paid task replay.

@@ -306,3 +306,49 @@ export interface SyntheticTaskRunCreate {
   idempotency_key: string
   profile: SyntheticDecisionCardRequest
 }
+
+export interface AuthorizedResearchScope {
+  school_ids: [number, number]
+  major_id: number
+  province: string
+  subject_type: string
+  batch: string
+  year_from: number
+  year_to: number
+}
+
+export interface AuthorizedResearchCreate {
+  scope: AuthorizedResearchScope
+  model_id: string
+  image_id: string
+  approval_ref: string
+  idempotency_key: string
+}
+
+export interface AuthorizedResearchRun {
+  run_id: string
+  owner: string
+  status: 'PENDING_APPROVAL' | 'APPROVED' | 'RUNNING' | 'SUCCEEDED' | 'NEEDS_REVIEW' | 'FAILED' | 'CANCELLED' | 'EXPIRED'
+  spec: {
+    scope: AuthorizedResearchScope
+    dataset_ref: string
+    model_id: string
+    image_id: string
+    approval_ref: null
+  }
+  spec_sha256: string
+  approved_by: string | null
+  result: {
+    status: string
+    evidence_sha256: string
+    analysis_sha256: string
+    coverage: Record<string, unknown>
+    analysis: Record<string, unknown>
+    admission_recommendation_verified: false
+    spec_sha256: string
+  } | null
+  failure_code: string | null
+  automatic_paid_replay: false
+  created_at: number
+  updated_at: number
+}

@@ -17,6 +17,7 @@ from server.middleware.security import SecurityMiddleware
 from server.monitoring import init_sentry
 from server.observability.agent_trace import initialize_agent_otel
 from server.report.routes import router as report_router
+from server.routes.admissions_research_runs import router as admissions_research_router
 from server.routes.agent_experiments import router as agent_experiments_router
 from server.routes.agent_optimizer import router as agent_optimizer_router
 from server.routes.agent_taskruns import router as agent_taskruns_router
@@ -131,6 +132,7 @@ app.include_router(chat_router)
 app.include_router(chat_review_router)
 app.include_router(agent_experiments_router)
 app.include_router(agent_taskruns_router)
+app.include_router(admissions_research_router)
 app.include_router(agent_optimizer_router)
 app.include_router(profile_router)
 app.include_router(user_memory_router)

@@ -8,10 +8,12 @@
       </div>
     </div>
     <p v-else class="text-sm text-gray-400">对话后将显示用户画像</p>
+    <UserMemoryPanel />
   </div>
 </template>
 
 <script setup>
+import UserMemoryPanel from './UserMemoryPanel.vue'
 import { useChatStore } from '../../stores/chat'
 const chat = useChatStore()
 </script>
