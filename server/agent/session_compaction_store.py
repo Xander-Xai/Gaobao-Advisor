@@ -159,8 +159,35 @@ class SessionCompactionStore:
                         .one_or_none()
                     )
                     if prior is not None:
-                        return False
-                    db.add(SessionCompactionSnapshot(conversation_id=conv.id, version=1, **fields))
+                        prior_prefix = [
+                            {"role": m.role, "content": m.content}
+                            for m in conv.messages[: prior.covered_count]
+                        ]
+                        still_valid = (
+                            prior.expires_at > now
+                            and prior.policy_sha256 == policy_sha256
+                            and prior.covered_count > 0
+                            and len(prior_prefix) == prior.covered_count
+                            and history_digest(prior_prefix) == prior.covered_sha256
+                            and bool(prior.summary.strip())
+                        )
+                        if still_valid:
+                            return False
+                        # Replace only a demonstrably stale/expired cache;
+                        # concurrent replacement is guarded by the DB version.
+                        replaced = (
+                            db.query(SessionCompactionSnapshot)
+                            .filter(
+                                SessionCompactionSnapshot.conversation_id == conv.id,
+                                SessionCompactionSnapshot.version == prior.version,
+                            )
+                            .update({**fields, "version": prior.version + 1}, synchronize_session=False)
+                        )
+                        if replaced != 1:
+                            db.rollback()
+                            return False
+                    else:
+                        db.add(SessionCompactionSnapshot(conversation_id=conv.id, version=1, **fields))
                 else:
                     changed = (
                         db.query(SessionCompactionSnapshot)
