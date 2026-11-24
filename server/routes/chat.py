@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 import secrets
 
 from fastapi import APIRouter, Header, HTTPException
@@ -21,6 +22,7 @@ from server.graph.nodes.memory import memory_node
 from server.graph.nodes.post_check import quality_post_check_node
 from server.graph.nodes.render import _DISCLAIMER
 from server.graph.nodes.source_attribution import source_attribution_node
+from server.quality.chat_repair import chat_rewrite_enabled, generate_chat_rewrite
 from slots.persistence import extract_query_state, flatten_slots
 
 logger = logging.getLogger(__name__)
@@ -69,7 +71,45 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
     return slots, extract_query_state(stored)
 
 
-def _finalize_chat_answer(state: dict, candidate: str, *, model_generated: bool) -> tuple[dict, bool]:
+_ASSERTED_NUMBER = re.compile(r"(?<![0-9])(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d{4,7})\s*(?:分|位次|%|元/月|元/年|万元|万人)")
+_EVIDENCE_NUMBER = re.compile(r"(?<![0-9])\d+(?:\.\d+)?(?![0-9])")
+
+
+def _unsupported_numbers(state: dict, candidate: str) -> bool:
+    """Cheap evidence containment gate, NOT semantic fact verification.
+
+    A forged '根据/来源' marker cannot certify an unseen numeric value. This
+    intentionally errs toward rejecting unverifiable statistics. Having a
+    number somewhere in evidence still does NOT prove a claim about a
+    particular school; human/semantic review remains necessary.
+    """
+    raw = [str(state.get("input_text") or "")]
+    for key in ("slots", "data_query_results", "rag_chunks"):
+        raw.append(json.dumps(state.get(key) or {}, ensure_ascii=False, default=str))
+    observed = {m.group(0) for m in _EVIDENCE_NUMBER.finditer("\n".join(raw).replace(",", ""))}
+    return any(m.group(1).replace(",", "") not in observed for m in _ASSERTED_NUMBER.finditer(candidate))
+
+
+def _deterministic_gate_issues(state: dict, candidate: str) -> list[str]:
+    """Return stable, redacted reason codes; never treat a marker as proof."""
+    draft = dict(state)
+    draft["reply"] = candidate
+    checked = source_attribution_node(draft)
+    draft.update(checked)
+    draft.update(quality_post_check_node(draft))
+    issues = []
+    if "（数据来源待补全）" in draft.get("reply", ""):
+        issues.append("UNATTRIBUTED_NUMBER")
+    if draft.get("should_rewrite"):
+        issues.append("ANTI_PATTERN")
+    if _unsupported_numbers(state, candidate):
+        issues.append("UNVERIFIED_NUMERIC_CLAIM")
+    return issues
+
+
+def _finalize_chat_answer(
+    state: dict, candidate: str, *, model_generated: bool, rewrite_attempts: int = 0
+) -> tuple[dict, bool]:
     """Verify the exact answer, then persist it once before SSE publishes it.
 
     A deterministic answer/fallback is deliberately preferred to a risky model
@@ -95,23 +135,53 @@ def _finalize_chat_answer(state: dict, candidate: str, *, model_generated: bool)
 
     checked = check(candidate)
     degraded = False
-    if model_generated and (checked.get("should_rewrite") or "（数据来源待补全）" in checked.get("reply", "")):
-        # Do not stream a failing draft or recursively call a potentially
-        # unreliable LLM. This is an explicit bounded fallback, not a rewrite.
-        checked = check(fallback)
-        degraded = True
+    review_reasons = []
+    if model_generated:
+        review_reasons = _deterministic_gate_issues(final, candidate)
+        if review_reasons:
+            # Reject the untrusted draft, not just its offending sentence.
+            checked = check(fallback)
+            degraded = True
 
     try:
-        checked.update(quality_judge_node(checked))
-        checked.update(feedback_node(checked))
+        # Scoring is computed on the proposed final answer, without writing a
+        # quality row before its owning conversation message exists.
+        checked.update(quality_judge_node({**checked, "defer_quality_persistence": True}))
+        if (
+            model_generated
+            and not degraded
+            and (
+                checked.get("quality_grade") in {"fail", "unscored"}
+                or checked.get("hallucination_flags")
+                or checked.get("judge_needs_rewrite")
+            )
+        ):
+            review_reasons.append(
+                "JUDGE_UNAVAILABLE" if checked.get("quality_grade") == "unscored" else "JUDGE_REJECTED"
+            )
+            checked = check(fallback)
+            degraded = True
+            # The rejected model score must not be reported as the delivered
+            # fallback's quality score; it has not been independently graded.
+            checked["quality_grade"] = "unscored"
+            checked["quality_scored"] = False
+            checked["quality_scores"] = {}
+            checked["hallucination_flags"] = []
+            checked["aggregate_score"] = None
     except Exception:
         logger.exception("Final-answer quality evaluation failed")
-        # If quality evaluation crashes there is no validated model result.
         if model_generated and not degraded:
+            review_reasons.append("JUDGE_ERROR")
             checked = check(fallback)
             degraded = True
         checked["quality_grade"] = "unscored"
+        checked["quality_scored"] = False
 
+    # No model rewriting is asserted unless an explicit attempt happened.
+    checked["rewrite_attempts"] = min(max(rewrite_attempts, 0), 1)
+    checked["review_required"] = bool(review_reasons)
+    checked["review_reason_codes"] = sorted(set(review_reasons))
+    checked.update(feedback_node(checked))
     checked["atomic_memory"] = True
     checked.update(memory_node(checked))
     if not any(
@@ -181,12 +251,30 @@ async def _sse_generator(
         degraded = True
         degraded_message = "未配置 LLM Key，已使用基于结构化数据的确定性模板答复"
 
+    rewrite_attempts = 0
+    if is_template and llm_configured and not degraded and chat_rewrite_enabled():
+        # Only repair a model answer rejected by *deterministic* rules.
+        # Judge-only failures fail closed to the template; they cannot trigger
+        # unbounded model calls or invent citations.
+        reasons = _deterministic_gate_issues(result, reply)
+        if reasons:
+            rewrite_attempts = 1
+            try:
+                rewritten = await generate_chat_rewrite(result, reply, reasons)
+                if rewritten:
+                    reply = rewritten
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Chat rewrite orchestration failed")
+
     try:
         final, quality_degraded = await asyncio.to_thread(
             _finalize_chat_answer,
             result,
             reply,
             model_generated=is_template and llm_configured and not degraded,
+            rewrite_attempts=rewrite_attempts,
         )
     except asyncio.CancelledError:
         raise
@@ -214,6 +302,8 @@ async def _sse_generator(
 
     if degraded:
         yield f"data: {json.dumps({'type': 'degraded', 'message': degraded_message})}\n\n"
+    if final.get("review_required"):
+        yield f"data: {json.dumps({'type': 'review', 'status': 'required', 'reason_codes': final['review_reason_codes'], 'review_ticket_id': final.get('review_ticket_id'), 'message': '当前模型草稿未通过自动核验，已返回保守答复；如需实际决策请人工核验官方来源'})}\n\n"
     final_reply = final.get("reply") or ""
     for i in range(0, len(final_reply), 20):
         yield f"data: {json.dumps({'type': 'token', 'content': final_reply[i : i + 20]})}\n\n"

@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -167,7 +168,13 @@ class JudgeRouter:
             )
             parsed = _parse_llm_json(raw)
 
-            score = float(parsed.get("score", _DEFAULT_SCORE))
+            # Invalid/missing provider output is UNGRADED, not a valid 50.
+            # Also reject NaN/Inf so bad JSON cannot poison metrics.
+            if "score" not in parsed:
+                raise ValueError("judge returned no score")
+            score = float(parsed["score"])
+            if not math.isfinite(score):
+                raise ValueError("judge returned non-finite score")
             score = max(0.0, min(100.0, score))  # 钳制到 0-100
 
             reason = str(parsed.get("reason", ""))

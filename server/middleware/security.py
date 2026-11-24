@@ -158,7 +158,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     """FastAPI middleware for injection detection on chat endpoints."""
 
     async def dispatch(self, request: Request, call_next):
-        if request.method == "POST" and "/chat" in request.url.path:
+        if request.method == "POST" and request.url.path == "/api/v1/chat":
             try:
                 body = await request.json()
                 message = body.get("message", "")

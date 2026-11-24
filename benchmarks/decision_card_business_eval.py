@@ -23,6 +23,7 @@ import tempfile
 import time
 from dataclasses import asdict
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from benchmarks.decision_card_trace_eval import TRACE_CONTRACT, grade_step_trace
@@ -227,10 +228,78 @@ def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str,
     return {"passed": not errors, "failure_codes": sorted(set(errors))}
 
 
-def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -> dict[str, Any]:
+class ProviderBudget:
+    """Count attempts and provider usage before planner output parsing.
+
+    Request count is a hard client-side cap. The reported-token threshold is
+    checked between requests; a single response may cross it. Unknown usage
+    or transport failure stops further requests rather than assuming zero cost.
+    """
+
+    def __init__(self, client: Any, *, max_calls: int, stop_after_tokens: int) -> None:
+        if type(max_calls) is not int or not 1 <= max_calls <= 128:
+            raise ValueError("Invalid provider call cap")
+        if type(stop_after_tokens) is not int or not 1 <= stop_after_tokens <= 500_000:
+            raise ValueError("Invalid reported token threshold")
+        self._client = client
+        self.max_calls = max_calls
+        self.stop_after_tokens = stop_after_tokens
+        self.attempts = 0
+        self.known_usage_responses = 0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.stop_reason: str | None = None
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+    def create(self, **kwargs: Any) -> Any:
+        if self.stop_reason is not None:
+            raise RuntimeError("Provider budget stopped")
+        self.attempts += 1
+        try:
+            response = self._client.chat.completions.create(**kwargs)
+        except Exception:
+            self.stop_reason = "provider_error_usage_unknown"
+            raise
+        usage = getattr(response, "usage", None)
+        prompt = getattr(usage, "prompt_tokens", None)
+        completion = getattr(usage, "completion_tokens", None)
+        if type(prompt) is not int or type(completion) is not int or min(prompt, completion) < 0:
+            self.stop_reason = "provider_usage_unknown"
+            raise RuntimeError("Provider usage unavailable")
+        self.known_usage_responses += 1
+        self.prompt_tokens += prompt
+        self.completion_tokens += completion
+        if self.prompt_tokens + self.completion_tokens >= self.stop_after_tokens:
+            self.stop_reason = "reported_token_threshold_reached"
+        elif self.attempts >= self.max_calls:
+            self.stop_reason = "request_cap_reached"
+        return response
+
+    def receipt(self) -> dict[str, Any]:
+        return {
+            "max_calls": self.max_calls,
+            "stop_after_reported_tokens": self.stop_after_tokens,
+            "attempts": self.attempts,
+            "known_usage_responses": self.known_usage_responses,
+            "known_prompt_tokens": self.prompt_tokens,
+            "known_completion_tokens": self.completion_tokens,
+            "usage_complete": self.attempts == self.known_usage_responses,
+            "stop_reason": self.stop_reason,
+            "hard_token_cap": False,
+        }
+
+
+def run_cases(
+    cases: list[dict[str, Any]],
+    planner_factory: Any | None = None,
+    *,
+    budget: ProviderBudget | None = None,
+) -> dict[str, Any]:
     """Same cases and oracle for baseline or a supplied planner factory."""
     reports = []
     for case in cases:
+        if budget is not None and budget.stop_reason is not None:
+            break
         profile = DecisionCardProfile(**case["profile"])
         planner = planner_factory(profile) if planner_factory is not None else None
         start = time.monotonic()
@@ -280,6 +349,8 @@ def run_cases(cases: list[dict[str, Any]], planner_factory: Any | None = None) -
         "human_review_complete": False,
         "dataset_sha256": _digest(cases),
         "cases": len(reports),
+        "requested_cases": len(cases),
+        "unattempted_case_ids": [case["case_id"] for case in cases[len(reports) :]],
         "passed": sum(item["passed"] for item in reports),
         "trace_contract": TRACE_CONTRACT,
         "trace_validated_cases": sum(item["trace_receipt"] is not None for item in reports),
@@ -316,12 +387,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--permit-external-model", action="store_true")
     parser.add_argument("--max-cases", type=int, default=8)
+    parser.add_argument("--max-provider-calls", type=int, default=64)
+    parser.add_argument("--stop-after-reported-tokens", type=int, default=120_000)
     parser.add_argument("--synthetic-canary-journal", type=Path)
     parser.add_argument("--canary-run-key", help="Opaque synthetic experiment allocation key")
     parser.add_argument("--canary-percentage", type=int)
     args = parser.parse_args(argv)
     if not 1 <= args.max_cases <= 8:
         parser.error("--max-cases must be 1..8")
+    if not 1 <= args.max_provider_calls <= 128 or not 1 <= args.stop_after_reported_tokens <= 500_000:
+        parser.error("Provider budget out of range")
+    if args.out.exists() or args.out.is_symlink():
+        parser.error("Evaluation output must be a new file")
     canary_assignment = None
     if any(value is not None for value in (args.synthetic_canary_journal, args.canary_run_key, args.canary_percentage)):
         if args.mode != "model" or args.synthetic_canary_journal is None or args.canary_run_key is None:
@@ -338,8 +415,6 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("Canary allocation percentage must be 0..100")
         if not args.synthetic_canary_journal.is_file():
             parser.error("Canary journal must already exist")
-        if args.out.exists() or args.out.is_symlink():
-            parser.error("Canary output must be a fresh path")
         from server.agent.synthetic_canary import choose_synthetic_variant
         from server.agent.synthetic_optimization_registry import SyntheticOptimizationReviewStore
         from server.agent.taskrun_store import SyntheticTaskRunStore
@@ -348,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
         percentage = 10 if args.canary_percentage is None else args.canary_percentage
         canary_assignment = choose_synthetic_variant(registry, args.canary_run_key, percentage)
         args.prompt_variant = canary_assignment["prompt_variant"]
+    budget = None
     if args.mode == "model":
         if not args.permit_external_model or not args.model:
             parser.error("Model evaluation requires --model and --permit-external-model")
@@ -364,10 +440,13 @@ def main(argv: list[str] | None = None) -> int:
             max_retries=0,
         )
 
+        budget = ProviderBudget(
+            client, max_calls=args.max_provider_calls, stop_after_tokens=args.stop_after_reported_tokens
+        )
         frozen_prompt = prompt_for_variant(args.prompt_variant)
 
         def planner_factory(profile: DecisionCardProfile) -> DecisionCardModelPlanner:
-            return DecisionCardModelPlanner(client, args.model, profile, system_prompt=frozen_prompt)
+            return DecisionCardModelPlanner(budget, args.model, profile, system_prompt=frozen_prompt)
 
         controller = "REAL_MODEL_NOT_SCRIPTED"
     else:
@@ -383,7 +462,7 @@ def main(argv: list[str] | None = None) -> int:
         from scripts.seed_demo_data import seed_database
 
         seed_database(db_path=path, reset=True)
-        report = run_cases(cases, planner_factory)
+        report = run_cases(cases, planner_factory, budget=budget)
         from db.database import engine
 
         engine.dispose()
@@ -409,6 +488,15 @@ def main(argv: list[str] | None = None) -> int:
         "OPENAI_COMPATIBLE_REPORTED_USAGE" if controller == "REAL_MODEL_NOT_SCRIPTED" else "NOT_MEASURED"
     )
     report["provider_cost_usd"] = None
+    report["provider_budget"] = budget.receipt() if budget is not None else None
+    usage_reconciled = (
+        budget is not None
+        and budget.attempts > 0
+        and budget.attempts == budget.known_usage_responses
+        and budget.prompt_tokens == report["provider_prompt_tokens"]
+        and budget.completion_tokens == report["provider_completion_tokens"]
+    )
+    report["provider_usage_reconciled"] = usage_reconciled
     report["synthetic_canary_assignment"] = canary_assignment
     report["comparison_eligible"] = (
         canary_assignment is None
@@ -416,20 +504,18 @@ def main(argv: list[str] | None = None) -> int:
         and report["cases"] == 8
         and report["holdout_cases"] == 4
         and report["trace_validated_cases"] == 8
+        and usage_reconciled
+        and budget is not None
+        and budget.stop_reason is None
         and report["provider_prompt_tokens"] is not None
         and report["provider_completion_tokens"] is not None
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    serialized = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
-    if canary_assignment is not None:
-        # Preserve the reviewed journal and earlier run artifacts, including
-        # aliases or output paths created after the preflight check.
-        with args.out.open("x", encoding="utf-8") as handle:
-            handle.write(serialized)
-    else:
-        args.out.write_text(serialized, encoding="utf-8")
+    with args.out.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     print(f"{controller}: verified_business_tasks={report['passed']}/{report['cases']}")
-    return 0 if report["passed"] == report["cases"] else 1
+    complete = report["cases"] == len(cases) and report["passed"] == len(cases)
+    return 0 if complete and (budget is None or usage_reconciled and budget.stop_reason is None) else 1
 
 
 if __name__ == "__main__":
