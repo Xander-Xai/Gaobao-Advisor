@@ -257,6 +257,18 @@ def test_real_report_pair_rejects_provider_version_drift_across_trials(tmp_path)
             row["completion_tokens"] = 10
         report["prompt_tokens_reported"] = 40 * len(report["results"])
         report["completion_tokens_reported"] = 10 * len(report["results"])
+        attempts = sum(row["model_steps"] for row in report["results"])
+        report["provider_budget"] = {
+            "max_calls": 64,
+            "stop_after_reported_tokens": 120_000,
+            "attempts": attempts,
+            "known_usage_responses": attempts,
+            "known_prompt_tokens": report["prompt_tokens_reported"],
+            "known_completion_tokens": report["completion_tokens_reported"],
+            "usage_complete": True,
+            "stop_reason": None,
+            "hard_token_cap": False,
+        }
         return report
 
     first = (as_real_fixture(full, "provider-v1", "a"), as_real_fixture(compact, "provider-v1", "b"))
@@ -267,3 +279,27 @@ def test_real_report_pair_rejects_provider_version_drift_across_trials(tmp_path)
         compare_trials([first, drift])
     with pytest.raises(ValueError, match="identity missing or drifted"):
         compare_pair(as_real_fixture(full, " ", "g"), as_real_fixture(compact, " ", "h"))
+
+
+def test_incomplete_context_receipt_cannot_be_compared(tmp_path):
+    full, compact, _ = _scripted_pair(tmp_path)
+    compact["status"] = "INCOMPLETE_NOT_COMPARABLE"
+    with pytest.raises(ValueError, match="Incomplete"):
+        compare_pair(full, compact)
+
+
+def test_context_child_stops_parent_on_retained_incomplete_receipt(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from benchmarks.context_ab_eval import _run_child
+
+    path = tmp_path / "partial.json"
+
+    def fake_run(*args, **kwargs):
+        path.write_text(json.dumps({"status": "INCOMPLETE_NOT_COMPARABLE"}), encoding="utf-8")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="retained private receipt"):
+        _run_child("full", "model", "fixture-model", path, True, 64, 120_000)
+    assert path.exists()

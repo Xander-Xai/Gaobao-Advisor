@@ -30,7 +30,7 @@ from statistics import median
 from types import SimpleNamespace
 from typing import Any
 
-from benchmarks.decision_card_business_eval import frozen_cases, run_cases
+from benchmarks.decision_card_business_eval import ProviderBudget, frozen_cases, run_cases
 from server.agent.context_ablation import ContextABPlanner
 from server.agent.decision_card_model_planner import DecisionCardModelPlanner, prompt_for_variant
 
@@ -38,6 +38,8 @@ ARMS = ("full", "evidence_compact")
 _CONTRACT = "SYNTHETIC_CONTEXT_AB_V1"
 _CASES = 8
 _STEPS_UPPER_BOUND = 8
+_DEFAULT_ARM_CALLS = 64
+_DEFAULT_ARM_TOKENS = 120_000
 _MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,159}$")
 
 
@@ -82,11 +84,20 @@ class _ObservedCompletions:
         return response
 
 
-def run_arm(arm: str, model_id: str, *, real_model: bool) -> dict[str, Any]:
+def run_arm(
+    arm: str,
+    model_id: str,
+    *,
+    real_model: bool,
+    max_provider_calls: int = _DEFAULT_ARM_CALLS,
+    stop_after_reported_tokens: int = _DEFAULT_ARM_TOKENS,
+) -> dict[str, Any]:
     """Run one frozen eight-case arm with a freshly seeded temporary SQLite DB."""
     if arm not in ARMS or not _MODEL_RE.fullmatch(model_id):
         raise ValueError("Unrecognized arm/model identity")
     if real_model:
+        if not 1 <= max_provider_calls <= 64:
+            raise ValueError("Context arm call cap must be between 1 and 64")
         from openai import OpenAI
 
         delegate = OpenAI(
@@ -99,6 +110,13 @@ def run_arm(arm: str, model_id: str, *, real_model: bool) -> dict[str, Any]:
         delegate = _FakeCompletions()
     observed = _ObservedCompletions(delegate)
     client = SimpleNamespace(chat=SimpleNamespace(completions=observed))
+    budget = (
+        ProviderBudget(client, max_calls=max_provider_calls, stop_after_tokens=stop_after_reported_tokens)
+        if real_model
+        else None
+    )
+    if budget is not None:
+        client = budget
     instances: list[ContextABPlanner] = []
     frozen_prompt = prompt_for_variant("baseline")
 
@@ -116,11 +134,36 @@ def run_arm(arm: str, model_id: str, *, real_model: bool) -> dict[str, Any]:
         from scripts.seed_demo_data import seed_database
 
         seed_database(db_path=target, reset=True)
-        business = run_cases(cases, planner_factory=factory)
+        business = run_cases(cases, planner_factory=factory, budget=budget)
         from db.database import engine
 
         engine.dispose()
 
+    if budget is not None:
+        receipt = budget.receipt()
+        if (
+            business["cases"] != _CASES
+            or business["trace_validated_cases"] != _CASES
+            or not receipt["usage_complete"]
+            or receipt["stop_reason"] is not None
+            or receipt["attempts"] != business["total_model_steps"]
+            or receipt["known_prompt_tokens"] != business["provider_prompt_tokens"]
+            or receipt["known_completion_tokens"] != business["provider_completion_tokens"]
+        ):
+            return {
+                "contract": _CONTRACT,
+                "arm": arm,
+                "status": "INCOMPLETE_NOT_COMPARABLE",
+                "controller": "EXTERNAL_MODEL_CALLS_NOT_INDEPENDENTLY_ATTESTED",
+                "model_id": model_id,
+                "dataset_sha256": business["dataset_sha256"],
+                "planned_cases": _CASES,
+                "attempted_cases": business["cases"],
+                "unattempted_case_ids": business["unattempted_case_ids"],
+                "provider_budget": receipt,
+                "production_release_authorized": False,
+                "real_admissions_quality": "NOT_MEASURED",
+            }
     if len(instances) != _CASES or business["cases"] != _CASES or business["holdout_cases"] != 4:
         raise ValueError("Incomplete frozen context evaluation suite")
     if business["trace_validated_cases"] != _CASES or any(value != 0 for value in observed.requested_temperatures):
@@ -158,6 +201,8 @@ def run_arm(arm: str, model_id: str, *, real_model: bool) -> dict[str, Any]:
     return {
         "contract": _CONTRACT,
         "arm": arm,
+        "status": "COMPLETE",
+        "provider_budget": budget.receipt() if budget is not None else None,
         "controller": "EXTERNAL_MODEL_CALLS_NOT_INDEPENDENTLY_ATTESTED"
         if real_model
         else "SCRIPTED_COMPAT_STUB_NOT_LLM",
@@ -194,6 +239,8 @@ def _index(report: dict[str, Any], arm: str) -> dict[str, dict[str, Any]]:
         "EXTERNAL_MODEL_CALLS_NOT_INDEPENDENTLY_ATTESTED",
     }:
         raise ValueError("Unsupported execution provenance")
+    if report.get("status") != "COMPLETE":
+        raise ValueError("Incomplete context arm is not comparable")
     rows = report.get("results")
     if not isinstance(rows, list) or len(rows) != _CASES or report.get("cases") != _CASES:
         raise ValueError("Incomplete eight-case context suite")
@@ -247,6 +294,42 @@ def _index(report: dict[str, Any], arm: str) -> dict[str, dict[str, Any]]:
                 raise ValueError("Provider usage total disagrees with case receipts")
         elif any(value is not None for value in values) or report.get(f"{field}_reported") is not None:
             raise ValueError("Scripted usage must not masquerade as provider tokens")
+    receipt = report.get("provider_budget")
+    if real:
+        if (
+            report.get("provider_model_identity_consistent") is not True
+            or not isinstance(report.get("provider_reported_model"), str)
+            or not report["provider_reported_model"].strip()
+        ):
+            raise ValueError("Provider-reported model identity missing or drifted")
+        if not isinstance(receipt, dict) or (
+            receipt.get("usage_complete") is not True
+            or receipt.get("hard_token_cap") is not False
+            or receipt.get("stop_reason") is not None
+            or any(
+                type(receipt.get(key)) is not int or receipt[key] < 0
+                for key in (
+                    "max_calls",
+                    "stop_after_reported_tokens",
+                    "attempts",
+                    "known_usage_responses",
+                    "known_prompt_tokens",
+                    "known_completion_tokens",
+                )
+            )
+            or not 1 <= receipt["max_calls"] <= 64
+            or not 1 <= receipt["stop_after_reported_tokens"] <= 500_000
+            or not 0 < receipt["attempts"] < receipt["max_calls"]
+            or receipt["attempts"] != receipt["known_usage_responses"]
+            or receipt["attempts"] != sum(row["model_steps"] for row in rows)
+            or receipt["known_prompt_tokens"] != report["prompt_tokens_reported"]
+            or receipt["known_completion_tokens"] != report["completion_tokens_reported"]
+            or receipt["known_prompt_tokens"] + receipt["known_completion_tokens"]
+            >= receipt["stop_after_reported_tokens"]
+        ):
+            raise ValueError("Missing or inconsistent provider budget receipt")
+    elif receipt is not None:
+        raise ValueError("Scripted arm cannot carry provider budget evidence")
     return indexed
 
 
@@ -265,6 +348,11 @@ def compare_pair(full: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
     ):
         raise ValueError("Unpaired model/dataset/prompt/tool/case identity")
     real = full["controller"] == "EXTERNAL_MODEL_CALLS_NOT_INDEPENDENTLY_ATTESTED"
+    if real and any(
+        full["provider_budget"][key] != compact["provider_budget"][key]
+        for key in ("max_calls", "stop_after_reported_tokens")
+    ):
+        raise ValueError("Provider budget differs between arms")
     reported_version_equal = (
         real
         and full.get("provider_model_identity_consistent") is True
@@ -344,6 +432,9 @@ def compare_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> dict[s
             full["same_frozen_prompt_sha256"],
             full["tool_contract_sha256"],
             result["provider_reported_model"],
+            tuple(full["provider_budget"][key] for key in ("max_calls", "stop_after_reported_tokens"))
+            if full["provider_budget"] is not None
+            else None,
         )
         if frozen_identity is None:
             frozen_identity = identity
@@ -386,7 +477,15 @@ def compare_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> dict[s
     }
 
 
-def _run_child(arm: str, mode: str, model: str, path: Path, allow_charges: bool) -> dict[str, Any]:
+def _run_child(
+    arm: str,
+    mode: str,
+    model: str,
+    path: Path,
+    allow_charges: bool,
+    max_provider_calls: int,
+    stop_after_reported_tokens: int,
+) -> dict[str, Any]:
     cmd = [
         sys.executable,
         "-m",
@@ -399,20 +498,36 @@ def _run_child(arm: str, mode: str, model: str, path: Path, allow_charges: bool)
         str(path),
     ]
     if mode == "model":
-        cmd.extend(("--execute", "--permit-external-model", "--confirm-provider-charges"))
+        cmd.extend(
+            (
+                "--execute",
+                "--permit-external-model",
+                "--confirm-provider-charges",
+                "--max-provider-calls-per-arm",
+                str(max_provider_calls),
+                "--stop-after-reported-tokens-per-arm",
+                str(stop_after_reported_tokens),
+            )
+        )
     try:
         result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=900)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("Context A/B arm exceeded the execution timeout") from exc
     if result.returncode != 0 or not path.is_file():
         raise RuntimeError("Context arm failed; no complete, eligible receipt produced")
-    return json.loads(path.read_text(encoding="utf-8"))
+    report = json.loads(path.read_text(encoding="utf-8"))
+    if report.get("status") != "COMPLETE":
+        raise RuntimeError("Context arm stopped; inspect retained private receipt before any further calls")
+    _index(report, arm)
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default=None, help="Explicit non-floating model/version identifier")
     parser.add_argument("--trials", type=int, default=2, help="2..5 paired trials for real-model mode")
+    parser.add_argument("--max-provider-calls-per-arm", type=int, default=_DEFAULT_ARM_CALLS)
+    parser.add_argument("--stop-after-reported-tokens-per-arm", type=int, default=_DEFAULT_ARM_TOKENS)
     parser.add_argument("--out-dir", type=Path)
     parser.add_argument("--out", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--internal-arm", choices=ARMS, help=argparse.SUPPRESS)
@@ -422,6 +537,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--confirm-provider-charges", action="store_true")
     args = parser.parse_args(argv)
 
+    if not 1 <= args.max_provider_calls_per_arm <= 64 or not 1 <= args.stop_after_reported_tokens_per_arm <= 500_000:
+        parser.error("Invalid provider budget")
     if not 2 <= args.trials <= 5:
         parser.error("--trials must be between 2 and 5")
     if args.execute:
@@ -447,9 +564,16 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("Refusing to overwrite an existing experiment report")
         if args.execute and not args.model:
             parser.error("External-model arm requires a model identifier")
-        report = run_arm(args.internal_arm, args.model if args.execute else "fixture-stub", real_model=args.execute)
+        report = run_arm(
+            args.internal_arm,
+            args.model if args.execute else "fixture-stub",
+            real_model=args.execute,
+            max_provider_calls=args.max_provider_calls_per_arm,
+            stop_after_reported_tokens=args.stop_after_reported_tokens_per_arm,
+        )
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        with args.out.open("x", encoding="utf-8") as handle:
+            handle.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         return 0
 
     if not args.execute and not args.scripted_smoke:
@@ -464,7 +588,10 @@ def main(argv: list[str] | None = None) -> int:
                     "cases_per_arm": _CASES,
                     "planned_trials": args.trials,
                     "max_decisions_per_case": _STEPS_UPPER_BOUND,
-                    "max_model_calls_exposure": _CASES * len(ARMS) * args.trials * _STEPS_UPPER_BOUND,
+                    "max_model_calls_exposure": len(ARMS) * args.trials * args.max_provider_calls_per_arm,
+                    "max_provider_calls_per_arm": args.max_provider_calls_per_arm,
+                    "stop_after_reported_tokens_per_arm": args.stop_after_reported_tokens_per_arm,
+                    "hard_token_cap": False,
                     "provider_cost_usd": "UNKNOWN_NO_RATE_CARD",
                     "real_model_quality": "NOT_MEASURED",
                 },
@@ -487,12 +614,19 @@ def main(argv: list[str] | None = None) -> int:
         for arm in order:
             path = args.out_dir / f"trial-{trial}-{arm}.json"
             reports[arm] = _run_child(
-                arm, "model" if real_model else "stub", args.model or "fixture-stub", path, real_model
+                arm,
+                "model" if real_model else "stub",
+                args.model or "fixture-stub",
+                path,
+                real_model,
+                args.max_provider_calls_per_arm,
+                args.stop_after_reported_tokens_per_arm,
             )
         runs.append((reports[ARMS[0]], reports[ARMS[1]]))
     summary = compare_trials(runs)
     target = args.out_dir / "context-ab-summary.json"
-    target.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    with target.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
     print(
         f"Context A/B: {summary['descriptive_candidate']}; "
         f"trials={summary['trial_count']}; real_admissions_accuracy=NOT_MEASURED"
