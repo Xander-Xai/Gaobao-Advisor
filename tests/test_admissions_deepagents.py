@@ -161,3 +161,57 @@ def test_actual_sdk_builds_specialized_delegation_graph(monkeypatch):
     graph = research.build_deep_agent("openai:research-sdk-no-call", [submit_research], specs)
     assert callable(graph.invoke)
     assert "tools" in graph.get_graph().nodes
+
+
+def test_actual_sdk_task_and_todos_with_scripted_model(sessions, monkeypatch):
+    """Real Deep Agents tool dispatch; only the provider transport is stubbed."""
+    import re
+
+    pytest.importorskip("deepagents")
+    pytest.importorskip("langchain_openai")
+    from langchain_core.messages import AIMessage
+    from langchain_core.outputs import ChatGeneration, ChatResult
+    from langchain_openai import ChatOpenAI
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sdk-dispatch-test-only")
+    requested = []
+
+    def generate(self, messages, stop=None, run_manager=None, **kwargs):
+        index = len(requested)
+        requested.append(index)
+        if index == 0:
+            name = "write_todos"
+            args = {"todos": [{"content": "Research history and plans", "status": "in_progress"}]}
+        elif index in (1, 2):
+            name = "task"
+            args = {
+                "subagent_type": ("admission-history", "enrollment-plans")[index - 1],
+                "description": "Read the approved SQL scope and return the receipt.",
+            }
+        elif index == 3:
+            name = "submit_research"
+            ids = []
+            for message in messages:
+                if getattr(message, "type", "") == "tool" and getattr(message, "name", "") == "task":
+                    matches = re.findall(r'"receipt"\s*:\s*"([0-9a-f]{64})"', str(message.content))
+                    ids.extend(matches)
+            assert len(ids) == 2
+            args = {"history_receipt": ids[0], "plans_receipt": ids[1]}
+        else:
+            return ChatResult(generations=[ChatGeneration(message=AIMessage(content="Research finished"))])
+        message = AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call_{index}"}])
+        return ChatResult(generations=[ChatGeneration(message=message)])
+
+    monkeypatch.setattr(ChatOpenAI, "_generate", generate)
+    receipt = research.run_admissions_research(
+        SCOPE,
+        sessions,
+        "openai:research-sdk-dispatch-no-call",
+        approval_ref="local-approval",
+        authorized=True,
+        model_authorized=True,
+    )
+    assert receipt["status"] == "VERIFIED_RESEARCH", receipt
+    assert receipt["delegated_dimensions"] == ["admission-history", "enrollment-plans"]
+    assert len(requested) == 5
+    assert receipt["provider_billing_verified"] is False
