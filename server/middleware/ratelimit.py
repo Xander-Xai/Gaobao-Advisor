@@ -103,9 +103,7 @@ class RedisTokenBucketLimiter:
         if client is None:
             import redis
 
-            client = redis.Redis.from_url(
-                url, decode_responses=True, socket_connect_timeout=1, socket_timeout=1
-            )
+            client = redis.Redis.from_url(url, decode_responses=True, socket_connect_timeout=1, socket_timeout=1)
         self.client = client
         self.secret = secret.encode()
         self.rate = rate
@@ -118,9 +116,7 @@ class RedisTokenBucketLimiter:
 
     def allow(self, ip: str) -> bool:
         try:
-            result = self.client.eval(
-                _REDIS_TOKEN_BUCKET, 1, self.key_for(ip), str(self.rate), str(self.capacity)
-            )
+            result = self.client.eval(_REDIS_TOKEN_BUCKET, 1, self.key_for(ip), str(self.rate), str(self.capacity))
         except Exception as exc:
             raise SecurityBackendUnavailable("Public rate-limit backend unavailable") from exc
         if result not in (0, 1):
@@ -157,9 +153,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = resolve_client_ip(request)
         try:
             allowed = (
-                await run_in_threadpool(self.limiter.allow, client_ip)
-                if self.shared
-                else self.limiter.allow(client_ip)
+                await run_in_threadpool(self.limiter.allow, client_ip) if self.shared else self.limiter.allow(client_ip)
             )
         except SecurityBackendUnavailable:
             return JSONResponse(status_code=503, content={"detail": "服务暂不可用，请稍后再试"})

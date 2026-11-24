@@ -203,11 +203,16 @@ def test_research_report_http_requires_authorized_owner_and_terminal_result(admi
     payload["idempotency_key"] = "research-http-001"
     created = admin_client.post(base, json=payload, headers=operator)
     assert created.status_code == 201, created.text
+    assert "no-store" in created.headers["cache-control"]
     run_id = created.json()["run_id"]
     report_url = f"{base}/{run_id}/report"
-    assert admin_client.get(report_url).status_code == 401
+    unauthorized = admin_client.get(report_url)
+    assert unauthorized.status_code == 401
+    assert "no-store" in unauthorized.headers["cache-control"]
     assert admin_client.get(report_url, headers=viewer).status_code == 403
-    assert admin_client.get(report_url, headers=operator).status_code == 409
+    pending = admin_client.get(report_url, headers=operator)
+    assert pending.status_code == 409
+    assert "no-store" in pending.headers["cache-control"]
     assert admin_client.get(report_url, headers=administrator).status_code == 409
     assert admin_client.post(f"{base}/{run_id}/execute", headers=operator).status_code == 404
 
