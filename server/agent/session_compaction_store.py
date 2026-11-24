@@ -129,19 +129,13 @@ class SessionCompactionStore:
         try:
             with self.session_factory() as db:
                 conv = (
-                    db.query(Conversation)
-                    .filter(Conversation.session_id == session_id)
-                    .with_for_update()
-                    .one_or_none()
+                    db.query(Conversation).filter(Conversation.session_id == session_id).with_for_update().one_or_none()
                 )
                 if conv is None:
                     return False
                 # Verify against the *current* committed rows, not just the
                 # request-local history. Rewrites/deletion must invalidate cache.
-                actual_prefix = [
-                    {"role": m.role, "content": m.content}
-                    for m in conv.messages[:covered_count]
-                ]
+                actual_prefix = [{"role": m.role, "content": m.content} for m in conv.messages[:covered_count]]
                 if len(actual_prefix) != covered_count or history_digest(actual_prefix) != expected_digest:
                     return False
                 now = _utcnow()
@@ -161,8 +155,7 @@ class SessionCompactionStore:
                     )
                     if prior is not None:
                         prior_prefix = [
-                            {"role": m.role, "content": m.content}
-                            for m in conv.messages[: prior.covered_count]
+                            {"role": m.role, "content": m.content} for m in conv.messages[: prior.covered_count]
                         ]
                         still_valid = (
                             prior.expires_at > now
