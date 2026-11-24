@@ -143,7 +143,7 @@ curl -sS -X POST http://localhost:8000/api/v1/admin/agent-experiments/research \
 | 引用正确但事实错误仍拒绝 | `benchmarks/harness_answer_eval.py` 与 `tests/test_readonly_model_verified_task.py` | 预先冻结的合成事实和工具来源双重验证 |
 | Ground Truth 候选冻结 | `benchmarks/groundtruth_pipeline.py` | 20 条合成候选、开发/holdout、SHA 和审核门禁；**默认待人工审核** |
 | 优化前后评价门禁 | `benchmarks/harness_optimizer.py` | 同模型/同数据集、质量与安全不退化、真实 Token 用量才可提交人工审查；尚无实测收益 |
-| 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；**可信测试脚本独立只读挂载（本次 PR 待验收）**；不是生产级多租户 OS 沙箱 |
+| 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；**独立最小 Python 镜像 + 可信测试脚本只读挂载（本次 PR 待验收）**；不是生产级多租户 OS 沙箱 |
 | Coding Agent 真实执行链路 | `benchmarks/sandbox_coding_agent.py` | **两个合成算术代码修复 2/2，通过真实容器测试；控制器为 SCRIPTED_NOT_LLM** |
 | 可选模型自主修复 | `benchmarks/sandbox_model_planner.py` | API 适配器已实现、显式授权与 Token 预算；**尚无真实模型跑分** |
 
@@ -154,8 +154,8 @@ curl -sS -X POST http://localhost:8000/api/v1/admin/agent-experiments/research \
 沙箱演示（Docker 环境，全部为虚构代码，脚本控制器不产生外部模型费用）：
 
 ```bash
-docker build -t gb-advisor:ci .
-IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+docker build -f Dockerfile.sandbox -t gb-advisor:sandbox-ci .
+IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
 python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/workspace-eval.json
 python -m benchmarks.sandbox_coding_agent --image "$IMAGE_ID" --out /tmp/coding-eval.json
 ```
