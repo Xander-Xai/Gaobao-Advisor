@@ -98,3 +98,72 @@ def test_cross_process_interruption_resume_and_no_duplicate_tools(tmp_path):
     ]
     assert all(item["tool_calls"] == 1 for item in results)
     assert counter.read_text(encoding="utf-8") == "1"
+
+
+@pytest.mark.parametrize("terminal", [False, True])
+@pytest.mark.parametrize("change", ["limits", "schema", "revision"])
+def test_resume_rejects_changed_execution_policy_before_planner(tmp_path, terminal, change):
+    from server.agent.readonly_harness import Decision, HarnessLimits, ReadOnlyTool, run_readonly_agent
+
+    class Planner:
+        def decide(self, task, history, schemas):
+            if not history:
+                return Decision("tool", "school_lookup", {"school_name": "synthetic"})
+            if terminal:
+                return Decision("finish", answer="synthetic answer", evidence_ids=[SOURCE])
+            raise RuntimeError("simulated interruption")
+
+    class NeverPlanner:
+        def decide(self, task, history, schemas):
+            pytest.fail("changed policy must not invoke planner")
+
+    def tool(args):
+        return {"data_profile": "SYNTHETIC_DEMO", "source_ids": [SOURCE]}
+
+    def never_tool(args):
+        pytest.fail("changed policy must not invoke tool")
+
+    store = SQLiteSyntheticCheckpointStore(tmp_path / "run.db")
+    run_id = "synthetic-run-policy"
+    task = "synthetic admissions lookup"
+    tools = {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, tool)}
+    first = run_readonly_agent(task, Planner(), tools, checkpoint=store, run_id=run_id)
+    assert first.reason == ("evidence_bound_finish" if terminal else "planner_failed")
+    prior = store.load(run_id, task_digest(task))
+    assert prior is not None
+    assert prior[1]["phase"] == ("done" if terminal else "active")
+
+    schema = {"school_name": int if change == "schema" else str}
+    changed_tools = {"school_lookup": ReadOnlyTool("school_lookup", schema, never_tool)}
+    limits = HarnessLimits(max_tool_calls=1) if change == "limits" else HarnessLimits()
+    revision = "synthetic-v2" if change == "revision" else "synthetic-v1"
+    with pytest.raises(ValueError, match="execution policy mismatch"):
+        run_readonly_agent(
+            task,
+            NeverPlanner(),
+            changed_tools,
+            limits,
+            checkpoint=store,
+            run_id=run_id,
+            checkpoint_revision=revision,
+        )
+    assert store.load(run_id, task_digest(task)) == prior
+
+
+def test_legacy_checkpoint_without_policy_binding_fails_closed(tmp_path):
+    from server.agent.readonly_harness import ReadOnlyTool, run_readonly_agent
+
+    class NeverPlanner:
+        def decide(self, task, history, schemas):
+            pytest.fail("legacy checkpoint must not invoke planner")
+
+    def never_tool(args):
+        pytest.fail("legacy checkpoint must not invoke tool")
+
+    store = SQLiteSyntheticCheckpointStore(tmp_path / "run.db")
+    task = "synthetic"
+    run_id = "synthetic-run-legacy"
+    store.save(run_id, task_digest(task), None, {"data_profile": "SYNTHETIC_DEMO", "phase": "done"})
+    tools = {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, never_tool)}
+    with pytest.raises(ValueError, match="execution policy mismatch"):
+        run_readonly_agent(task, NeverPlanner(), tools, checkpoint=store, run_id=run_id)

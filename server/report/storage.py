@@ -19,10 +19,17 @@ _SAFE_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_\-]{1,128}$")
 
 
 def _safe_component(value: str, label: str) -> str:
-    """Return ``value`` if it is a safe single path component, else raise."""
-    if not value or not _SAFE_COMPONENT_RE.match(value):
+    """Return a basename-verified safe component, else raise.
+
+    os.path.basename is an explicit path-traversal sanitizer; the equality
+    check rejects any input that would have been changed by normalization.
+    """
+    if not isinstance(value, str):
         raise ValueError(f"unsafe {label}: must match [A-Za-z0-9_-]{{1,128}}")
-    return value
+    component = os.path.basename(value)
+    if component != value or not _SAFE_COMPONENT_RE.fullmatch(component):
+        raise ValueError(f"unsafe {label}: must match [A-Za-z0-9_-]{{1,128}}")
+    return component
 
 
 class ReportStorage:
@@ -34,6 +41,27 @@ class ReportStorage:
     def __init__(self, base_dir: str | Path | None = None) -> None:
         self._base = Path(base_dir) if base_dir else _DEFAULT_BASE
 
+    def _session_directory(self, session_id: str) -> Path:
+        """Validate a direct report-root child; reject symlinks before access."""
+        component = _safe_component(session_id, "session_id")
+        candidate = self._base / component
+        if (
+            self._base.is_symlink()
+            or candidate.is_symlink()
+            or not candidate.resolve(strict=False).is_relative_to(self._base.resolve(strict=False))
+        ):
+            raise ValueError("Unsafe report session directory")
+        return candidate
+
+    def _report_path(self, session_id: str, report_id: str) -> Path:
+        filename = _safe_component(report_id, "report_id")
+        candidate = self._session_directory(session_id) / f"{filename}.json"
+        if candidate.is_symlink() or not candidate.resolve(strict=False).is_relative_to(
+            self._base.resolve(strict=False)
+        ):
+            raise ValueError("Unsafe report file path")
+        return candidate
+
     def save(self, report: Report) -> Path:
         """Save a Report to disk. Returns the file path written.
 
@@ -41,9 +69,7 @@ class ReportStorage:
             ValueError: if ``session_id`` or ``report.id`` is not a safe path
                 component (defence against path traversal / storage pollution).
         """
-        session_dir = _safe_component(report.session_id, "session_id")
-        report_file = _safe_component(report.id, "report_id")
-        dest = self._base / session_dir / f"{report_file}.json"
+        dest = self._report_path(report.session_id, report.id)
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
         return dest
@@ -55,32 +81,38 @@ class ReportStorage:
             ValueError: if ``report_id`` is not a safe path component.
         """
         report_file = _safe_component(report_id, "report_id")
+        if self._base.is_symlink():
+            raise ValueError("Unsafe report storage root")
         if not self._base.exists():
             return None
         for session_dir in sorted(self._base.iterdir()):
-            if not session_dir.is_dir():
+            if (
+                session_dir.is_symlink()
+                or not _SAFE_COMPONENT_RE.fullmatch(session_dir.name)
+                or not session_dir.is_dir()
+            ):
                 continue
-            candidate = session_dir / f"{report_file}.json"
+            candidate = self._report_path(session_dir.name, report_file)
             if candidate.exists():
                 return self._load_file(candidate)
         return None
 
     def load_by_session(self, report_id: str, session_id: str) -> Report | None:
         """Direct load by session_id — no search needed."""
-        report_file = _safe_component(report_id, "report_id")
-        session_dir = _safe_component(session_id, "session_id")
-        path = self._base / session_dir / f"{report_file}.json"
+        path = self._report_path(session_id, report_id)
         if path.exists():
             return self._load_file(path)
         return None
 
     def list_by_session(self, session_id: str) -> list[Report]:
         """Return all reports for a given session, sorted by creation time."""
-        session_dir = self._base / _safe_component(session_id, "session_id")
+        session_dir = self._session_directory(session_id)
         if not session_dir.exists():
             return []
         reports: list[Report] = []
         for fp in sorted(session_dir.glob("*.json")):
+            if fp.is_symlink() or not fp.is_file() or not _SAFE_COMPONENT_RE.fullmatch(fp.stem):
+                raise ValueError("Unsafe report entry in session directory")
             reports.append(self._load_file(fp))
         return reports
 
@@ -90,7 +122,7 @@ class ReportStorage:
         Reports in .purge-staging are not visible to load(). No arbitrary path
         or symlink may be deleted. This is not a cross-process writer lock.
         """
-        session_dir = self._base / _safe_component(session_id, "session_id")
+        session_dir = self._session_directory(session_id)
         if session_dir.is_symlink():
             raise ValueError("Symlinked report directory is unsafe")
         if not session_dir.exists():
@@ -118,7 +150,7 @@ class ReportStorage:
 
     def restore_staged_session(self, session_id: str, staged: Path) -> None:
         """Restore hidden reports only when the SQL transaction fails."""
-        original = self._base / _safe_component(session_id, "session_id")
+        original = self._session_directory(session_id)
         self._validate_stage(staged)
         if original.exists() or original.is_symlink():
             raise RuntimeError("Original report directory was recreated during erasure")
