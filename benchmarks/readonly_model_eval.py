@@ -92,7 +92,7 @@ def run_model_cases(
         "cases": len(reports),
         "planned_cases": len(cases),
         "unexecuted_case_ids": [case["id"] for case in cases[len(reports) :]],
-        "suite_complete": len(reports) == len(cases),
+        "suite_complete": bool(cases) and len(reports) == len(cases) and known and total <= max_total_tokens,
         "stop_reason": stop_reason,
         "max_total_reported_tokens": max_total_tokens,
         "budget_boundary": "post-response accounting; not a hard provider billing cap",
@@ -101,6 +101,7 @@ def run_model_cases(
                 "case_id": row["case_id"],
                 "split": row["split"],
                 "fact_passed": row["answer_facts"]["passed"],
+                "verified_task_passed": row["verified_task_passed"],
                 "tool_calls": row["observed"]["tool_calls"],
                 "total_tokens": (
                     row["observed"]["prompt_tokens"] + row["observed"]["completion_tokens"]
