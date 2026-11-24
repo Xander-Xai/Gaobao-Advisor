@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Integration smoke for the opt-in Java/MySQL/Redis topology on CI runners.
+# Integration smoke for the standard Java/MySQL/Redis topology on CI runners.
 set -euo pipefail
 
 if ! docker compose version >/dev/null 2>&1; then
@@ -31,7 +31,7 @@ cleanup() {
 trap cleanup EXIT
 
 "${compose[@]}" config --quiet
-"${compose[@]}" config --format json >/tmp/gaobao-java-compose.json
+python3 scripts/compose_standard.py config --format json >/tmp/gaobao-java-compose.json
 python3 - <<'PY'
 import json
 with open("/tmp/gaobao-java-compose.json", encoding="utf-8") as f:
@@ -39,6 +39,12 @@ with open("/tmp/gaobao-java-compose.json", encoding="utf-8") as f:
 for name in ("api", "frontend"):
     assert not cfg["services"][name].get("ports"), f"{name} bypasses gateway on host"
 assert cfg["services"]["nginx"].get("ports"), "Nginx has no public port"
+assert {"mysql", "redis", "worker", "java-gateway", "java-catalog", "catalog-db-init"} <= set(cfg["services"])
+api_env = cfg["services"]["api"]["environment"]
+assert api_env["GAOBAO_CHAT_COMPACTION_ENABLED"] == "true"
+assert api_env["GAOBAO_CHAT_SNAPSHOT_ENABLED"] == "true"
+assert api_env["DATABASE_URL"].startswith("mysql+pymysql://")
+assert api_env["REDIS_URL"].startswith("redis://")
 print("Java overlay host port isolation: PASS")
 PY
 "${compose[@]}" up --build --detach

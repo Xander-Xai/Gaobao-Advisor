@@ -1,4 +1,4 @@
-# Optional Java microservices overlay, used alongside the existing full profile.
+# Required gateway/catalog layer of the standard local architecture.
 # python scripts/setup_full_env.py
 # docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml \
 #   -f docker-compose.java.yml --profile full --profile java up --build -d

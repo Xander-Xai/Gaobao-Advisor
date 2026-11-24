@@ -1,4 +1,4 @@
-"""Generate .env.full for the optional MySQL + Redis + worker profile.
+"""Generate .env.full for the standard Java/MySQL/Redis local stack.
 
     python scripts/setup_full_env.py
     docker compose --env-file .env.full \\
@@ -82,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"admin username: {args.username}")
     print(f"admin password: {admin_password}")
     print(
-        "start: docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml --profile full up --build"
+        "start: python scripts/compose_standard.py up --build -d"
     )
     return 0
 

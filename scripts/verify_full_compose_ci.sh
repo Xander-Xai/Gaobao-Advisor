@@ -106,7 +106,10 @@ assert all(local_opt_in["services"]["api"]["environment"][key] == "true" for key
 full_files = ["docker-compose.yml", "docker-compose.full.yml"]
 full = render(full_files, ".env.full", profile="full")
 assert {"mysql", "redis", "worker"} <= set(full["services"])
-assert all(full["services"]["api"]["environment"][key] == "false" for key in flags)
+assert all(full["services"]["api"]["environment"][key] == "false" for key in (flags[0], flags[1], flags[4]))
+assert all(full["services"]["api"]["environment"][key] == "true" for key in flags[2:4])
+full_disabled = render(full_files, ".env.full", {key: "false" for key in flags[2:4]}, profile="full")
+assert all(full_disabled["services"]["api"]["environment"][key] == "false" for key in flags[2:4])
 opt_in = render(full_files, ".env.full", {"ENABLE_SYNTHETIC_AGENT_EXPERIMENT": "true"}, profile="full")
 assert opt_in["services"]["api"]["environment"]["ENABLE_SYNTHETIC_AGENT_EXPERIMENT"] == "true"
 print("Compose Agent profile contract PASS (local defaults, rollback, full isolation and explicit opt-in)")
