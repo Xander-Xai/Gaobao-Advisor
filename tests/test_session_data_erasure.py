@@ -307,3 +307,13 @@ def test_ambiguous_commit_keeps_private_reports_hidden(isolated, monkeypatch, co
         assert check.query(Conversation).count() == (0 if committed else 1)
     with pytest.raises(RuntimeError, match="operator reconciliation"):
         erase_live_session_data("synthetic-session-privacy", storage)
+
+
+def test_containment_rejects_sibling_prefix_and_absolute_path(isolated):
+    _, storage = isolated
+    root = storage._base
+    root.mkdir(parents=True)
+    for name in ("../reports-other", str(root.parent / "reports-other"), "../outside"):
+        with pytest.raises(ValueError, match="Unsafe"):
+            storage._contained_child(root, name)
+    assert storage._contained_child(root, "valid-session") == root / "valid-session"

@@ -2,7 +2,7 @@
 
 This is a frozen set of *synthetic* examples for the static source/quality
 gate. No provider calls, real school records, or network traffic are used.
-The known semantic failure is recorded separately, not counted as a success.
+Explicit school minimum-score assertions additionally require a matching SQL row.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 
 from server.routes.chat import _deterministic_gate_issues
 
-_CONTRACT = "SYNTHETIC_CHAT_GATE_V1"
+_CONTRACT = "SYNTHETIC_CHAT_GATE_V2"
 
 CASES = [
     {
@@ -67,18 +67,17 @@ CASES = [
     },
 ]
 
-# This deliberately FAILS semantic attribution: the number exists in SQL
-# but the candidate assigns it to the wrong fictional school. We disclose
-# it as a known limitation and never claim the gate proves factual support.
-KNOWN_LIMITATION = {
+# Previously accepted negative control; now required to be rejected.
+WRONG_SCHOOL = {
     "case_id": "numeric_wrong_school",
     "state": {
         "input_text": "比较两所学校",
         "data_query_results": {"match_schools": [{"school_name": "示例甲（合成）", "min_score": 600}]},
     },
     "candidate": "根据合成数据，示例乙的最低分为600分。",
-    "expected_unsafe": True,
+    "expected": ["UNBOUND_SCHOOL_SCORE"],
 }
+CASES.append(WRONG_SCHOOL)
 
 
 def evaluate_chat_gate() -> dict:
@@ -94,7 +93,6 @@ def evaluate_chat_gate() -> dict:
                 "expected_reason_codes": expected,
             }
         )
-    limitation_accepted = not _deterministic_gate_issues(KNOWN_LIMITATION["state"], KNOWN_LIMITATION["candidate"])
     return {
         "contract": _CONTRACT,
         "data_profile": "SYNTHETIC_DEMO",
@@ -103,11 +101,7 @@ def evaluate_chat_gate() -> dict:
         "contract_passed": sum(item["passed"] for item in results),
         "all_contract_cases_passed": all(item["passed"] for item in results),
         "case_results": results,
-        "known_semantic_attribution_failure": {
-            "case_id": KNOWN_LIMITATION["case_id"],
-            "wrong_school_claim_accepted": limitation_accepted,
-            "requires_claim_level_verification": True,
-        },
+        "remaining_semantic_limitations": ["year_province_major_rank_policy", "unrecognized_paraphrase"],
         "real_model_task_success": "NOT_MEASURED",
         "human_reviewed_ground_truth": False,
         "admissions_accuracy": "NOT_MEASURED",

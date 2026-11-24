@@ -122,10 +122,10 @@ def _knowledge(args: dict[str, Any]) -> dict[str, Any]:
 def synthetic_readonly_tools() -> dict[str, ReadOnlyTool]:
     """Never register arbitrary Python, shell, SQL execution or external API tools."""
     return {
-        "school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, _school),
-        "major_lookup": ReadOnlyTool("major_lookup", {"major_name": str}, _major),
+        "school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, _school, retry_safe=True),
+        "major_lookup": ReadOnlyTool("major_lookup", {"major_name": str}, _major, retry_safe=True),
         "candidate_lookup": ReadOnlyTool(
-            "candidate_lookup", {"province": str, "score": int, "subject_type": str}, _candidates
+            "candidate_lookup", {"province": str, "score": int, "subject_type": str}, _candidates, retry_safe=True
         ),
-        "knowledge_lookup": ReadOnlyTool("knowledge_lookup", {"query": str}, _knowledge),
+        "knowledge_lookup": ReadOnlyTool("knowledge_lookup", {"query": str}, _knowledge, retry_safe=True),
     }

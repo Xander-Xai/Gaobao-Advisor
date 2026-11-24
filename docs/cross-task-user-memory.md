@@ -26,7 +26,7 @@ export USER_MEMORY_ENABLED=true
 
 # SQLite 演示环境启动时 create_all；MySQL 必须执行迁移
 python -m db.migrate upgrade
-# 当前 Draft 合并迁移 head: 20261124_0008
+# 已合入的合并迁移 head: 20261124_0008
 ```
 
 HTTP 接口使用独立请求头 `X-User-Memory-Token`，**不是**
@@ -59,7 +59,7 @@ curl -sS -N -X POST http://localhost:8000/api/v1/chat \
   -d '{"session_id":"fresh-client-placeholder","scene":"gaokao","message":"请简要比较一下选择专业的思路"}'
 
 # 5. 如需修改，使用 GET 得到的当前 version 进行乐观锁更新（冲突 409）
-# 6. 逐条忘记：DELETE /api/v1/memory/entries/{key}
+# 6. 逐条忘记：DELETE /api/v1/memory/entries/{key}?expected_version=<当前 GET 版本>
 # 7. 凭证轮换：POST /api/v1/memory/vault/rotate（旧 token 立刻失效）
 # 8. 全部忘记：DELETE /api/v1/memory/vault（删除明文偏好和 token 摘要）
 ```
@@ -114,3 +114,5 @@ ruff check server/user_memory.py server/routes/user_memory.py tests/test_cross_t
 - 已引入 vault 持久化单调版本：新增、修改均分配新版本，删除、TTL、物理清理及 token 轮换不重置计数。客户端需使用最新 GET 返回的版本，不得假设新条目版本为 1。计数达到上限拒绝修改。
 - `20261124_0007` 仅适用于此未发布 Draft 链；若旧表存在历史 vault 且缺少计数列，拒绝迁移，避免从现存条目猜测已删除版本。不会自动删除数据。`20261124_0008` 合并两条迁移路径并保留既有 revision ID，需以最新提交 CI 验收为准；禁止真实用户启用。
 - HTTP 写入拒绝布尔值、浮点数或数字字符串冒充版本/TTL；非法请求返回固定 422 文案，不回显原始偏好内容。401/409 等记忆接口错误也带 `Cache-Control: no-store`；新增回归覆盖无副作用及凭证不回显。前一提交的回归已通过，不代表生产隐私验收。
+
+- 单条删除也必须绑定 GET 返回的当前版本：缺失版本返回 422，旧版本与现有有效条目不符返回 409，无有效条目返回 404。删除后重建的版本不能被旧客户端删除。过期条目交由受信任清理器；整库遗忘仍是独立的凭证撤销操作。此为默认关闭的开发实验 API 的不兼容变更，不宣称已完成生产隐私或全局遗忘。

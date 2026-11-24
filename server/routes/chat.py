@@ -23,6 +23,7 @@ from server.graph.nodes.post_check import quality_post_check_node
 from server.graph.nodes.render import _DISCLAIMER
 from server.graph.nodes.source_attribution import source_attribution_node
 from server.quality.chat_repair import chat_rewrite_enabled, generate_chat_rewrite
+from server.quality.school_score_gate import has_unbound_school_score
 from slots.persistence import extract_query_state, flatten_slots
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,8 @@ def _deterministic_gate_issues(state: dict, candidate: str) -> list[str]:
         issues.append("ANTI_PATTERN")
     if _unsupported_numbers(state, candidate):
         issues.append("UNVERIFIED_NUMERIC_CLAIM")
+    elif has_unbound_school_score(state, candidate):
+        issues.append("UNBOUND_SCHOOL_SCORE")
     return issues
 
 

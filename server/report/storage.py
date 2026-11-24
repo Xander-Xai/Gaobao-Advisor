@@ -48,25 +48,34 @@ class ReportStorage:
     def __init__(self, base_dir: str | Path | None = None) -> None:
         self._base = Path(base_dir) if base_dir else _DEFAULT_BASE
 
+    @staticmethod
+    def _contained_child(parent: Path, name: str) -> Path:
+        """Check normalized absolute containment before filesystem operations.
+
+        The trailing separator prevents a sibling prefix from being accepted.
+        Keep the lexical path to detect links, then independently verify its
+        resolved location. Storage must be private to the application user;
+        these checks alone do not provide race-free hostile-writer isolation.
+        """
+        root = os.path.abspath(parent)
+        candidate = os.path.abspath(os.path.join(root, name))
+        if not candidate.startswith(root.rstrip(os.sep) + os.sep):
+            raise ValueError("Unsafe report path")
+        child = Path(candidate)
+        if child.is_symlink() or not child.resolve(strict=False).is_relative_to(parent.resolve(strict=False)):
+            raise ValueError("Unsafe report path")
+        return child
+
     def _session_directory(self, session_id: str) -> Path:
         """Validate a direct report-root child; reject symlinks before access."""
         component = _safe_component(session_id, "session_id")
-        candidate = self._base / component
-        if (
-            self._base.is_symlink()
-            or candidate.is_symlink()
-            or not candidate.resolve(strict=False).is_relative_to(self._base.resolve(strict=False))
-        ):
-            raise ValueError("Unsafe report session directory")
-        return candidate
+        if self._base.is_symlink():
+            raise ValueError("Unsafe report storage root")
+        return self._contained_child(self._base, component)
 
     def _report_path(self, session_id: str, report_id: str) -> Path:
         filename = _safe_component(report_id, "report_id")
-        candidate = self._session_directory(session_id) / f"{filename}.json"
-        if candidate.is_symlink() or not candidate.resolve(strict=False).is_relative_to(
-            self._base.resolve(strict=False)
-        ):
-            raise ValueError("Unsafe report file path")
+        candidate = self._contained_child(self._session_directory(session_id), f"{filename}.json")
         if candidate.exists() and not _safe_regular_file(candidate):
             raise ValueError("Unsafe report file type or link count")
         return candidate
@@ -136,9 +145,9 @@ class ReportStorage:
         # A stable, opaque stage identity lets a subsequent request detect an
         # incomplete earlier deletion even if the original directory is gone.
         stage_key = hashlib.sha256(session_dir.name.encode("ascii")).hexdigest()
-        staged = staged_root / ("pending-" + stage_key)
         if staged_root.is_symlink():
             raise ValueError("Report staging root cannot be a symlink")
+        staged = self._contained_child(staged_root, "pending-" + stage_key)
         if staged.exists() or staged.is_symlink():
             raise RuntimeError("Previous session erasure requires operator reconciliation")
         # Stages from older versions used random IDs and cannot be attributed

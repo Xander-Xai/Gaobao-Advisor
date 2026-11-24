@@ -13,7 +13,7 @@ import re
 import uuid
 from collections.abc import Awaitable, Callable
 
-from server.observability.agent_trace import continue_trace, safe_agent_span
+from server.observability.agent_trace import continue_trace, safe_agent_span, set_current_span_attribute
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,7 @@ class RequestIDMiddleware:
 
         async def send_with_header(message: dict) -> None:
             if message.get("type") == "http.response.start":
+                set_current_span_attribute("http.status_code", message.get("status"))
                 raw_headers = list(message.get("headers", []))
                 raw_headers.append((b"x-request-id", request_id.encode("latin-1")))
                 message = {**message, "headers": raw_headers}
