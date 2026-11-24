@@ -239,3 +239,31 @@ def test_context_rejects_source_kind_mismatch_even_if_both_copies_agree():
     for arm in ("full", "evidence_compact"):
         with pytest.raises(ValueError, match="provenance"):
             compress_history([event], arm)
+
+
+def test_real_report_pair_rejects_provider_version_drift_across_trials(tmp_path):
+    full, compact, _ = _scripted_pair(tmp_path)
+
+    def as_real_fixture(report, version, run_id):
+        # Fabricated receipts exercise the comparison contract only, never a provider.
+        report = copy.deepcopy(report)
+        report["controller"] = "EXTERNAL_MODEL_CALLS_NOT_INDEPENDENTLY_ATTESTED"
+        report["model_id"] = "requested-model-alias"
+        report["provider_reported_model"] = version
+        report["provider_model_identity_consistent"] = True
+        report["run_id"] = run_id
+        for row in report["results"]:
+            row["prompt_tokens"] = 40
+            row["completion_tokens"] = 10
+        report["prompt_tokens_reported"] = 40 * len(report["results"])
+        report["completion_tokens_reported"] = 10 * len(report["results"])
+        return report
+
+    first = (as_real_fixture(full, "provider-v1", "a"), as_real_fixture(compact, "provider-v1", "b"))
+    stable = (as_real_fixture(full, "provider-v1", "c"), as_real_fixture(compact, "provider-v1", "d"))
+    drift = (as_real_fixture(full, "provider-v2", "e"), as_real_fixture(compact, "provider-v2", "f"))
+    assert compare_trials([first, stable])["provider_reported_model"] == "provider-v1"
+    with pytest.raises(ValueError, match="changed frozen evaluation contract"):
+        compare_trials([first, drift])
+    with pytest.raises(ValueError, match="identity missing or drifted"):
+        compare_pair(as_real_fixture(full, " ", "g"), as_real_fixture(compact, " ", "h"))
