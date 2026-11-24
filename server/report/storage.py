@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
-import uuid
 from pathlib import Path
 
 from server.report.models import Report
@@ -123,8 +123,21 @@ class ReportStorage:
         or symlink may be deleted. This is not a cross-process writer lock.
         """
         session_dir = self._session_directory(session_id)
-        if session_dir.is_symlink():
-            raise ValueError("Symlinked report directory is unsafe")
+        staged_root = self._base / ".purge-staging"
+        # A stable, opaque stage identity lets a subsequent request detect an
+        # incomplete earlier deletion even if the original directory is gone.
+        stage_key = hashlib.sha256(session_dir.name.encode("ascii")).hexdigest()
+        staged = staged_root / ("pending-" + stage_key)
+        if staged_root.is_symlink():
+            raise ValueError("Report staging root cannot be a symlink")
+        if staged.exists() or staged.is_symlink():
+            raise RuntimeError("Previous session erasure requires operator reconciliation")
+        # Stages from older versions used random IDs and cannot be attributed
+        # safely to a session. Refuse new purges until an operator reconciles them.
+        if staged_root.exists() and any(
+            not re.fullmatch(r"pending-[a-f0-9]{64}", item.name) for item in staged_root.iterdir()
+        ):
+            raise RuntimeError("Unattributed report erasure stages require operator reconciliation")
         if not session_dir.exists():
             return None
         if not session_dir.is_dir():
@@ -138,20 +151,21 @@ class ReportStorage:
             for item in entries
         ):
             raise ValueError("Report directory contains unrecognized files")
-        staged_root = self._base / ".purge-staging"
-        if staged_root.is_symlink():
-            raise ValueError("Report staging root cannot be a symlink")
         staged_root.mkdir(parents=True, exist_ok=True)
         if staged_root.is_symlink():
             raise ValueError("Report staging root cannot be a symlink")
-        staged = staged_root / ("pending-" + uuid.uuid4().hex)
-        os.replace(session_dir, staged)
+        if staged.exists() or staged.is_symlink():
+            raise RuntimeError("Previous session erasure requires operator reconciliation")
+        os.rename(session_dir, staged)
         return staged, len(entries)
 
     def restore_staged_session(self, session_id: str, staged: Path) -> None:
         """Restore hidden reports only when the SQL transaction fails."""
         original = self._session_directory(session_id)
         self._validate_stage(staged)
+        expected = "pending-" + hashlib.sha256(original.name.encode("ascii")).hexdigest()
+        if staged.name != expected:
+            raise ValueError("Report deletion stage does not match session")
         if original.exists() or original.is_symlink():
             raise RuntimeError("Original report directory was recreated during erasure")
         os.replace(staged, original)
@@ -179,7 +193,7 @@ class ReportStorage:
             staged.is_symlink()
             or root.is_symlink()
             or staged.parent.resolve() != root.resolve()
-            or not re.fullmatch(r"pending-[a-f0-9]{32}", staged.name)
+            or not re.fullmatch(r"pending-[a-f0-9]{64}", staged.name)
             or not staged.is_dir()
         ):
             raise ValueError("Invalid isolated report deletion stage")
