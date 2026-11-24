@@ -132,3 +132,65 @@ def test_same_run_and_fake_token_totals_are_rejected():
     other["provider_completion_tokens"] = 0
     with pytest.raises(ValueError, match="Inconsistent completion"):
         compare_model_runs(base, other)
+
+
+def budget_fixture(run_id):
+    report = fixture(run_id)
+    report["requested_cases"] = 8
+    report["unattempted_case_ids"] = []
+    report["provider_usage_reconciled"] = True
+    report["provider_budget"] = {
+        "max_calls": 64,
+        "stop_after_reported_tokens": 120000,
+        "attempts": 48,
+        "known_usage_responses": 48,
+        "known_prompt_tokens": 800,
+        "known_completion_tokens": 160,
+        "usage_complete": True,
+        "stop_reason": None,
+        "hard_token_cap": False,
+    }
+    return report
+
+
+def test_budget_receipts_must_match_comparison_configuration():
+    baseline, candidate = budget_fixture("baseline"), budget_fixture("candidate")
+    assert compare_model_runs(baseline, candidate)["provider_budget_contract_checked"] is True
+    candidate["provider_budget"]["max_calls"] = 80
+    with pytest.raises(ValueError, match="budget contracts differ"):
+        compare_model_runs(baseline, candidate)
+    with pytest.raises(ValueError, match="budget contracts differ"):
+        compare_model_runs(baseline, fixture("legacy"))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("known_usage_responses", 47),
+        ("known_prompt_tokens", 801),
+        ("usage_complete", False),
+        ("stop_reason", "request_cap_reached"),
+        ("attempts", True),
+        ("max_calls", 48),
+    ],
+)
+def test_budget_receipt_rejects_incomplete_or_inconsistent_accounting(field, value):
+    candidate = budget_fixture("candidate")
+    candidate["provider_budget"][field] = value
+    with pytest.raises(ValueError, match="budget"):
+        compare_model_runs(budget_fixture("baseline"), candidate)
+
+
+def test_legacy_reports_are_explicitly_not_budget_checked():
+    result = compare_model_runs(fixture("baseline"), fixture("candidate"))
+    assert result["provider_budget_contract_checked"] is False
+
+
+def test_comparison_cannot_overwrite_input_evidence(tmp_path):
+    baseline, candidate = tmp_path / "base.json", tmp_path / "candidate.json"
+    baseline.write_text(json.dumps(fixture("baseline")), encoding="utf-8")
+    candidate.write_text(json.dumps(fixture("candidate")), encoding="utf-8")
+    before = baseline.read_bytes()
+    with pytest.raises(FileExistsError):
+        main(["--baseline", str(baseline), "--candidate", str(candidate), "--out", str(baseline)])
+    assert baseline.read_bytes() == before
