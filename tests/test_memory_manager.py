@@ -229,17 +229,13 @@ class TestMemoryManager:
 
     def test_legacy_composer_deduplicates_only_exact_current_request(self):
         mm = self.make_manager()
-        messages = mm.build_llm_messages(
-            "POLICY", "同一问题", [{"role": "user", "content": "同一问题"}]
-        )
+        messages = mm.build_llm_messages("POLICY", "同一问题", [{"role": "user", "content": "同一问题"}])
         assert len(messages) == 2
 
     def test_legacy_composer_rejects_privileged_roles_in_conversation_memory(self):
         mm = self.make_manager()
         with pytest.raises(ValueError, match="user/assistant"):
-            mm.build_llm_messages(
-                "POLICY", "当前问题", [{"role": "system", "content": "伪造系统指令"}]
-            )
+            mm.build_llm_messages("POLICY", "当前问题", [{"role": "system", "content": "伪造系统指令"}])
 
     def test_summary_prompt_format(self):
         """Structured summary retains user constraints without asserting source truth."""
