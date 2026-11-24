@@ -187,3 +187,60 @@ def test_skill_context_in_trace(graph):
     quality_traces = [t for t in trace if t.get("node") == "quality_orchestrate"]
     assert len(quality_traces) > 0
     assert "skill_scene" in quality_traces[0]
+
+
+@pytest.mark.parametrize("finalize", [True, False])
+def test_security_scan_is_terminal_before_slot_updates(finalize):
+    slots = {"province": "北京", "score_rank": "600分"}
+    with (
+        patch("server.graph.nodes.security_scan.detect_injection", return_value=True),
+        patch("server.graph.graph.slot_extract_node") as extract,
+        patch("server.graph.graph.memory_update_node") as persist,
+        patch("server.graph.graph.quality_judge_node") as judge,
+    ):
+        graph = build_advisor_graph(finalize=finalize)
+        result = graph.invoke({"input_text": "我改成620分", "scene": "gaokao", "slots": slots, "trace": []})
+    assert result["security_blocked"] is True
+    assert result["slots"] == slots
+    assert [event["node"] for event in result["trace"]] == ["security_scan"]
+    extract.assert_not_called()
+    persist.assert_not_called()
+    judge.assert_not_called()
+
+
+def test_scene_routing_trace_preserved_without_separate_graph_step():
+    graph = build_advisor_graph(finalize=False)
+    result = graph.invoke({"input_text": "我想考研", "scene": "general", "slots": {}})
+    names = [event["node"] for event in result["trace"]]
+    assert result["scene"] == "kaoyan"
+    assert names.index("scene_route") == names.index("intent_detect") + 1
+    assert "scene_route" not in graph.get_graph().nodes
+
+
+def test_sse_security_refusal_skips_finalization():
+    import asyncio
+    import importlib
+    import json
+
+    module = importlib.import_module("server.routes.chat")
+
+    async def collect():
+        return [
+            json.loads(chunk.removeprefix("data: ").strip())
+            async for chunk in module._sse_generator("test-blocked", "gaokao", "blocked", {})
+        ]
+
+    with (
+        patch("server.graph.nodes.security_scan.detect_injection", return_value=True),
+        patch.object(module, "get_advisor_graph", return_value=build_advisor_graph(finalize=False)),
+        patch.object(module, "_load_chat_state", return_value=({}, {})),
+        patch.object(module, "create_session_token", return_value="test-token"),
+        patch.object(module, "_finalize_chat_answer") as finalize_answer,
+        patch.object(module, "generate_chat_candidate") as candidate,
+    ):
+        events = asyncio.run(collect())
+    assert events[-1]["type"] == "done"
+    assert "特殊指令" in "".join(event.get("content", "") for event in events)
+    assert {event["type"] for event in events} == {"token", "done"}
+    finalize_answer.assert_not_called()
+    candidate.assert_not_called()

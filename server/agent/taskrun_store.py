@@ -59,9 +59,16 @@ class SyntheticTaskRunStore:
             admissions_path = Path(existing_database.removeprefix("sqlite:///")).resolve()
             if admissions_path == self.path:
                 raise ValueError("Task journal must be separate from admissions database")
+        research_path = os.getenv("ADMISSIONS_RESEARCH_JOURNAL", "")
+        if research_path and Path(research_path).resolve() == self.path:
+            raise ValueError("Synthetic journal must be separate from private research journal")
         if self.path.exists() and not self.path.is_file():
             raise ValueError("Task journal must be a regular file")
         with self._open() as conn:
+            # Serialize the trust-boundary check and schema initialization.
+            conn.execute("BEGIN IMMEDIATE")
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", ("authorized_research_runs",)).fetchone():
+                raise ValueError("Synthetic journal must not contain private research schema")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS synthetic_task_runs (
@@ -101,6 +108,7 @@ class SyntheticTaskRunStore:
                 )
                 """
             )
+            conn.commit()
 
     @contextmanager
     def _open(self) -> Iterator[sqlite3.Connection]:

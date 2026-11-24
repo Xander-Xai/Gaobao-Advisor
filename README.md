@@ -1,5 +1,8 @@
 # Gaobao Advisor｜可核验的高考志愿辅助决策系统
 
+> **架构治理（2026-11-25）**：确定性 LangGraph 咨询为默认主线；Deep Agents 是经批准的复杂招生研究候选，原生只读 Harness 作为参考和 Eval 基线，沙箱只面向受控招生分析。Java 为可选目录 overlay。见 [架构裁决与裁剪门禁](docs/architecture/README.md#architecture-decision-freeze--2026-11-25)。
+
+
 > **Memory 专项定位（2026-11-24）**：统一对话上下文、可选语义压缩、版本化 Session Snapshot 和独立的用户偏好机制；后两者受开关、隐私与 CI 门禁约束，不能用历史摘要代替招生 SQL 证据。见 [Memory 专项工程定位](docs/architecture/memory-engineering-positioning-20261124.md)。
 
 **AI 应用全栈交付 + 可信数据查询 + Agent 运行时可靠性实验**
@@ -272,7 +275,7 @@ flowchart LR
 |---|---|
 | Frontend | Vue 3、Vite、Pinia、Vue Router、Tailwind CSS；运营后台模块使用 TypeScript |
 | Backend | FastAPI、Pydantic、SSE（`sse-starlette`）、WebSocket（可选语音） |
-| Agent 编排 | LangGraph `StateGraph`，17 个节点，单状态图 |
+| Agent 编排 | LangGraph `StateGraph`，完整图 17 个节点 / 在线准备图 12 个节点，安全拒绝提前终止 |
 | 数据库 | SQLite（默认）、MySQL 8.4（可选）、SQLAlchemy 2、Alembic |
 | 知识检索 | 自研 BM25 关键词检索；可选 embedding provider + Dense 检索 |
 | LLM | OpenAI-compatible API（DeepSeek / Qwen / GLM / Moonshot / OpenAI / Ollama） |
@@ -483,7 +486,7 @@ curl -s "http://localhost:8000/api/v1/data/trends?school_name=北辰示例科技
 server/
   main.py            FastAPI 入口、中间件与路由挂载
   routes/            chat / data / health / knowledge / profile / report / voice
-  graph/             LangGraph 状态图、状态契约与 17 个节点
+  graph/             LangGraph 状态图、状态契约与在线准备/完整图
   services/          RAG、数据目录、模型路由、质量与语音
   admin/             管理员 RBAC、质检任务、审计、Redis 队列与 Worker
   domain/            Pydantic 领域/接口模型

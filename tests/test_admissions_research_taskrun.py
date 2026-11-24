@@ -167,3 +167,31 @@ def test_research_report_http_requires_authorized_owner_and_terminal_result(admi
     assert admin_client.get(report_url, headers=operator).status_code == 409
     assert admin_client.get(report_url, headers=administrator).status_code == 409
     assert admin_client.post(f"{base}/{run_id}/execute", headers=operator).status_code == 404
+
+
+def test_task_journals_cannot_share_storage_even_without_environment_configuration(tmp_path, monkeypatch):
+    from server.agent.taskrun_store import SyntheticTaskRunStore
+
+    monkeypatch.delenv("ADMISSIONS_RESEARCH_JOURNAL", raising=False)
+    monkeypatch.delenv("SYNTHETIC_TASKRUN_JOURNAL", raising=False)
+    tmp_path.chmod(0o700)
+    private = tmp_path / "private.sqlite"
+    ResearchJournal(private)
+    with pytest.raises(ValueError, match="private research schema"):
+        SyntheticTaskRunStore(private)
+
+    synthetic = tmp_path / "synthetic.sqlite"
+    SyntheticTaskRunStore(synthetic)
+    synthetic.chmod(0o600)
+    with pytest.raises(ValueError, match="synthetic task schema"):
+        ResearchJournal(synthetic)
+
+
+def test_synthetic_journal_rejects_reserved_private_path_before_initialization(tmp_path, monkeypatch):
+    from server.agent.taskrun_store import SyntheticTaskRunStore
+
+    private = tmp_path / "private.sqlite"
+    monkeypatch.setenv("ADMISSIONS_RESEARCH_JOURNAL", str(private))
+    with pytest.raises(ValueError, match="separate from private research journal"):
+        SyntheticTaskRunStore(private)
+    assert not private.exists()

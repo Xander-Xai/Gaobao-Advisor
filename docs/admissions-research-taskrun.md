@@ -1,7 +1,6 @@
 # Approved admissions research TaskRun (operator-only)
 
-The synthetic journal remains synthetic. The private business journal accepts
-an explicitly authorized data reference and immutable model/image/scope.
+The synthetic journal is an isolated evaluation fixture, not a second business research runtime. The private business journal is the sole proposed authority for approved business research and accepts an explicitly authorized data reference and immutable model/image/scope. This separation is deliberate: the synthetic read-only recovery policy permits bounded replay, while approved paid research must never automatically replay. Do not merge their storage or expose the synthetic engine as a production fallback. Both stores now reject the other schema under a SQLite write transaction, even if environment variables are missing; a configured private journal path is reserved before synthetic initialization. The proposed business dispatch layer invokes the same journal claim/execute path rather than creating another lifecycle.
 The operator API creates and inspects the run; a different admin approves its
 exact request digest. Only a separately invoked worker can spend model tokens
 or start a sandbox. No browser click triggers model calls.
