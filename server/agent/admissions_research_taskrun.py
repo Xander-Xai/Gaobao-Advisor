@@ -144,10 +144,16 @@ class ResearchJournal:
         spec = json.loads(row["spec"])
         spec["approval_ref"] = None
         return {
-            "run_id": row["id"], "owner": row["owner"], "status": row["state"],
-            "spec": spec, "spec_sha256": row["spec_sha256"], "approved_by": row["approver"],
+            "run_id": row["id"],
+            "owner": row["owner"],
+            "status": row["state"],
+            "spec": spec,
+            "spec_sha256": row["spec_sha256"],
+            "approved_by": row["approver"],
             "result": json.loads(row["result"]) if row["result"] else None,
-            "failure_code": row["failure"], "created_at": row["created"], "updated_at": row["updated"],
+            "failure_code": row["failure"],
+            "created_at": row["created"],
+            "updated_at": row["updated"],
             "automatic_paid_replay": False,
         }
 
@@ -169,10 +175,14 @@ class ResearchJournal:
                 if existing["spec_sha256"] != digest(spec):
                     raise ResearchConflict("Idempotency conflict")
                 return self._view(self._row(db, existing["id"]))
-            if db.execute(
-                "SELECT COUNT(*) FROM authorized_research_runs WHERE owner=? "
-                "AND state IN ('PENDING_APPROVAL','APPROVED','RUNNING')", (owner,)
-            ).fetchone()[0] >= 8:
+            if (
+                db.execute(
+                    "SELECT COUNT(*) FROM authorized_research_runs WHERE owner=? "
+                    "AND state IN ('PENDING_APPROVAL','APPROVED','RUNNING')",
+                    (owner,),
+                ).fetchone()[0]
+                >= 8
+            ):
                 raise ResearchConflict("Outstanding task quota")
             if db.execute("SELECT COUNT(*) FROM authorized_research_runs").fetchone()[0] >= 5000:
                 raise ResearchConflict("Journal quota")

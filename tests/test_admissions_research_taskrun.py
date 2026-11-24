@@ -23,8 +23,13 @@ def journal(tmp_path):
 def spec():
     return {
         "scope": {
-            "school_ids": [101, 102], "major_id": 42, "province": "广东",
-            "subject_type": "物理", "batch": "本科", "year_from": 2022, "year_to": 2024,
+            "school_ids": [101, 102],
+            "major_id": 42,
+            "province": "广东",
+            "subject_type": "物理",
+            "batch": "本科",
+            "year_from": 2022,
+            "year_to": 2024,
         },
         "model_id": "openai:approved-model",
         "dataset_ref": "approved-catalog-v1",
