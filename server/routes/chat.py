@@ -60,6 +60,10 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
         db = get_session()
         stored = load_conversation_slots(db, session_id) or {}
     except Exception:
+        from server.industrial_runtime import industrial_enabled
+
+        if industrial_enabled():
+            raise RuntimeError("Session storage unavailable") from None
         logger.warning("Could not load persisted slots for session %s", session_id, exc_info=True)
     finally:
         if db is not None:
@@ -119,7 +123,21 @@ def _finalize_chat_answer(
     completion. The LLM-as-Judge is diagnostic: a 50-point *unscored* fallback
     must not be mistaken for evidence of safety or a verified business result.
     """
+    from server.industrial_runtime import industrial_enabled
+
     final = dict(state)
+    if industrial_enabled():
+        from server.services.industrial_admissions import build_history_reply
+
+        final["reply"], final["structured_result"] = build_history_reply(final)
+        final["atomic_memory"] = True
+        final.update(memory_node(final))
+        if not any(
+            event.get("node") == "memory_update" and event.get("event") == "persisted"
+            for event in final.get("trace", [])
+        ):
+            raise RuntimeError("Final-answer persistence failed")
+        return final, False
     fallback = final.get("template_reply") or final.get("reply") or "当前信息不足，无法完成分析。"
     if not candidate.strip():
         candidate, model_generated = fallback, False
@@ -208,7 +226,13 @@ async def _sse_generator(
     unchecked provider chunks are ever emitted to the browser.
     """
     graph = get_advisor_graph()
-    persisted_slots, query_state = await asyncio.to_thread(_load_chat_state, session_id, existing_slots)
+    from server.industrial_runtime import industrial_enabled
+
+    try:
+        persisted_slots, query_state = await asyncio.to_thread(_load_chat_state, session_id, existing_slots)
+    except Exception:
+        yield f"data: {json.dumps({'type': 'error', 'code': 'SESSION_UNAVAILABLE', 'message': '会话服务暂时不可用'})}\n\n"
+        return
     initial_state = {
         "session_id": session_id,
         "input_text": message,
@@ -239,7 +263,7 @@ async def _sse_generator(
 
     reply = result.get("reply") or ""
     is_template = result.get("reply_source") == "template"
-    llm_configured = bool(str(load_llm_config().get("api_key", "")).strip())
+    llm_configured = not industrial_enabled() and bool(str(load_llm_config().get("api_key", "")).strip())
     degraded = False
     degraded_message = ""
 
