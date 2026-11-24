@@ -160,6 +160,9 @@ def score_case(case: dict, receipt: Any) -> dict:
     if status != case["expected_status"]:
         reasons.append("unexpected_status")
     if case["expected_status"] == "BLOCKED":
+        # A withheld report can result from an outage or an incorrect planner.
+        # v1 has no independent business-rejection reason oracle.
+        reasons.append("full_receipt_block_reason_not_independently_classified")
         if any(receipt.get(key) is not None for key in ("evidence", "sandbox_analysis", "receipt_ids")):
             reasons.append("blocked_result_leaked")
     else:

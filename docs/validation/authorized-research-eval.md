@@ -34,5 +34,4 @@ the raw evidence digest or independently verify provider transport. An
 expected BLOCKED case cannot pass on a generic FAILED or cancelled run:
 the current managed failure projection does not distinguish correct business
 rejection from infrastructure failure. Keep this evidence gap open until
-independent classification is available. Neither lane authorizes production
-release or establishes admission prediction accuracy.
+independent classification is available. The full receipt lane applies the same conservative rule: BLOCKED without an independently labelled and verified rejection reason is not a passing task. A provider outage, unverified finish or changed source can withhold a report safely without completing the expected business task. Use VERIFIED_PARTIAL_RESEARCH with independently frozen coverage for incomplete-data cases; keep true business-rejection acceptance open pending a reason oracle. Neither lane authorizes production release or establishes admission prediction accuracy.

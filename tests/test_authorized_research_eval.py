@@ -105,6 +105,26 @@ def test_split_leakage_and_reused_run_rejected():
         evaluate(manifest, receipts)
 
 
+@pytest.mark.parametrize("error", ["research_failed", "unverified_finish", "source_changed"])
+def test_full_receipt_does_not_credit_unclassified_block(error):
+    manifest, receipts = fixture()
+    case = manifest["cases"][1]
+    case.update(
+        expected_status="BLOCKED",
+        expected_coverage=None,
+        expected_analysis_sha256=None,
+        expected_evidence_sha256=None,
+    )
+    receipt = receipts["case-1"]
+    receipt.update(status="BLOCKED", error=error)
+    for field in ("evidence", "sandbox_analysis", "receipt_ids"):
+        receipt.pop(field, None)
+    result = evaluate(manifest, receipts)
+    assert result["status"] == "FAILED"
+    assert result["splits"]["development"]["passed"] == 1
+    assert "full_receipt_block_reason_not_independently_classified" in result["cases"][1]["reasons"]
+
+
 def managed_fixture(tmp_path):
     from server.agent.admissions_research_taskrun import ResearchJournal
 
