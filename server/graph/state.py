@@ -30,6 +30,8 @@ class AdvisorState(TypedDict, total=False):
     emotion_state: str
     cognitive_model: str
     decision_heuristics: list[str]
+    skill_context: str  # server-owned methodology and safety, not RAG evidence
+    skill_sections: list[str]
     anti_pattern_violations: list[dict]
 
     # ── Knowledge retrieval ────────────────────────────────────
