@@ -253,3 +253,27 @@ def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatc
     )
     assert receipt["status"] == "VERIFIED_RESEARCH"
     assert receipt["sandbox_analysis"]["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS"
+
+
+def test_private_report_requires_verified_evidence(sessions):
+    receipt = run(sessions, controller())
+    rendered = research.render_verified_research(receipt)
+    assert receipt["evidence_sha256"] in rendered
+    assert "12345" in rendered
+    assert "选科要求原文保留" in rendered
+    assert "录取概率" in rendered
+    receipt["evidence"]["admission-history"][0]["min_score"] = 999
+    with pytest.raises(ValueError, match="digest"):
+        research.render_verified_research(receipt)
+
+
+def test_private_report_preserves_partial_and_blocks_unsubmitted(sessions):
+    with sessions() as session:
+        session.query(EnrollmentPlan).filter_by(school_id=2).delete()
+        session.commit()
+    receipt = run(sessions, controller())
+    rendered = research.render_verified_research(receipt)
+    assert "VERIFIED_PARTIAL_RESEARCH" in rendered
+    assert '"missing":[[2,2024]]' in rendered
+    with pytest.raises(ValueError, match="verified"):
+        research.render_verified_research(run(sessions, controller(submit=False)))
