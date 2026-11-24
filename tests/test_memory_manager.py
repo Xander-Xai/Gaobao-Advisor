@@ -242,8 +242,11 @@ class TestMemoryManager:
             )
 
     def test_summary_prompt_format(self):
-        """SUMMARY_PROMPT contains the history placeholder."""
+        """Structured summary retains user constraints without asserting source truth."""
         assert "{history}" in SUMMARY_PROMPT
+        for anchor in ("用户目标", "明确约束", "未确认事项", "已完成与下一步", "授权 SQL"):
+            assert anchor in SUMMARY_PROMPT
+        assert "不得虚构" in SUMMARY_PROMPT
 
     def test_estimate_tokens_on_memory_data(self):
         """Token estimation works on memory data structure."""
