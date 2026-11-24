@@ -24,6 +24,26 @@ record why the larger decisions were made.
 
 **架构裁剪门禁**：先确认默认路由、operator 入口、实验入口的调用关系和兼容合同；再做等价状态/失败回归和简单基线对比。没有证据不删除安全检查，不自动开启模型、沙箱、真实数据或付费调用。未完成架构裁剪前暂停新增技术栈和能力缺口扩展。
 
+### Entry-point and state ownership decision (#190)
+
+The following describes the default branch before integrating the open research work, not a production claim.
+
+| Entry point | Actual responsibility | Architecture decision |
+|---|---|---|
+| `server/routes/chat.py` → `get_chat_preparation_graph()` | 12 registered preparation nodes ending at render_reply; SSE route owns candidate checks and persistence | Keep one public consultation path. Do not run the 17-node finalized variant and then finalize again. |
+| `server/graph/graph.py::get_advisor_graph` | Full 17-node graph with finalizers | Retain compatibility/reference; never count 17 nodes as 17 online model calls. |
+| `server/agent/readonly_harness.py` / `native_taskrun_harness.py` | Bounded loop reference and synthetic evaluation | Not another public chat engine or production research runtime. |
+| `server/routes/agent_taskruns.py` / `taskrun_store.py` | Synthetic operator journal | Keep physically isolated from private admissions and real research data; its receipts cannot authorize private work. |
+| `server/agent/admissions_deepagents.py` | Authorized local operator research with InMemorySaver | Sole complex-research engine candidate; process restart is not graph-resume support. |
+| `server/agent/admissions_analysis_sandbox.py` / `sandbox_runtime.py` | Restricted admissions analysis / synthetic security fixtures | Use deterministic SQL/functions first; no arbitrary shell from public chat. |
+| Open integrated research PR #192 | Proposed private research journal/API/dispatcher plus other changes | Not current mainline. Review lifecycle authority and privacy isolation before enabling or merging. |
+
+A physically separate synthetic journal is a trust boundary, not a second production engine. The private research path must have exactly one authoritative owner/approval/lease/receipt/state transition contract. Do not expose a second queue, allow synthetic approvals to authorize real work, or interpret a persisted job row as a persisted graph checkpoint. If recovery of a paid or externally uncertain action is not proven, park the run for reconciliation rather than replaying it.
+
+Retain existing graph nodes until a behavior-preserving comparison justifies removal. Security scan, profile branching, data validation, source attribution, candidate gate and final persistence are distinct responsibilities; simple sequential edges alone are not evidence that a node is redundant. Any consolidation must preserve the SSE event/refusal contract, hard admissions constraints and single ownership of final persistence.
+
+Acceptance: exact-head CI, API and SSE contracts, deterministic negative cases and one research lifecycle authority; no real model/data calls are implied by this decision. Architecture issue #190 remains open until the structural changes and acceptance have been reviewed; capability additions are deferred.
+
 ## 1. System overview
 
 `gaobao-advisor` is a read/write web application with four runtime roles:
