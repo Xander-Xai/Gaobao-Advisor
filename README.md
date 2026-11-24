@@ -35,6 +35,8 @@
 操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
 跨任务用户偏好记忆仍在独立 Draft PR #135，不应与会话压缩混同。
 
+进一步的**可复用会话摘要快照**已在独立堆叠 Draft 中实现：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。仍需单独授权开关 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，且当前明确禁止生产环境启用；具体限制与 Alembic 迁移冲突见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
+
 ## Agent Harness / Eval 实验
 
 与现有 17 节点业务图**分离**的只读执行层，位于 `server/agent/readonly_harness.py`、`readonly_model_planner.py` 和 `readonly_tools.py`。这里实现的是 **Planner → Tool → Observation → Finish/Abstain** 的受约束循环，不是把业务 LangGraph 节点数当成“工具步长”。
