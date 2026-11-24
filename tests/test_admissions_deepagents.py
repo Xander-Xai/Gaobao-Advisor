@@ -325,11 +325,32 @@ def test_managed_research_rejects_direct_cli_before_io(monkeypatch, tmp_path):
     monkeypatch.setenv("ADMISSIONS_RESEARCH_ENABLED", "true")
     output = tmp_path / "unapproved.json"
     with pytest.raises(SystemExit) as exc:
-        main([
-            "--authorized-data", "--authorize-model-call", "--approval-ref", "offline",
-            "--school-ids", "101", "102", "--major-id", "42", "--province", "广东",
-            "--subject-type", "物理", "--batch", "本科", "--year-from", "2022",
-            "--year-to", "2024", "--model", "openai:approved-model", "--out", str(output),
-        ])
+        main(
+            [
+                "--authorized-data",
+                "--authorize-model-call",
+                "--approval-ref",
+                "offline",
+                "--school-ids",
+                "101",
+                "102",
+                "--major-id",
+                "42",
+                "--province",
+                "广东",
+                "--subject-type",
+                "物理",
+                "--batch",
+                "本科",
+                "--year-from",
+                "2022",
+                "--year-to",
+                "2024",
+                "--model",
+                "openai:approved-model",
+                "--out",
+                str(output),
+            ]
+        )
     assert exc.value.code == 2
     assert not output.exists()
