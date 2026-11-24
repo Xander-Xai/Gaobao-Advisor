@@ -201,6 +201,25 @@ def sandbox_command(image_id: str, workspace: Path, name: str, *, oracle_dir: Pa
     ]
 
 
+def _remove_and_verify_container(name: str) -> bool:
+    """Best-effort removal plus a successful daemon query for this exact name."""
+    try:
+        subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    try:
+        listing = subprocess.run(
+            ["docker", "ps", "--all", "--filter", f"name=^/{name}$", "--format", "{{.Names}}"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return listing.returncode == 0 and not listing.stdout.strip()
+
+
 def run_sandbox_probe(
     image_id: str,
     workspace: Path,
@@ -229,6 +248,7 @@ def run_sandbox_probe(
         name = "gaobao-harness-" + secrets.token_hex(8)
         try:
             command = sandbox_command(image_id, workspace, name, oracle_dir=oracle_dir)
+            report: dict[str, Any] = {}
             try:
                 completed = runner(
                     command,
@@ -251,20 +271,22 @@ def run_sandbox_probe(
                     message = message.replace(name, "<container>")
                     print("sandbox Docker launch diagnostic: " + message, file=sys.stderr)
                     report["error"] = "docker_launch_failed"
-                return report
             except subprocess.TimeoutExpired:
-                return {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "sandbox_timeout"}
+                report = {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "sandbox_timeout"}
             except SandboxOutputExceeded:
-                return {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "sandbox_output_limit"}
+                report = {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "sandbox_output_limit"}
             except OSError:
-                return {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "docker_unavailable"}
+                report = {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "docker_unavailable"}
             finally:
-                # A client-side timeout does not guarantee Docker teardown.
+                # A killed client is not proof that the daemon removed its container.
                 if runner is _bounded_docker_run:
-                    try:
-                        subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True, timeout=5)
-                    except (OSError, subprocess.TimeoutExpired):
-                        pass
+                    removed = _remove_and_verify_container(name)
+                    if report:
+                        report["cleanup_verified"] = removed
+                        if not removed:
+                            report["passed"] = False
+                            report.setdefault("error", "sandbox_cleanup_unverified")
+            return report
         finally:
             # Allow the host's temporary-directory cleanup to remove its file.
             oracle_dir.chmod(0o700)
@@ -302,10 +324,32 @@ print("SYNTHETIC_WORKSPACE_PASS")
 """
 
 
+def run_sandbox_failure_probes(image_id: str, workspace: Path) -> dict[str, Any]:
+    """Run fixed controller-owned negative cases through the real Docker boundary."""
+    cases = (
+        ("nonzero_exit", "print('SYNTHETIC_WORKSPACE_PASS'); raise SystemExit(7)", 25),
+        ("invalid_marker", "print('SYNTHETIC_WORKSPACE_PASS_BUT_FAILED')", 25),
+        ("output_limit", "print('X' * 100000)", 25),
+        ("timeout", "import time; time.sleep(60)", 10),
+    )
+    checks = {}
+    for name, source, timeout in cases:
+        result = run_sandbox_probe(image_id, workspace, oracle_source=source, timeout_seconds=timeout)
+        if name == "nonzero_exit":
+            correct = result.get("exit_code") == 7
+        elif name == "invalid_marker":
+            correct = result.get("exit_code") == 0 and "error" not in result
+        else:
+            correct = result.get("error") == f"sandbox_{name}"
+        checks[name] = not result.get("passed") and correct and result.get("cleanup_verified") is True
+    return {"passed": all(checks.values()), "checks": checks}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True, help="Local Docker sha256:image_id, not a mutable tag")
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--failure-probes", action="store_true", help="Run fixed real Docker negative probes")
     args = parser.parse_args(argv)
     with tempfile.TemporaryDirectory(prefix="gaobao-synthetic-parent-") as temp:
         work = Path(temp) / ("gaobao-synthetic-" + secrets.token_hex(6))
@@ -314,10 +358,15 @@ def main(argv: list[str] | None = None) -> int:
         (work / _WORKSPACE_MARKER).write_text("SYNTHETIC_ONLY\n", encoding="utf-8")
         result = run_sandbox_probe(args.image, work)
         result["scratch_artifact_created"] = (work / "artifact.txt").is_file()
+        if args.failure_probes:
+            result["failure_probes"] = run_sandbox_failure_probes(args.image, work)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, sort_keys=True))
-    return 0 if result["passed"] and result["scratch_artifact_created"] else 1
+    passed = result["passed"] and result["scratch_artifact_created"]
+    if args.failure_probes:
+        passed = passed and result["failure_probes"]["passed"]
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

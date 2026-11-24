@@ -265,13 +265,17 @@ jobs:
       - name: Verify synthetic workspace Docker sandbox
         run: |
           IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
-          python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/gaobao-harness-sandbox.json
+          python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/gaobao-harness-sandbox.json --failure-probes
           python - <<'PY'
           import json
           record = json.load(open("/tmp/gaobao-harness-sandbox.json"))
           assert record["sandbox"] == "DOCKER_RESTRICTED_SYNTHETIC", record
           assert record["passed"] and record["scratch_artifact_created"], record
-          print("sandbox isolation smoke passed")
+          assert record["cleanup_verified"] is True, record
+          assert record["failure_probes"]["passed"], record
+          assert set(record["failure_probes"]["checks"]) == {"nonzero_exit", "invalid_marker", "output_limit", "timeout"}
+          assert all(record["failure_probes"]["checks"].values()), record
+          print("sandbox isolation and negative smoke passed")
           PY
       - name: Execute two synthetic code repairs inside Docker workspace
         run: |
