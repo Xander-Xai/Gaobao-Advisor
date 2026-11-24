@@ -79,7 +79,9 @@ def test_last_case_unknown_usage_or_overspend_is_not_complete(monkeypatch, promp
     from benchmarks.harness_optimizer import compare_holdout
 
     install_runner(monkeypatch, prompt, completion)
-    report = evaluation.run_model_cases(cases()[:1], object(), max_total_tokens=20, groundtruth_review="REVIEW_DECLARED")
+    report = evaluation.run_model_cases(
+        cases()[:1], object(), max_total_tokens=20, groundtruth_review="REVIEW_DECLARED"
+    )
     assert report["cases"] == report["planned_cases"] == 1
     assert report["unexecuted_case_ids"] == []
     assert report["suite_complete"] is False
