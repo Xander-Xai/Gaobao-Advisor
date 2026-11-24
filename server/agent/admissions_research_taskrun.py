@@ -158,6 +158,7 @@ class ResearchJournal:
 
     def create(self, owner: str, key: str, spec: dict):
         validate_spec(spec)
+        self.expire_abandoned()
         if not owner or not KEY.fullmatch(key):
             raise ValueError("Invalid owner or idempotency key")
         with self.tx() as db:
@@ -213,6 +214,43 @@ class ResearchJournal:
             )
             return self._view(self._row(db, run_id))
 
+    def expire_abandoned(self) -> int:
+        """Commit expiry separately so later guard exceptions cannot roll it back."""
+        now = time.time()
+        with self.tx() as db:
+            changed = db.execute(
+                "UPDATE authorized_research_runs SET state='EXPIRED',lease=NULL,deadline=NULL,"
+                "failure='lease_expired_no_replay',updated=? WHERE state='RUNNING' AND deadline<=?",
+                (now, now),
+            )
+            return changed.rowcount
+
+    def approved_candidates(self, dataset_ref: str, model_id: str, image_id: str) -> list[str]:
+        """Select only immutable, approved requests within an operator's execution policy."""
+        if not DATASET.fullmatch(dataset_ref) or not MODEL_RE.fullmatch(model_id) or not IMAGE.fullmatch(image_id):
+            raise ValueError("Invalid dispatcher policy")
+        self.expire_abandoned()
+        with self.tx() as db:
+            rows = db.execute(
+                "SELECT id,spec,spec_sha256 FROM authorized_research_runs "
+                "WHERE state='APPROVED' AND approver IS NOT NULL ORDER BY created,id LIMIT 5000"
+            ).fetchall()
+            selected = []
+            for row in rows:
+                try:
+                    spec = json.loads(row["spec"])
+                    validate_spec(spec)
+                    if (
+                        digest(spec) == row["spec_sha256"]
+                        and spec["dataset_ref"] == dataset_ref
+                        and spec["model_id"] == model_id
+                        and spec["image_id"] == image_id
+                    ):
+                        selected.append(row["id"])
+                except (TypeError, ValueError):
+                    continue
+            return selected
+
     def claim(self, run_id: str, dataset_ref: str):
         with self.tx() as db:
             row = self._row(db, run_id)
@@ -233,6 +271,7 @@ class ResearchJournal:
             return spec, lease
 
     def guard(self, run_id: str, lease: str):
+        self.expire_abandoned()
         with self.tx() as db:
             row = self._row(db, run_id)
             if row["state"] != "RUNNING" or row["lease"] != lease:
