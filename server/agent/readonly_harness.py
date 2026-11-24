@@ -132,6 +132,7 @@ def run_readonly_agent(
     *,
     checkpoint: SQLiteSyntheticCheckpointStore | None = None,
     run_id: str | None = None,
+    checkpoint_revision: str = "synthetic-v1",
 ) -> HarnessResult:
     """Execute an agent loop with explicit budget, evidence and repeat gates.
 
@@ -165,10 +166,23 @@ def run_readonly_agent(
     resume_step = 1
     if (checkpoint is None) != (run_id is None):
         raise ValueError("Checkpoint store and synthetic run ID must be supplied together")
+    if not isinstance(checkpoint_revision, str) or not 0 < len(checkpoint_revision) <= 128:
+        raise ValueError("Checkpoint revision must be a nonempty string <= 128 characters")
+    # Bind both active and terminal snapshots to the execution policy. Callers
+    # must bump checkpoint_revision when the planner, tool logic or corpus changes.
+    policy_digest = task_digest(
+        json.dumps(
+            {"version": 1, "revision": checkpoint_revision, "limits": asdict(limits), "schemas": schemas},
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+    )
     if checkpoint is not None and run_id is not None:
         saved = checkpoint.load(run_id, task_digest(task))
         if saved is not None:
             checkpoint_version, state = saved
+            if state.get("policy_sha256") != policy_digest:
+                raise ValueError("Checkpoint execution policy mismatch; use a new synthetic run ID")
             if state.get("phase") == "done":
                 return HarnessResult(**state["result"])
             if state.get("phase") != "active":
@@ -341,6 +355,7 @@ def run_readonly_agent(
             snapshot = {
                 "data_profile": "SYNTHETIC_DEMO",
                 "phase": "active",
+                "policy_sha256": policy_digest,
                 "history": history,
                 "sources": sorted(sources),
                 "sequence": sequence,
@@ -381,6 +396,11 @@ def run_readonly_agent(
             run_id,
             task_digest(task),
             checkpoint_version,
-            {"data_profile": "SYNTHETIC_DEMO", "phase": "done", "result": asdict(result)},
+            {
+                "data_profile": "SYNTHETIC_DEMO",
+                "phase": "done",
+                "policy_sha256": policy_digest,
+                "result": asdict(result),
+            },
         )
     return result
