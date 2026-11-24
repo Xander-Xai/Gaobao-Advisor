@@ -36,3 +36,11 @@ private no-store text response from GET /runs/{id}/report, using the same
 owner/admin access rule as run inspection. Failed, expired or cancelled runs
 cannot produce a report. No raw rows, personal data, or approval reference are
 included. This is not a browser UI or a production/provider acceptance result.
+
+A failed sandbox program may be repaired once by the Deep Agents planner when
+the error is execution_failed, invalid_analysis_output or oracle_mismatch and
+container cleanup was verified. The retry uses the same captured SQL snapshot,
+image and task lease. Timeout, isolation/cleanup failure, exhausted budget or
+successful execution cannot trigger a retry. The model sees only the fixed
+error code and retry eligibility; the receipt records attempts. This is bounded
+reflection, not unrestricted replanning or automatic paid task replay.

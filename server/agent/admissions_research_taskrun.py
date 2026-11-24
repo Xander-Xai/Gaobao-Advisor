@@ -273,8 +273,14 @@ def execute_approved(journal, run_id, dataset_ref, session_factory, *, runner=ru
     try:
         scope = validate_spec(spec)
         report = runner(
-            scope, session_factory, spec["model_id"], approval_ref=spec["approval_ref"],
-            authorized=True, model_authorized=True, analysis_image_id=spec["image_id"], lease_guard=guard,
+            scope,
+            session_factory,
+            spec["model_id"],
+            approval_ref=spec["approval_ref"],
+            authorized=True,
+            model_authorized=True,
+            analysis_image_id=spec["image_id"],
+            lease_guard=guard,
         )
         guard()
         evidence = report.get("evidence")

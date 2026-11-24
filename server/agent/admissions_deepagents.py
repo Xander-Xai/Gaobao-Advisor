@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any
 
 MAX_ROWS = 100
+MAX_ANALYSIS_ATTEMPTS = 2
+RECOVERABLE_ANALYSIS_ERRORS = frozenset({"oracle_mismatch", "invalid_analysis_output", "execution_failed"})
 MODEL_RE = re.compile(r"openai:[A-Za-z0-9_.-]{2,100}")
 _SKILL = """---
 name: admissions-research
@@ -36,7 +38,7 @@ _SYSTEM = (
     "Read the admissions-research skill and use write_todos. Delegate both named "
     "subagents with task; their fixed SQL scope cannot be changed. "
     "Submit both opaque receipt IDs using submit_research. Final prose is not evidence. "
-    "Do not request arbitrary SQL, code, external searches, or personal data."
+    "Do not request arbitrary SQL, external searches, personal data, or code outside the explicitly offered sandbox."
 )
 
 
@@ -225,7 +227,9 @@ def run_admissions_research(
     attempted: set[str] = set()
     submitted = False
     analysis_receipt: dict[str, Any] | None = None
-    analysis_attempted = False
+    analysis_attempts = 0
+    analysis_running = False
+    analysis_attempt_log: list[dict[str, Any]] = []
     if analysis_image_id is not None and not re.fullmatch(r"sha256:[0-9a-f]{64}", analysis_image_id):
         raise ValueError("Invalid immutable sandbox image")
     kinds = ("admission-history", "enrollment-plans")
@@ -266,29 +270,63 @@ def run_admissions_research(
         Read /input/rows.json; group by school_id and year, emit the exact
         descriptive statistics schema specified in the system instructions.
         """
-        nonlocal analysis_attempted, analysis_receipt
+        nonlocal analysis_attempts, analysis_running, analysis_receipt
         guard()
         from server.agent.admissions_analysis_sandbox import Scope, execute_admissions_analysis
 
         with lock:
-            if analysis_image_id is None or analysis_attempted or submitted or kinds[0] not in snapshots:
-                raise ValueError("Sandbox requires approved history and one execution budget")
-            analysis_attempted = True
+            if (
+                analysis_image_id is None
+                or analysis_running
+                or submitted
+                or kinds[0] not in snapshots
+                or analysis_attempts >= MAX_ANALYSIS_ATTEMPTS
+                or (
+                    analysis_attempts > 0
+                    and (
+                        analysis_receipt is None
+                        or analysis_receipt.get("status") != "BLOCKED"
+                        or analysis_receipt.get("cleanup_verified") is not True
+                        or analysis_receipt.get("error") not in RECOVERABLE_ANALYSIS_ERRORS
+                    )
+                )
+            ):
+                raise ValueError("Sandbox execution or repair not authorized")
+            analysis_attempts += 1
+            analysis_running = True
             rows = [dict(row) for row in snapshots[kinds[0]]]
-        sandbox_scope = Scope(scope.province, scope.subject_type, scope.batch, scope.year_from, scope.year_to, "major")
-        result = execute_admissions_analysis(
-            rows,
-            sandbox_scope,
-            ("school_id", "year"),
-            code.encode(),
-            image_id=analysis_image_id,
-            approval_ref=approval_ref,
-            authorized=True,
-        )
-        guard()
-        with lock:
-            analysis_receipt = result
-        return _canonical({"status": result["status"], "result_sha256": result.get("result_sha256")})
+        try:
+            sandbox_scope = Scope(scope.province, scope.subject_type, scope.batch, scope.year_from, scope.year_to, "major")
+            result = execute_admissions_analysis(
+                rows,
+                sandbox_scope,
+                ("school_id", "year"),
+                code.encode(),
+                image_id=analysis_image_id,
+                approval_ref=approval_ref,
+                authorized=True,
+            )
+            guard()
+            with lock:
+                analysis_receipt = result
+                retry_allowed = (
+                    result.get("status") == "BLOCKED"
+                    and result.get("cleanup_verified") is True
+                    and result.get("error") in RECOVERABLE_ANALYSIS_ERRORS
+                    and analysis_attempts < MAX_ANALYSIS_ATTEMPTS
+                )
+                observation = {
+                    "status": result["status"],
+                    "result_sha256": result.get("result_sha256"),
+                    "error": result.get("error"),
+                    "attempt": analysis_attempts,
+                    "retry_allowed": retry_allowed,
+                }
+                analysis_attempt_log.append(observation)
+            return _canonical(observation)
+        finally:
+            with lock:
+                analysis_running = False
 
     def submit_research(history_receipt: str, plans_receipt: str) -> str:
         """Submit exactly the two returned opaque receipt IDs after delegation."""
@@ -355,7 +393,8 @@ def run_admissions_research(
                                 "highest_min_score, best_min_rank, worst_min_rank. "
                                 "Score metrics use non-null min_score, rank metrics non-null min_rank. "
                                 "Use statistics.median; unavailable metrics are null. "
-                                "Only submit research after sandbox verification."
+                                "If retry_allowed is true, revise the code once using the error code; "
+                                "never change the approved data scope. Only submit after sandbox verification."
                                 if analysis_image_id is not None
                                 else ""
                             )
@@ -406,6 +445,7 @@ def run_admissions_research(
         report["error_type"] = type(exc).__name__
     finally:
         report["delegated_dimensions"] = sorted(snapshots)
+        report["sandbox_attempts"] = analysis_attempt_log
     return report
 
 
