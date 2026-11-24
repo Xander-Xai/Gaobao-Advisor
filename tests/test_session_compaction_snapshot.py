@@ -216,3 +216,18 @@ def test_orphan_or_invalid_session_cannot_publish(db_factory):
     assert not store.publish("session-none", history, covered_count=6, summary="orphan", policy_sha256=POLICY)
     with pytest.raises(ValueError, match="session identity"):
         store.load("../cross-owner", history, policy_sha256=POLICY)
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("app_env", ["", "production", "prod", "staging"])
+async def test_snapshot_integration_refuses_unknown_or_production_env(monkeypatch, app_env):
+    from server.graph.nodes import llm_node
+
+    monkeypatch.setenv("APP_ENV", app_env)
+    monkeypatch.setenv("GAOBAO_CHAT_COMPACTION_ENABLED", "true")
+    monkeypatch.setenv("GAOBAO_CHAT_SNAPSHOT_ENABLED", "true")
+    monkeypatch.setattr(llm_node, "_load_memory_for_session", lambda sid: [])
+    monkeypatch.setattr(llm_node, "_get_config", lambda: {"model": "fake-model"})
+    with pytest.raises(RuntimeError, match="Explicit non-production APP_ENV"):
+        await llm_node._build_chat_context_async({"session_id": "test-session"}, "POLICY")
