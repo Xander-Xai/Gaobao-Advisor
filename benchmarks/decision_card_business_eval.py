@@ -195,8 +195,25 @@ def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str,
         if not isinstance(schools, list) or len(schools) != 2 or not isinstance(refs, list) or len(refs) != 5:
             errors.append("incomplete_evidence")
         else:
+            # Independent business identity check: two returned rows must cover
+            # two distinct requested schools.  A duplicated school row could
+            # otherwise pass every per-row field check while the top-level
+            # source list still contains evidence for both schools.
+            actual_names = [item.get("school_name") if isinstance(item, dict) else None for item in schools]
+            if not all(isinstance(name, str) for name in actual_names) or set(actual_names) != {
+                profile.school_a,
+                profile.school_b,
+            }:
+                errors.append("school_identity_mismatch")
             for item in schools:
-                true_row = rows.get(item.get("school_name"))
+                if not isinstance(item, dict):
+                    errors.append("invalid_school_record")
+                    continue
+                school_name = item.get("school_name")
+                if not isinstance(school_name, str):
+                    errors.append("invalid_school_identity")
+                    continue
+                true_row = rows.get(school_name)
                 if true_row is None or any(item.get(field) != value for field, value in true_row.items()):
                     errors.append("factual_mismatch")
                     break

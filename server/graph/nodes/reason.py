@@ -43,6 +43,10 @@ def reason_node(state: dict[str, Any]) -> dict[str, Any]:
         if rank_info:
             parts.append(f"分数位次: {rank_info}")
 
+    validation = state.get("validation") or {}
+    if validation.get("single_source_count"):
+        parts.append("录取数据来源提示: 当前记录只有单一来源，尚不能证明独立交叉核验。")
+
     # Knowledge context (includes skill methodology)
     if knowledge:
         truncated = knowledge[:800]

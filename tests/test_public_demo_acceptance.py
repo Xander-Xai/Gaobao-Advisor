@@ -437,9 +437,9 @@ class TestExcludedAssetsAbsent:
 
     def test_tracked_file_count_is_bounded(self) -> None:
         """A clean public repo should be a few hundred files, not thousands."""
-        # Expanded Agent observability, evaluation, and authenticated erasure tests
-        # are intentionally tracked source. A finite cap still rejects bulk data.
-        assert 50 < len(_tracked_files()) < 720
+        # Added review/eval code is intentionally tracked. Retain a finite
+        # size guard while checking forbidden assets separately above.
+        assert 50 < len(_tracked_files()) < 750
 
 
 # ── 5. Session auth round-trip through the real FastAPI app ──────────────

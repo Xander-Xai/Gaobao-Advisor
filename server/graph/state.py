@@ -23,6 +23,7 @@ class AdvisorState(TypedDict, total=False):
     # Conversation.slots_json; it must be a declared channel or LangGraph
     # drops it between nodes.
     _query_state: dict
+    atomic_memory: bool  # use one transaction for public final user+assistant+slot state
 
     # ── Quality pipeline ───────────────────────────────────────
     emotion_state: str
@@ -40,6 +41,8 @@ class AdvisorState(TypedDict, total=False):
     rag_sources: list[dict]  # citations for retrieved chunks
     rag_reason: str  # explanation when state != RAG_ENABLED or no evidence
     knowledge_query: bool  # input is a knowledge question (routing signal)
+    validation: dict  # post-SQL per-school provenance checks; never cross-compare different schools
+    major_risk: dict  # pre-generation major risk hint
 
     # ── Reasoning & Output ────────────────────────────────────
     reasoning: str
