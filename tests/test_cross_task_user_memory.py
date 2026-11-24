@@ -423,3 +423,37 @@ def test_memory_credential_and_conflict_errors_are_not_cacheable(client_db):
         assert response.headers["cache-control"] == "no-store"
         assert response.headers["pragma"] == "no-cache"
         assert token not in response.text
+
+
+@pytest.mark.parametrize("expected_version", [0, 1])
+def test_expiry_rechecked_after_credential_lock_wait(client_db, monkeypatch, expected_version):
+    client, factory = client_db
+    token = create_token(client)
+    assert put(client, token, ttl=1).status_code == 200
+    with factory() as db:
+        expiry = db.query(UserMemoryEntry).one().expires_at
+
+    clock = [expiry - timedelta(seconds=1)]
+    original_owner = service._owner
+
+    def owner_after_wait(db, token, *, write=False):
+        owner = original_owner(db, token, write=write)
+        if write:
+            clock[0] = expiry + timedelta(seconds=1)
+        return owner
+
+    monkeypatch.setattr(service, "_utcnow", lambda: clock[0])
+    monkeypatch.setattr(service, "_owner", owner_after_wait)
+    response = put(client, token, value="重新确认", version=expected_version, ttl=1)
+    if expected_version == 1:
+        assert response.status_code == 409
+        with factory() as db:
+            row = db.query(UserMemoryEntry).one()
+            assert row.version == 1
+            assert row.expires_at == expiry
+    else:
+        assert response.status_code == 200, response.text
+        assert response.json()["version"] == 2
+        with factory() as db:
+            row = db.query(UserMemoryEntry).one()
+            assert row.expires_at == clock[0] + timedelta(days=1)

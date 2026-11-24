@@ -178,10 +178,12 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
     value = _validate_value(key, value, ttl_days)
     if type(expected_version) is not int or not 0 <= expected_version <= MAX_MEMORY_VERSION:
         raise MemoryInvalid("Invalid expected version")
-    now = _utcnow()
     db = get_session()
     try:
         owner = _owner(db, token, write=True)
+        # A writer may wait for the vault lock past an entry's expiry. Use
+        # the clock after acquiring ownership, not the time before waiting.
+        now = _utcnow()
         row = (
             db.query(UserMemoryEntry)
             .filter(UserMemoryEntry.vault_id == owner.id, UserMemoryEntry.memory_key == key)
