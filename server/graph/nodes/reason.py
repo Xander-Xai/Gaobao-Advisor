@@ -11,7 +11,7 @@ def reason_node(state: dict[str, Any]) -> dict[str, Any]:
 
     This node builds a structured reasoning string that captures the
     key facts, data, and knowledge to inform the final response.
-    Includes skill methodology context when available.
+    Skill methodology remains separate in the trusted system prompt.
     """
     slots = state.get("slots", {})
     data = state.get("data_query_results", {})
@@ -47,10 +47,10 @@ def reason_node(state: dict[str, Any]) -> dict[str, Any]:
     if validation.get("single_source_count"):
         parts.append("录取数据来源提示: 当前记录只有单一来源，尚不能证明独立交叉核验。")
 
-    # Knowledge context (includes skill methodology)
+    # Retrieved knowledge is evidence, not the server-owned skill.
     if knowledge:
         truncated = knowledge[:800]
-        parts.append(f"方法论与知识:\n{truncated}")
+        parts.append(f"检索证据:\n{truncated}")
 
     # Expert quotes
     if quotes:

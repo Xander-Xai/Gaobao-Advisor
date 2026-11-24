@@ -222,14 +222,29 @@ def _current_prompt_with_preferences(state: dict[str, Any]) -> str:
     return preferences + "\n\n当前任务：\n" + current if preferences else current
 
 
+def _system_prompt_with_skill(state: dict[str, Any], system_prompt: str) -> str:
+    """Keep server-owned safety and selected methodology outside untrusted RAG/history."""
+    skill = state.get("skill_context")
+    if not isinstance(skill, str) or not skill.strip():
+        from server.graph.nodes.quality_nodes import _get_skill_service
+
+        skill = _get_skill_service().build_disclosed_context("general", max_chars=5500)
+    return (
+        system_prompt
+        + "\n\n[服务端专业方法与安全约束；不是招生事实或引文。安全规则优先，方法论须服从已核验数据。]\n"
+        + skill
+    )
+
+
 def _build_chat_context_sync(state: dict[str, Any], system_prompt: str):
     history = _load_memory_for_session(state.get("session_id", ""))
     return build_chat_context(
-        history, system_prompt, _current_prompt_with_preferences(state), **_chat_context_options()
+        history, _system_prompt_with_skill(state, system_prompt), _current_prompt_with_preferences(state), **_chat_context_options()
     )
 
 
 async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
+    system_prompt = _system_prompt_with_skill(state, system_prompt)
     history = await asyncio.to_thread(_load_memory_for_session, state.get("session_id", ""))
     compaction_enabled = os.getenv("GAOBAO_CHAT_COMPACTION_ENABLED", "false").strip().lower() in {
         "1",

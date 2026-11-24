@@ -70,3 +70,51 @@ def test_full_pipeline_with_skill(graph):
     node_names = [t.get("node") for t in trace]
     assert "quality_orchestrate" in node_names
     assert "reason" in node_names
+
+
+@pytest.mark.parametrize("rag_has_evidence", [True, False])
+@pytest.mark.asyncio
+async def test_online_skill_survives_retrieval_and_reaches_both_generation_paths(monkeypatch, rag_has_evidence):
+    from server.graph.nodes import llm_node, quality_nodes, rag_node
+    from skills.service import SkillService
+
+    skill = SkillService()
+    monkeypatch.setattr(quality_nodes, "_get_skill_service", lambda: skill)
+    monkeypatch.setattr(llm_node, "_load_memory_for_session", lambda *_: [])
+    monkeypatch.setenv("GAOBAO_CHAT_COMPACTION_ENABLED", "false")
+    monkeypatch.setattr(
+        rag_node.rag,
+        "search",
+        lambda *_: {
+            "group_chunks": [{"text": "RAG_ONLY_EVIDENCE", "source": "test-source"}] if rag_has_evidence else [],
+            "has_evidence": rag_has_evidence,
+            "citations": [{"source": "test-source"}] if rag_has_evidence else [],
+        },
+    )
+    state = {"scene": "gaokao", "input_text": "比较志愿", "slots": {}}
+    state.update(quality_nodes.quality_orchestrate_node(state))
+    state.update(rag_node.rag_retrieve_node(state))
+    assert state["skill_sections"] == ["heuristics", "anti_patterns"]
+    assert skill._safety_rules in state["skill_context"]
+    assert "RAG_ONLY_EVIDENCE" not in state["skill_context"]
+    assert ("RAG_ONLY_EVIDENCE" in state["knowledge_context"]) is rag_has_evidence
+    for context in (
+        llm_node._build_chat_context_sync(state, "BASE"),
+        await llm_node._build_chat_context_async(state, "BASE"),
+    ):
+        assert skill._safety_rules in context.messages[0]["content"]
+        assert skill._heuristics_text in context.messages[0]["content"]
+        assert "RAG_ONLY_EVIDENCE" not in context.messages[0]["content"]
+
+
+def test_online_skill_discloses_only_safety_for_factual_lookup(monkeypatch):
+    from server.graph.nodes import quality_nodes
+    from skills.service import SkillService
+
+    skill = SkillService()
+    monkeypatch.setattr(quality_nodes, "_get_skill_service", lambda: skill)
+    state = quality_nodes.quality_orchestrate_node(
+        {"scene": "gaokao", "knowledge_query": True, "input_text": "政策是什么", "slots": {}}
+    )
+    assert state["skill_sections"] == []
+    assert state["skill_context"] == skill._safety_rules

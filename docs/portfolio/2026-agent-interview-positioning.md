@@ -50,3 +50,16 @@ Local Compose binds all published ports to loopback and keeps `USER_MEMORY_ENABL
 Acceptance: start local Compose after configuring operator/admin authentication; verify unauthenticated requests fail and operator example endpoint succeeds; create a synthetic task and approve with a different authorized admin; verify production rejects experiments and explicit false disables them. Run existing API/TaskRun/memory tests and exact-head CI. No new runtime results are claimed.
 
 The optional MySQL/Redis full Compose overlay keeps synthetic experiments, cross-task memory and compaction **off** unless explicitly enabled via shell or `--env-file .env.full`. Run the full overlay with `docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml --profile full up --build`. Compose interpolation and service env_file are distinct. The existing full Compose CI script now renders both profiles, checks loopback bindings, local defaults, explicit false rollback, full default-off and explicit opt-in without logging resolved credentials. This is configuration evidence only, not a model or privacy production acceptance.
+
+## Online Skills boundary (2026-11-25)
+
+Previously the quality node put methodology into the same knowledge_context
+channel that RAG retrieval replaced. Skill files therefore could be loaded
+without reaching generation. A distinct server-owned skill_context channel
+now survives retrieval, and both generation paths prepend it to the system
+prompt. Factual lookups receive mandatory safety only; gaokao advisory
+queries receive safety plus selected heuristics and anti-patterns under a
+5500-character disclosure cap. Retrieval remains separate evidence, not a
+source of instructions. The context budget cannot silently drop the system
+message. Tests exercise actual sync/async context construction with and
+without retrieved evidence. No measured Token or quality improvement claimed.

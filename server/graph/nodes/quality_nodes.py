@@ -59,8 +59,10 @@ def quality_orchestrate_node(state: dict[str, Any]) -> dict[str, Any]:
         h.get("description", h.get("name", "")) for h in (heuristics_raw if isinstance(heuristics_raw, list) else [])
     ]
 
-    # Skill context for the scene
-    skill_context = skill_svc.build_context(scene)
+    # Server-owned disclosure policy: factual lookups need safety rules only;
+    # advisory tasks additionally need the decision methods and anti-patterns.
+    skill_sections = ("heuristics", "anti_patterns") if scene == "gaokao" and not state.get("knowledge_query") else ()
+    skill_context = skill_svc.build_disclosed_context(scene, skill_sections, max_chars=5500)
 
     # AI-era risk: check target/interested major when scene is gaokao
     major_risk: dict[str, Any] | None = None
@@ -83,6 +85,7 @@ def quality_orchestrate_node(state: dict[str, Any]) -> dict[str, Any]:
             "event": f"emotion={emotion_state}",
             "model": cognitive_model,
             "skill_scene": scene,
+            "skill_sections": list(skill_sections),
         }
     )
 
@@ -105,7 +108,8 @@ def quality_orchestrate_node(state: dict[str, Any]) -> dict[str, Any]:
         "emotion_state": emotion_state,
         "cognitive_model": cognitive_model,
         "decision_heuristics": decision_heuristics,
-        "knowledge_context": skill_context,
+        "skill_context": skill_context,
+        "skill_sections": list(skill_sections),
         "trace": trace,
     }
     if major_risk is not None:
