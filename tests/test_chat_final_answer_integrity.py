@@ -14,11 +14,15 @@ from server.graph.nodes.data_validation import validate_data_node
 
 
 def test_chat_preparation_does_not_persist_template():
-    prepared = build_advisor_graph(finalize=False)
+    # Exercise the actual SSE entrypoint, not a separately built lookalike.
+    prepared = chat.get_advisor_graph()
     complete = build_advisor_graph()
-    assert "memory_update" not in prepared.nodes
-    assert "quality_judge" not in prepared.nodes
-    assert "memory_update" in complete.nodes
+    finalizers = {"source_attribution", "quality_post_check", "quality_judge", "feedback", "memory_update"}
+    assert "render_reply" in prepared.nodes
+    assert finalizers.isdisjoint(prepared.nodes)
+    assert set(complete.nodes) - set(prepared.nodes) == finalizers
+    assert len(set(prepared.nodes) - {"__start__", "__end__"}) == 12
+    assert len(set(complete.nodes) - {"__start__", "__end__"}) == 17
 
 
 def test_single_source_does_not_cross_validate_different_schools():

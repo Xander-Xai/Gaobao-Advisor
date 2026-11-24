@@ -10,7 +10,7 @@
 
 | 能力 | 代码依据 | 可宣称边界 |
 |---|---|---|
-| 高考辅助问答业务路径 | `server/graph/`, `server/routes/`, `frontend/src/` | 17 节点单图、SQL + 合成 BM25 + SSE；不是九 Agent 系统 |
+| 高考辅助问答业务路径 | `server/graph/`, `server/routes/`, `frontend/src/` | 在线 12 节点准备图 + SSE 路由唯一收尾；完整参考图 17 节点，SQL + 合成 BM25；不是九 Agent 系统 |
 | 独立只读 Harness | `server/agent/readonly_harness.py`, `readonly_tools.py` | 受限 Loop 和工具执行，**不在默认在线 chat 路由** |
 | 可选模型自主工具选择 | `server/agent/decision_card_model_planner.py` | 真实模型适配器存在，但实际 provider 任务成功率尚未测量 |
 | 业务真值 | `server/agent/portfolio_sql_oracle.py`, `benchmarks/decision_card_business_eval.py` | SQLite 合成事实的独立评分，不等于真实高考推荐效果 |
