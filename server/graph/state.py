@@ -61,6 +61,13 @@ class AdvisorState(TypedDict, total=False):
     aggregate_score: float  # 聚合分
     hallucination_flags: list  # 幻觉标记列表
     quality_grade: str  # excellent / pass / fail
+    quality_scored: bool  # False for no-key / timed-out judge
+    judge_needs_rewrite: bool
+    judge_model: str
+    judge_latency_ms: int
+    defer_quality_persistence: bool
+    review_required: bool
+    review_reason_codes: list[str]
 
     # ── Feedback & Rewrite ────────────────────────────────────
     should_rewrite: bool  # post-check flagged rewrite
