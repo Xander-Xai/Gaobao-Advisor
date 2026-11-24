@@ -22,14 +22,25 @@ def sessions():
         for school in (1, 2, 9):
             session.add(
                 AdmissionScore(
-                    school_id=school, major_id=3, province="广东", subject_type="物理",
-                    batch="本科批", year=2024, min_score=600, min_rank=12345,
+                    school_id=school,
+                    major_id=3,
+                    province="广东",
+                    subject_type="物理",
+                    batch="本科批",
+                    year=2024,
+                    min_score=600,
+                    min_rank=12345,
                 )
             )
             session.add(
                 EnrollmentPlan(
-                    school_id=school, major_id=3, province="广东", batch="本科批",
-                    year=2024, plan_count=10, subject_requirement="物理必选",
+                    school_id=school,
+                    major_id=3,
+                    province="广东",
+                    batch="本科批",
+                    year=2024,
+                    plan_count=10,
+                    subject_requirement="物理必选",
                 )
             )
         session.commit()
@@ -51,7 +62,12 @@ def controller(*, submit=True, mutate=None):
                     outcome = a["runnable"].invoke({"messages": [{"role": "user", "content": "research"}]})
                     value = json.loads(outcome["messages"][-1].content)
                     assert set(value) == {
-                        "kind", "receipt", "row_count", "missing_count", "ambiguous_count", "incomplete_count"
+                        "kind",
+                        "receipt",
+                        "row_count",
+                        "missing_count",
+                        "ambiguous_count",
+                        "incomplete_count",
                     }
                     assert "12345" not in json.dumps(value)
                     received[a["name"]] = value["receipt"]
@@ -68,8 +84,13 @@ def controller(*, submit=True, mutate=None):
 
 def run(sessions, factory):
     return research.run_admissions_research(
-        SCOPE, sessions, "openai:test-model", approval_ref="local-approval",
-        authorized=True, model_authorized=True, agent_factory=factory,
+        SCOPE,
+        sessions,
+        "openai:test-model",
+        approval_ref="local-approval",
+        authorized=True,
+        model_authorized=True,
+        agent_factory=factory,
     )
 
 
@@ -112,7 +133,11 @@ def test_missing_plan_is_explicit_partial(sessions):
 def test_requires_model_consent(sessions):
     with pytest.raises(ValueError, match="authorization"):
         research.run_admissions_research(
-            SCOPE, sessions, "openai:test-model", approval_ref="local-approval", authorized=True,
+            SCOPE,
+            sessions,
+            "openai:test-model",
+            approval_ref="local-approval",
+            authorized=True,
         )
 
 
