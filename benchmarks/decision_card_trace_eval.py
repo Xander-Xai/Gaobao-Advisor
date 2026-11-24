@@ -33,7 +33,7 @@ _EXECUTED = frozenset(
 )
 _TOOL_ERRORS = frozenset({"tool_not_allowlisted", "tool_schema_invalid", "tool_repeat_loop", *_EXECUTED})
 _BLOCKED = frozenset({"provider_usage_missing", "reported_token_budget_exhausted", "tool_budget_exhausted"})
-_TERMINAL = frozenset({"planner_failed", "planner_contract_invalid"})
+_TERMINAL = frozenset({"planner_failed", "planner_contract_invalid", "planner_response_invalid"})
 
 
 def _bounded_number(value: Any, limit: float) -> bool:

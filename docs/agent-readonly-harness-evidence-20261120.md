@@ -78,3 +78,9 @@ pytest -q tests/test_readonly_harness.py tests/test_readonly_harness_eval.py --o
 4. **Sandbox 与 Coding Agent**：这是**另一个独立实验**。若招聘方明确需要 Claude Code/Pi/DSH，使用受限容器与没有业务凭证的示例仓运行真实软件任务；不是在志愿查询服务内开放 shell。
 5. **优化实验**：针对上下文摘要/工具描述/步数预算进行预注册候选改动，对照真实模型的独立 holdout；未获得显著且可重复的质量-成本收益前不宣传“提升 X%”。
 6. **简历升级 Gate**：只有 merge、CI、可复现报告、真实模型评测结果和证据索引完整后，才能写“模型驱动 Harness 优化”。目前只可描述独立 read-only Harness 实验（合成 30-case CI 验收后）。
+
+## Decision-card malformed response accounting (2026-11-24)
+
+Later-employer Gaobao Harness/Eval follow-up. A returned response with missing, malformed or non-object JSON, or a missing/non-string action discriminator, is blocked with `planner_response_invalid`; valid provider-reported usage is preserved. The independent redacted trace validator accepts that terminal failure, and the regression checks zero tool execution and no raw response persistence. Forbidden tools, repeated calls, wrong argument types, premature finish and unsafe abstention also return the same fixed invalid decision, retaining reported usage without tool execution or raw output. Transport failures or missing provider usage remain separately blocked. The tests exercise both malformed and forbidden responses through the synthetic SQL harness. No real provider calls or business success claims.
+
+Validation: `pytest -q tests/test_decision_card_model_planner.py tests/test_decision_card_trace_eval.py` (CI required).
