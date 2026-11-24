@@ -27,7 +27,10 @@ def oracle(tmp_path: Path):
     source.write_text("print('SYNTHETIC_WORKSPACE_PASS')", encoding="utf-8")
     source.chmod(0o444)
     trusted.chmod(0o555)
-    return trusted
+    try:
+        yield trusted
+    finally:
+        trusted.chmod(0o755)
 
 
 def test_verified_workspace_remains_usable(work, oracle):
