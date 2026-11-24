@@ -258,3 +258,17 @@ def test_worker_lock_rejects_symlink(journal, tmp_path):
         with journal.execution_slot():
             pytest.fail("symlink must not be accepted")
     assert target.read_text() == "do not modify"
+
+
+def test_private_journal_rejects_hardlink_alias(journal, tmp_path, spec):
+    alias = tmp_path / "alias.sqlite"
+    alias.hardlink_to(journal.path)
+    with pytest.raises(ValueError, match="one link"):
+        ResearchJournal(alias)
+    with pytest.raises(ValueError, match="one link"):
+        journal.create("operator", "request-alias-001", spec)
+    with pytest.raises(ValueError, match="one link"):
+        with journal.execution_slot():
+            pytest.fail("linked journal must not acquire a worker slot")
+    alias.unlink()
+    assert journal.create("operator", "request-alias-001", spec)["status"] == "PENDING_APPROVAL"

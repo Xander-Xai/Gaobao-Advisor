@@ -51,3 +51,9 @@ and no provider call is made. A cancelled run holds the slot until its local
 runner exits; a worker crash releases the OS lock but does not requeue that run.
 Use one canonical journal on local disk; distributed workers and provider-wide
 budget accounting require separate deployment controls.
+
+Private journal files must have exactly one filesystem link at initialization,
+transaction entry and worker-slot acquisition. This prevents accidental hard-link
+aliases from creating distinct lock pathnames for one journal. The worker-owned
+0700 parent remains part of the trust boundary; this is not protection against a
+malicious process with the same OS identity.

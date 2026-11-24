@@ -90,8 +90,13 @@ class ResearchJournal:
             except FileExistsError:
                 pass
         info = path.lstat()
-        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_uid != os.getuid():
-            raise ValueError("Private regular journal file required")
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_mode & 0o077
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+        ):
+            raise ValueError("Private regular journal file with one link required")
         url = os.getenv("DATABASE_URL", "")
         if url.startswith("sqlite:///") and Path(url.removeprefix("sqlite:///")).resolve() == path.resolve():
             raise ValueError("Journal must not be the admissions database")
@@ -114,8 +119,20 @@ class ResearchJournal:
                 UNIQUE(owner, idem))"""
             )
 
+    def _check_private_file(self):
+        # A hard-linked alias would otherwise use a different worker-lock pathname.
+        info = self.path.lstat()
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_mode & 0o077
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+        ):
+            raise ValueError("Private regular journal file with one link required")
+
     @contextmanager
     def tx(self):
+        self._check_private_file()
         db = sqlite3.connect(self.path, timeout=5)
         db.row_factory = sqlite3.Row
         try:
@@ -133,6 +150,7 @@ class ResearchJournal:
         """Serialize paid execution on one Linux host, including cancelled calls in flight."""
         import fcntl
 
+        self._check_private_file()
         lock_path = self.path.with_name(self.path.name + ".worker.lock")
         fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
