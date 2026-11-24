@@ -174,7 +174,7 @@ def build_deep_agent(model_id: str, tools: list, subagents: list):
         api_key=os.environ["OPENAI_API_KEY"],
         base_url=os.getenv("OPENAI_BASE_URL") or os.getenv("OPENAI_API_BASE") or None,
         temperature=0,
-        max_tokens=600,
+        max_tokens=1800 if any(tool.__name__ == "analyze_history" for tool in tools) else 600,
         timeout=20,
         max_retries=0,
     )
@@ -260,9 +260,7 @@ def run_admissions_research(
                 raise ValueError("Sandbox requires approved history and one execution budget")
             analysis_attempted = True
             rows = [dict(row) for row in snapshots[kinds[0]]]
-        sandbox_scope = Scope(
-            scope.province, scope.subject_type, scope.batch, scope.year_from, scope.year_to, "major"
-        )
+        sandbox_scope = Scope(scope.province, scope.subject_type, scope.batch, scope.year_from, scope.year_to, "major")
         result = execute_admissions_analysis(
             rows,
             sandbox_scope,
@@ -322,24 +320,29 @@ def run_admissions_research(
             file_data = {"content": [_SKILL]}
         outcome = agent.invoke(
             {
-                "messages": [{"role": "user", "content": (
-                        "Complete both approved research dimensions. "
-                        + (
-                            "After the history delegation call analyze_history with Python code. "
-                            "Read /input/rows.json (rows and group_by); group by school_id and year; "
-                            "sort groups by key. Print one JSON object with groups, each containing key, "
-                            "records, missing_min_scores, median_min_score, lowest_min_score, "
-                            "highest_min_score, best_min_rank, worst_min_rank. "
-                            "Score metrics use non-null min_score, rank metrics non-null min_rank. "
-                            "Use statistics.median; unavailable metrics are null. "
-                            "Only submit research after sandbox verification."
-                            if analysis_image_id is not None
-                            else ""
-                        )
-                    )}],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": (
+                            "Complete both approved research dimensions. "
+                            + (
+                                "After the history delegation call analyze_history with Python code. "
+                                "Read /input/rows.json (rows and group_by); group by school_id and year; "
+                                "sort groups by key. Print one JSON object with groups, each containing key, "
+                                "records, missing_min_scores, median_min_score, lowest_min_score, "
+                                "highest_min_score, best_min_rank, worst_min_rank. "
+                                "Score metrics use non-null min_score, rank metrics non-null min_rank. "
+                                "Use statistics.median; unavailable metrics are null. "
+                                "Only submit research after sandbox verification."
+                                if analysis_image_id is not None
+                                else ""
+                            )
+                        ),
+                    }
+                ],
                 "files": {"/skills/admissions-research/SKILL.md": file_data},
             },
-            config={"configurable": {"thread_id": task_id}, "recursion_limit": 24},
+            config={"configurable": {"thread_id": task_id}, "recursion_limit": 64},
         )
         messages = outcome.get("messages", []) if isinstance(outcome, dict) else []
         usage = [getattr(msg, "usage_metadata", None) for msg in messages if getattr(msg, "type", "") == "ai"]

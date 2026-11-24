@@ -217,7 +217,6 @@ def test_actual_sdk_task_and_todos_with_scripted_model(sessions, monkeypatch):
     assert receipt["provider_billing_verified"] is False
 
 
-
 def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatch):
     from server.agent import admissions_analysis_sandbox
 
