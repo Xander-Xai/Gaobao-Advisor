@@ -237,6 +237,36 @@ async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
         from server.agent.memory_manager import DefaultMemoryManager
 
         manager = DefaultMemoryManager()
+        use_snapshot = os.getenv("GAOBAO_CHAT_SNAPSHOT_ENABLED", "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if use_snapshot:
+            if os.getenv("APP_ENV", "").strip().lower() not in {"development", "test", "testing", "local"}:
+                raise RuntimeError("Explicit non-production APP_ENV is required for plaintext snapshots")
+            from db.database import get_session
+            from server.agent.durable_chat_context import build_durable_chat_context
+            from server.agent.session_compaction_store import SessionCompactionStore, policy_digest
+
+            policy = policy_digest(
+                model_id=str(_get_config().get("model") or ""),
+                provider_identity=str(_get_config().get("base_url") or ""),
+                keep_recent_rounds=options["keep_recent_rounds"],
+                summary_trigger_tokens=manager.max_token_limit,
+            )
+            return await build_durable_chat_context(
+                session_id=state.get("session_id", ""),
+                history=history,
+                system_prompt=system_prompt,
+                current_prompt=current,
+                store=SessionCompactionStore(get_session),
+                policy_sha256=policy,
+                summarizer=manager._summarize_history,
+                summary_trigger_tokens=manager.max_token_limit,
+                **options,
+            )
         return await build_compacted_chat_context(
             history,
             system_prompt,
