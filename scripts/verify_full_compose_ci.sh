@@ -63,6 +63,55 @@ fi
 export CI_ADMIN_PASSWORD="$ADMIN_PASSWORD"
 unset ADMIN_PASSWORD
 
+# Render the actual Compose contract without starting a second deployment.
+# Do not print resolved environment variables (they include credentials).
+python3 - <<'PY'
+import json
+import os
+import subprocess
+
+flags = (
+    "ENABLE_SYNTHETIC_AGENT_EXPERIMENT",
+    "USER_MEMORY_ENABLED",
+    "GAOBAO_CHAT_COMPACTION_ENABLED",
+    "GAOBAO_CHAT_SNAPSHOT_ENABLED",
+    "ENABLE_OUTBOUND_FETCH",
+)
+env = {key: val for key, val in os.environ.items() if key not in flags + ("APP_ENV", "SYNTHETIC_TASKRUN_JOURNAL")}
+env["COMPOSE_DISABLE_ENV_FILE"] = "1"
+
+def render(files, env_file, overrides=None, *, profile=None):
+    cmd = ["docker", "compose", "--env-file", env_file]
+    for file in files:
+        cmd.extend(("-f", file))
+    if profile is not None:
+        cmd.extend(("--profile", profile))
+    cmd.extend(("config", "--format", "json"))
+    return json.loads(subprocess.check_output(cmd, env={**env, **(overrides or {})}))
+
+local = render(["docker-compose.yml"], "/dev/null")
+api = local["services"]["api"]["environment"]
+assert api["APP_ENV"] == "development"
+assert api[flags[0]] == "true"
+assert all(api[key] == "false" for key in flags[1:])
+assert api["SYNTHETIC_TASKRUN_JOURNAL"] == "/app/data/synthetic-taskruns.sqlite"
+for service in ("api", "frontend", "nginx"):
+    assert all(port["host_ip"] == "127.0.0.1" for port in local["services"][service]["ports"])
+
+disabled = render(["docker-compose.yml"], "/dev/null", {key: "false" for key in flags[:3]})
+assert all(disabled["services"]["api"]["environment"][key] == "false" for key in flags[:3])
+local_opt_in = render(["docker-compose.yml"], "/dev/null", {key: "true" for key in flags[1:3]})
+assert all(local_opt_in["services"]["api"]["environment"][key] == "true" for key in flags[1:3])
+
+full_files = ["docker-compose.yml", "docker-compose.full.yml"]
+full = render(full_files, ".env.full", profile="full")
+assert {"mysql", "redis", "worker"} <= set(full["services"])
+assert all(full["services"]["api"]["environment"][key] == "false" for key in flags)
+opt_in = render(full_files, ".env.full", {"ENABLE_SYNTHETIC_AGENT_EXPERIMENT": "true"}, profile="full")
+assert opt_in["services"]["api"]["environment"]["ENABLE_SYNTHETIC_AGENT_EXPERIMENT"] == "true"
+print("Compose Agent profile contract PASS (local defaults, rollback, full isolation and explicit opt-in)")
+PY
+
 echo "Starting complete Compose profile (including all healthchecks)"
 compose up --detach --build --wait --wait-timeout 360
 

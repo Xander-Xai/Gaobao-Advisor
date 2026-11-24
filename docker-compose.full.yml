@@ -1,7 +1,7 @@
 # Optional full profile: MySQL + Redis + quality worker.
 #
 #   python scripts/setup_full_env.py
-#   docker compose -f docker-compose.yml -f docker-compose.full.yml --profile full up --build
+#   docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml --profile full up --build
 #
 # The default `docker compose up` (without this overlay) still uses SQLite and
 # needs neither MySQL nor Redis.
@@ -49,6 +49,12 @@ services:
 
   api:
     env_file: .env.full
+    environment:
+      # The full overlay does not inherit the local-only experimental opt-ins.
+      # Use --env-file .env.full for interpolation and explicitly enable as needed.
+      ENABLE_SYNTHETIC_AGENT_EXPERIMENT: ${ENABLE_SYNTHETIC_AGENT_EXPERIMENT:-false}
+      USER_MEMORY_ENABLED: ${USER_MEMORY_ENABLED:-false}
+      GAOBAO_CHAT_COMPACTION_ENABLED: ${GAOBAO_CHAT_COMPACTION_ENABLED:-false}
     depends_on:
       mysql:
         condition: service_healthy
