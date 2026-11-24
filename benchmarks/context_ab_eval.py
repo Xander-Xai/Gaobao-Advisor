@@ -96,6 +96,8 @@ def run_arm(
     if arm not in ARMS or not _MODEL_RE.fullmatch(model_id):
         raise ValueError("Unrecognized arm/model identity")
     if real_model:
+        if not 1 <= max_provider_calls <= 64:
+            raise ValueError("Context arm call cap must be between 1 and 64")
         from openai import OpenAI
 
         delegate = OpenAI(
@@ -294,6 +296,12 @@ def _index(report: dict[str, Any], arm: str) -> dict[str, dict[str, Any]]:
             raise ValueError("Scripted usage must not masquerade as provider tokens")
     receipt = report.get("provider_budget")
     if real:
+        if (
+            report.get("provider_model_identity_consistent") is not True
+            or not isinstance(report.get("provider_reported_model"), str)
+            or not report["provider_reported_model"].strip()
+        ):
+            raise ValueError("Provider-reported model identity missing or drifted")
         if not isinstance(receipt, dict) or (
             receipt.get("usage_complete") is not True
             or receipt.get("hard_token_cap") is not False
@@ -301,8 +309,12 @@ def _index(report: dict[str, Any], arm: str) -> dict[str, dict[str, Any]]:
             or any(
                 type(receipt.get(key)) is not int or receipt[key] < 0
                 for key in (
-                    "max_calls", "stop_after_reported_tokens", "attempts", "known_usage_responses",
-                    "known_prompt_tokens", "known_completion_tokens",
+                    "max_calls",
+                    "stop_after_reported_tokens",
+                    "attempts",
+                    "known_usage_responses",
+                    "known_prompt_tokens",
+                    "known_completion_tokens",
                 )
             )
             or not 1 <= receipt["max_calls"] <= 64
@@ -312,7 +324,8 @@ def _index(report: dict[str, Any], arm: str) -> dict[str, dict[str, Any]]:
             or receipt["attempts"] != sum(row["model_steps"] for row in rows)
             or receipt["known_prompt_tokens"] != report["prompt_tokens_reported"]
             or receipt["known_completion_tokens"] != report["completion_tokens_reported"]
-            or receipt["known_prompt_tokens"] + receipt["known_completion_tokens"] >= receipt["stop_after_reported_tokens"]
+            or receipt["known_prompt_tokens"] + receipt["known_completion_tokens"]
+            >= receipt["stop_after_reported_tokens"]
         ):
             raise ValueError("Missing or inconsistent provider budget receipt")
     elif receipt is not None:
@@ -335,7 +348,10 @@ def compare_pair(full: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
     ):
         raise ValueError("Unpaired model/dataset/prompt/tool/case identity")
     real = full["controller"] == "EXTERNAL_MODEL_CALLS_NOT_INDEPENDENTLY_ATTESTED"
-    if real and any(full["provider_budget"][key] != compact["provider_budget"][key] for key in ("max_calls", "stop_after_reported_tokens")):
+    if real and any(
+        full["provider_budget"][key] != compact["provider_budget"][key]
+        for key in ("max_calls", "stop_after_reported_tokens")
+    ):
         raise ValueError("Provider budget differs between arms")
     reported_version_equal = (
         real
@@ -417,7 +433,8 @@ def compare_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> dict[s
             full["tool_contract_sha256"],
             result["provider_reported_model"],
             tuple(full["provider_budget"][key] for key in ("max_calls", "stop_after_reported_tokens"))
-            if full["provider_budget"] is not None else None,
+            if full["provider_budget"] is not None
+            else None,
         )
         if frozen_identity is None:
             frozen_identity = identity
@@ -461,8 +478,13 @@ def compare_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> dict[s
 
 
 def _run_child(
-    arm: str, mode: str, model: str, path: Path, allow_charges: bool,
-    max_provider_calls: int, stop_after_reported_tokens: int,
+    arm: str,
+    mode: str,
+    model: str,
+    path: Path,
+    allow_charges: bool,
+    max_provider_calls: int,
+    stop_after_reported_tokens: int,
 ) -> dict[str, Any]:
     cmd = [
         sys.executable,
@@ -476,9 +498,17 @@ def _run_child(
         str(path),
     ]
     if mode == "model":
-        cmd.extend(("--execute", "--permit-external-model", "--confirm-provider-charges",
-                    "--max-provider-calls-per-arm", str(max_provider_calls),
-                    "--stop-after-reported-tokens-per-arm", str(stop_after_reported_tokens)))
+        cmd.extend(
+            (
+                "--execute",
+                "--permit-external-model",
+                "--confirm-provider-charges",
+                "--max-provider-calls-per-arm",
+                str(max_provider_calls),
+                "--stop-after-reported-tokens-per-arm",
+                str(stop_after_reported_tokens),
+            )
+        )
     try:
         result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=900)
     except subprocess.TimeoutExpired as exc:
@@ -488,6 +518,7 @@ def _run_child(
     report = json.loads(path.read_text(encoding="utf-8"))
     if report.get("status") != "COMPLETE":
         raise RuntimeError("Context arm stopped; inspect retained private receipt before any further calls")
+    _index(report, arm)
     return report
 
 
@@ -506,7 +537,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--confirm-provider-charges", action="store_true")
     args = parser.parse_args(argv)
 
-    if not 1 <= args.max_provider_calls_per_arm <= 64 or not 1 <= args.stop_after_reported_tokens_per_arm <= 500_000:
+    if (
+        not 1 <= args.max_provider_calls_per_arm <= 64
+        or not 1 <= args.stop_after_reported_tokens_per_arm <= 500_000
+    ):
         parser.error("Invalid provider budget")
     if not 2 <= args.trials <= 5:
         parser.error("--trials must be between 2 and 5")
@@ -534,7 +568,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.execute and not args.model:
             parser.error("External-model arm requires a model identifier")
         report = run_arm(
-            args.internal_arm, args.model if args.execute else "fixture-stub", real_model=args.execute,
+            args.internal_arm,
+            args.model if args.execute else "fixture-stub",
+            real_model=args.execute,
             max_provider_calls=args.max_provider_calls_per_arm,
             stop_after_reported_tokens=args.stop_after_reported_tokens_per_arm,
         )
@@ -581,8 +617,13 @@ def main(argv: list[str] | None = None) -> int:
         for arm in order:
             path = args.out_dir / f"trial-{trial}-{arm}.json"
             reports[arm] = _run_child(
-                arm, "model" if real_model else "stub", args.model or "fixture-stub", path, real_model,
-                args.max_provider_calls_per_arm, args.stop_after_reported_tokens_per_arm
+                arm,
+                "model" if real_model else "stub",
+                args.model or "fixture-stub",
+                path,
+                real_model,
+                args.max_provider_calls_per_arm,
+                args.stop_after_reported_tokens_per_arm,
             )
         runs.append((reports[ARMS[0]], reports[ARMS[1]]))
     summary = compare_trials(runs)

@@ -259,10 +259,15 @@ def test_real_report_pair_rejects_provider_version_drift_across_trials(tmp_path)
         report["completion_tokens_reported"] = 10 * len(report["results"])
         attempts = sum(row["model_steps"] for row in report["results"])
         report["provider_budget"] = {
-            "max_calls": 64, "stop_after_reported_tokens": 120_000, "attempts": attempts,
-            "known_usage_responses": attempts, "known_prompt_tokens": report["prompt_tokens_reported"],
-            "known_completion_tokens": report["completion_tokens_reported"], "usage_complete": True,
-            "stop_reason": None, "hard_token_cap": False,
+            "max_calls": 64,
+            "stop_after_reported_tokens": 120_000,
+            "attempts": attempts,
+            "known_usage_responses": attempts,
+            "known_prompt_tokens": report["prompt_tokens_reported"],
+            "known_completion_tokens": report["completion_tokens_reported"],
+            "usage_complete": True,
+            "stop_reason": None,
+            "hard_token_cap": False,
         }
         return report
 
@@ -274,7 +279,6 @@ def test_real_report_pair_rejects_provider_version_drift_across_trials(tmp_path)
         compare_trials([first, drift])
     with pytest.raises(ValueError, match="identity missing or drifted"):
         compare_pair(as_real_fixture(full, " ", "g"), as_real_fixture(compact, " ", "h"))
-
 
 
 def test_incomplete_context_receipt_cannot_be_compared(tmp_path):
