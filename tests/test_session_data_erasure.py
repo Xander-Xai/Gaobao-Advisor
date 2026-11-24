@@ -237,3 +237,46 @@ def test_legacy_unattributed_stage_blocks_new_erasure(isolated):
     assert directory.is_dir()
     with session_factory() as db:
         assert db.query(Conversation).count() == 1
+
+
+def test_report_hardlink_rejected_before_read_write_and_erasure(isolated, tmp_path):
+    session_factory, storage = isolated
+    directory = seed(session_factory, storage)
+    external = tmp_path / "external.json"
+    external.write_text('{"private":"untouched"}', encoding="utf-8")
+    linked = directory / "linked-report.json"
+    try:
+        linked.hardlink_to(external)
+    except (OSError, NotImplementedError):
+        pytest.skip("Hard links unavailable")
+    report = Report(id="linked-report", session_id="synthetic-session-privacy")
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.save(report)
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.load_by_session(report.id, report.session_id)
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.load(report.id)
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.list_by_session(report.session_id)
+    with pytest.raises(ValueError, match="unrecognized"):
+        erase_live_session_data(report.session_id, storage)
+    assert external.read_text(encoding="utf-8") == '{"private":"untouched"}'
+    with session_factory() as db:
+        assert db.query(Conversation).count() == 1
+
+
+def test_staged_hardlink_blocks_finalization(isolated, tmp_path):
+    _, storage = isolated
+    directory = storage._base / "synthetic-session"
+    directory.mkdir(parents=True)
+    (directory / "report.json").write_text("{}", encoding="utf-8")
+    staged, _ = storage.stage_session_deletion("synthetic-session")
+    external = tmp_path / "external.json"
+    try:
+        external.hardlink_to(staged / "report.json")
+    except (OSError, NotImplementedError):
+        pytest.skip("Hard links unavailable")
+    with pytest.raises(ValueError, match="changed unexpectedly"):
+        storage.finalize_staged_session(staged)
+    assert (staged / "report.json").exists()
+    assert external.read_text(encoding="utf-8") == "{}"

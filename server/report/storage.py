@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 from pathlib import Path
 
 from server.report.models import Report
@@ -30,6 +31,12 @@ def _safe_component(value: str, label: str) -> str:
     if component != value or not _SAFE_COMPONENT_RE.fullmatch(component):
         raise ValueError(f"unsafe {label}: must match [A-Za-z0-9_-]{{1,128}}")
     return component
+
+
+def _safe_regular_file(path: Path) -> bool:
+    """Reject nonregular and multiply linked files in private report storage."""
+    metadata = path.lstat()
+    return stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
 
 
 class ReportStorage:
@@ -60,6 +67,8 @@ class ReportStorage:
             self._base.resolve(strict=False)
         ):
             raise ValueError("Unsafe report file path")
+        if candidate.exists() and not _safe_regular_file(candidate):
+            raise ValueError("Unsafe report file type or link count")
         return candidate
 
     def save(self, report: Report) -> Path:
@@ -111,7 +120,7 @@ class ReportStorage:
             return []
         reports: list[Report] = []
         for fp in sorted(session_dir.glob("*.json")):
-            if fp.is_symlink() or not fp.is_file() or not _SAFE_COMPONENT_RE.fullmatch(fp.stem):
+            if not _safe_regular_file(fp) or not _SAFE_COMPONENT_RE.fullmatch(fp.stem):
                 raise ValueError("Unsafe report entry in session directory")
             reports.append(self._load_file(fp))
         return reports
@@ -144,8 +153,7 @@ class ReportStorage:
             raise ValueError("Report storage entry is not a directory")
         entries = list(session_dir.iterdir())
         if len(entries) > 1000 or any(
-            item.is_symlink()
-            or not item.is_file()
+            not _safe_regular_file(item)
             or item.suffix != ".json"
             or not _SAFE_COMPONENT_RE.fullmatch(item.stem)
             for item in entries
@@ -175,8 +183,7 @@ class ReportStorage:
         self._validate_stage(staged)
         entries = list(staged.iterdir())
         if len(entries) > 1000 or any(
-            item.is_symlink()
-            or not item.is_file()
+            not _safe_regular_file(item)
             or item.suffix != ".json"
             or not _SAFE_COMPONENT_RE.fullmatch(item.stem)
             for item in entries
