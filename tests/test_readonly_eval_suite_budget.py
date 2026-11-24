@@ -94,6 +94,7 @@ def test_exact_budget_on_final_case_is_complete(monkeypatch):
     report = evaluation.run_model_cases(cases()[:1], object(), max_total_tokens=20)
     assert report["suite_complete"] is True
     assert report["prompt_tokens"] + report["completion_tokens"] == 20
+    assert report["paired_cases"][0]["verified_task_passed"] is False
 
 
 def test_empty_suite_is_not_complete(monkeypatch):

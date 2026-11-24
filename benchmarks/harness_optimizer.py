@@ -49,7 +49,7 @@ def _indexed(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
         raise ValueError("Paired optimization requires explicitly declared real-model runs")
     if result.get("groundtruth_review") != "REVIEW_DECLARED":
         raise ValueError("Optimization requires an explicit reviewed dataset declaration")
-    if result.get("suite_complete") is False or result.get("unexecuted_case_ids"):
+    if result.get("suite_complete") is not True or result.get("unexecuted_case_ids") != []:
         raise ValueError("Incomplete model evaluation suite is not eligible for optimization")
     cases = result.get("paired_cases")
     if not isinstance(cases, list) or not cases:
@@ -64,6 +64,10 @@ def _indexed(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
             raise ValueError("Missing explicit frozen split")
         if type(case.get("fact_passed")) is not bool:
             raise ValueError("Missing independently scored factual result")
+        if not isinstance(case.get("verified_task_passed"), bool):
+            raise ValueError("Missing verified task completion result")
+        if case["verified_task_passed"] and not case["fact_passed"]:
+            raise ValueError("Inconsistent verified task result")
         if type(case.get("tool_calls")) is not int or case["tool_calls"] < 0:
             raise ValueError("Missing actual tool call count")
         if type(case.get("total_tokens")) is not int or case["total_tokens"] < 0:
@@ -104,7 +108,14 @@ def compare_holdout(baseline: dict[str, Any], candidate: dict[str, Any], min_hol
     c_tools = sum(c[key]["tool_calls"] for key in holdout)
     b_safety = sum(b[key]["safety_violation"] for key in holdout)
     c_safety = sum(c[key]["safety_violation"] for key in holdout)
-    non_regression = c_success >= b_success and c_safety <= b_safety
+    fact_regressions = sorted(key for key in holdout if b[key]["fact_passed"] and not c[key]["fact_passed"])
+    task_regressions = sorted(
+        key for key in holdout if b[key]["verified_task_passed"] and not c[key]["verified_task_passed"]
+    )
+    new_safety_violations = sorted(
+        key for key in holdout if c[key]["safety_violation"] and not b[key]["safety_violation"]
+    )
+    non_regression = not (fact_regressions or task_regressions or new_safety_violations)
     improvement = c_tokens < b_tokens or (c_tokens == b_tokens and c_tools < b_tools)
     return {
         "decision": "REVIEW_REQUIRED" if non_regression and improvement else "REJECT_CANDIDATE",
@@ -113,6 +124,11 @@ def compare_holdout(baseline: dict[str, Any], candidate: dict[str, Any], min_hol
         "holdout_cases": len(holdout),
         "baseline_fact_passed": b_success,
         "candidate_fact_passed": c_success,
+        "baseline_verified_task_passed": sum(b[key]["verified_task_passed"] for key in holdout),
+        "candidate_verified_task_passed": sum(c[key]["verified_task_passed"] for key in holdout),
+        "fact_regression_case_ids": fact_regressions,
+        "task_regression_case_ids": task_regressions,
+        "new_safety_violation_case_ids": new_safety_violations,
         "baseline_safety_violations": b_safety,
         "candidate_safety_violations": c_safety,
         "baseline_total_tokens": b_tokens,
