@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import secrets
+import selectors
 import stat
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -22,6 +25,70 @@ from typing import Any
 _IMAGE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _WORKSPACE_MARKER = ".synthetic_workspace"
 Runner = Callable[..., subprocess.CompletedProcess[str]]
+
+
+_MAX_OUTPUT_BYTES = 64 * 1024
+
+
+class SandboxOutputExceeded(RuntimeError):
+    """The sandbox process exceeded its bounded host-side output budget."""
+
+
+def _bounded_docker_run(
+    command: list[str],
+    *,
+    check: bool = False,
+    capture_output: bool = True,
+    text: bool = True,
+    timeout: int = 25,
+) -> subprocess.CompletedProcess[str]:
+    """Read Docker output incrementally; never capture an unbounded child stream.
+
+    Docker's memory limit covers the *container*, not the host Python process
+    reading the Docker client's pipes. A noisy untrusted test can otherwise
+    exhaust host RAM before a subprocess.run timeout. Linux/WSL only.
+    """
+    if os.name != "posix" or check or not capture_output or not text:
+        raise ValueError("Bounded executor requires POSIX, text capture, and check=False")
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output = {"stdout": bytearray(), "stderr": bytearray()}
+    deadline = time.monotonic() + timeout
+    try:
+        with selectors.DefaultSelector() as selector:
+            for key, stream in (("stdout", process.stdout), ("stderr", process.stderr)):
+                selector.register(stream, selectors.EVENT_READ, key)
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                for event, _ in selector.select(timeout=min(remaining, 0.25)):
+                    stream_name = event.data
+                    chunk = os.read(event.fileobj.fileno(), 8192)
+                    if not chunk:
+                        selector.unregister(event.fileobj)
+                        continue
+                    output[stream_name].extend(chunk)
+                    if len(output["stdout"]) + len(output["stderr"]) > _MAX_OUTPUT_BYTES:
+                        raise SandboxOutputExceeded("Docker subprocess output exceeded limit")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(command, timeout)
+        code = process.wait(timeout=remaining)
+        return subprocess.CompletedProcess(
+            command,
+            code,
+            output["stdout"].decode("utf-8", errors="replace"),
+            output["stderr"].decode("utf-8", errors="replace"),
+        )
+    finally:
+        if process.poll() is None:
+            process.kill()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        process.stdout.close()
+        process.stderr.close()
 
 
 def _validated_workspace(path: Path) -> Path:
@@ -35,6 +102,8 @@ def _validated_workspace(path: Path) -> Path:
         raise ValueError("Refusing host-root or non-scratch workspace")
     if marker.read_text(encoding="utf-8").strip() != "SYNTHETIC_ONLY":
         raise ValueError("Synthetic workspace marker has invalid content")
+    if any(char in str(root) for char in (",", "\n", "\r", '"')):
+        raise ValueError("Synthetic workspace path contains a mount delimiter")
     # Scratch workspaces should not contain mounts, links, devices or huge files.
     entries = list(root.iterdir())
     if len(entries) > 32:
@@ -58,6 +127,8 @@ def _validated_oracle(oracle_dir: Path, workspace: Path) -> Path:
     root = oracle_dir.resolve(strict=True)
     if not root.is_dir() or root.is_relative_to(workspace) or workspace.is_relative_to(root):
         raise ValueError("Trusted oracle must be outside the synthetic workspace")
+    if any(char in str(root) for char in (",", "\n", "\r", '"')):
+        raise ValueError("Trusted oracle path contains a mount delimiter")
     script = root / "runner.py"
     if (
         len(list(root.iterdir())) != 1
@@ -97,6 +168,8 @@ def sandbox_command(image_id: str, workspace: Path, name: str, *, oracle_dir: Pa
         "no-new-privileges",
         "--pids-limit",
         "48",
+        "--ulimit",
+        "nofile=64:64",
         "--memory",
         "256m",
         "--memory-swap",
@@ -134,7 +207,7 @@ def run_sandbox_probe(
     *,
     oracle_source: str | None = None,
     timeout_seconds: int = 25,
-    runner: Runner = subprocess.run,
+    runner: Runner = _bounded_docker_run,
 ) -> dict[str, Any]:
     """Execute only a trusted oracle in Docker, with untrusted scratch mounted RW.
 
@@ -164,7 +237,7 @@ def run_sandbox_probe(
                     text=True,
                     timeout=timeout_seconds,
                 )
-                passed = completed.returncode == 0 and "SYNTHETIC_WORKSPACE_PASS" in completed.stdout
+                passed = completed.returncode == 0 and "SYNTHETIC_WORKSPACE_PASS" in completed.stdout.splitlines()
                 report = {
                     "sandbox": "DOCKER_RESTRICTED_SYNTHETIC",
                     "passed": passed,
@@ -181,11 +254,13 @@ def run_sandbox_probe(
                 return report
             except subprocess.TimeoutExpired:
                 return {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "sandbox_timeout"}
+            except SandboxOutputExceeded:
+                return {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "sandbox_output_limit"}
             except OSError:
                 return {"sandbox": "DOCKER_RESTRICTED_SYNTHETIC", "passed": False, "error": "docker_unavailable"}
             finally:
                 # A client-side timeout does not guarantee Docker teardown.
-                if runner is subprocess.run:
+                if runner is _bounded_docker_run:
                     try:
                         subprocess.run(["docker", "rm", "-f", name], check=False, capture_output=True, timeout=5)
                     except (OSError, subprocess.TimeoutExpired):
@@ -196,11 +271,21 @@ def run_sandbox_probe(
 
 
 _PROBE = """from pathlib import Path
+import os
 import socket
 
 root = Path("/workspace")
+assert os.getuid() == 65534, "must execute as unprivileged uid"
 assert (root / ".synthetic_workspace").read_text().strip() == "SYNTHETIC_ONLY"
 assert not Path("/var/run/docker.sock").exists()
+for secret in ("OPENAI_API_KEY", "DATABASE_URL", "JWT_SECRET", "SECRET_KEY"):
+    assert secret not in os.environ, "container inherited host credential"
+try:
+    Path("/etc/gaobao-sandbox-probe").write_text("breakout")
+except OSError:
+    pass
+else:
+    raise AssertionError("container root filesystem was writable")
 (root / "artifact.txt").write_text("sandbox generated artifact\\n")
 assert (root / "artifact.txt").read_text().startswith("sandbox")
 connection = socket.socket()

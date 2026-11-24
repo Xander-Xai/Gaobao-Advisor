@@ -151,6 +151,8 @@ curl -sS -X POST http://localhost:8000/api/v1/admin/agent-experiments/research \
 
 [最新 CI 证据（1288 passed / 34 skipped）](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/44579602863) · [CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/44579602669)
 
+| 沙箱安全加固与反例验收 | [docs/security/gaobao-agent-sandbox-contract-20261124.md](docs/security/gaobao-agent-sandbox-contract-20261124.md) | Docker 客户端输出 64 KiB 上限、IPC/FD 限制、硬链接拒绝、真实容器网络/根文件系统/身份负例探测；仅合成实验 |
+
 [Pi / OpenCode 沙箱设计与安全边界](docs/security/pi-opencode-sandbox-architecture-20261124.md) — 仅强化高报离线 Coding Agent 合成实验，**不开放公开聊天任意代码执行**；本 PR 最新 CI 未通过前不宣称生产隔离完成。
 
 沙箱演示（Docker 环境，全部为虚构代码，脚本控制器不产生外部模型费用）：

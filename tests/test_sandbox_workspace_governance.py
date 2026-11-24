@@ -69,3 +69,23 @@ def test_oversized_file_and_workspace_entry_count_rejected(work, oracle):
         (work / (f"file-{index:02d}")).write_text("synthetic", encoding="utf-8")
     with pytest.raises(ValueError, match="too many"):
         sandbox_command(IMAGE, work, NAME, oracle_dir=oracle)
+
+
+def test_workspace_hardlink_is_rejected(work, oracle, tmp_path):
+    # A normal file outside the sandbox root must not become writable via a hardlink.
+    target = tmp_path / "outside-data"
+    target.write_text("DO_NOT_MODIFY", encoding="utf-8")
+    alias = work / "linked-data"
+    alias.hardlink_to(target)
+    with pytest.raises(ValueError, match="unsafe"):
+        sandbox_command(IMAGE, work, NAME, oracle_dir=oracle)
+    assert target.read_text(encoding="utf-8") == "DO_NOT_MODIFY"
+
+
+@pytest.mark.parametrize("suffix", [",readonly", '"quoted"'])
+def test_reject_mount_delimiter(tmp_path, oracle, suffix):
+    root = tmp_path / ("gaobao-synthetic-" + suffix)
+    root.mkdir()
+    (root / ".synthetic_workspace").write_text("SYNTHETIC_ONLY", encoding="utf-8")
+    with pytest.raises(ValueError, match="mount delimiter"):
+        sandbox_command(IMAGE, root, NAME, oracle_dir=oracle)

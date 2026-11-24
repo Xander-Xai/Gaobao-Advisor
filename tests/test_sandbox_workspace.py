@@ -1,11 +1,17 @@
 """Container command contract; real Docker smoke lives in CI container job."""
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from benchmarks.sandbox_workspace import run_sandbox_probe, sandbox_command
+from benchmarks.sandbox_workspace import (
+    SandboxOutputExceeded,
+    _bounded_docker_run,
+    run_sandbox_probe,
+    sandbox_command,
+)
 
 FAKE_IMAGE = "sha256:" + "a" * 64
 FAKE_NAME = "gaobao-harness-" + "b" * 16
@@ -37,6 +43,7 @@ def oracle(tmp_path: Path):
 def test_docker_isolated_command_has_no_host_shell_or_network(workspace, oracle):
     command = sandbox_command(FAKE_IMAGE, workspace, FAKE_NAME, oracle_dir=oracle)
     assert command[:3] == ["docker", "run", "--rm"]
+    assert command[command.index("--ulimit") + 1] == "nofile=64:64"
     assert "--pull=never" in command
     assert command[command.index("--network") + 1] == "none"
     assert "--read-only" in command
@@ -121,3 +128,30 @@ def test_workspace_hardlink_is_rejected(tmp_path, workspace, oracle):
     (workspace / "hardlink").hardlink_to(file_outside)
     with pytest.raises(ValueError, match="unsafe"):
         sandbox_command(FAKE_IMAGE, workspace, FAKE_NAME, oracle_dir=oracle)
+
+
+def test_substring_success_marker_cannot_forge_pass(workspace):
+    def fake(args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, "SYNTHETIC_WORKSPACE_PASS_BUT_FAILED\\n", "")
+
+    result = run_sandbox_probe(FAKE_IMAGE, workspace, runner=fake)
+    assert result["passed"] is False
+
+
+def test_bounded_host_pipe_rejects_noisy_untrusted_process():
+    # The same bounded subprocess reader is used for the Docker CLI.
+    # Without it, an untrusted script can fill HOST RAM, despite Docker memory limits.
+    with pytest.raises(SandboxOutputExceeded):
+        _bounded_docker_run(
+            [sys.executable, "-c", "import sys; sys.stdout.write('X' * 100000)"],
+            timeout=5,
+        )
+
+
+def test_bounded_host_pipe_preserves_short_success_output():
+    done = _bounded_docker_run(
+        [sys.executable, "-c", "print('SYNTHETIC_WORKSPACE_PASS')"],
+        timeout=5,
+    )
+    assert done.returncode == 0
+    assert done.stdout.splitlines() == ["SYNTHETIC_WORKSPACE_PASS"]
