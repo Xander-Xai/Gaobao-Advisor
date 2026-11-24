@@ -139,7 +139,9 @@ def test_arbitrary_instructions_and_missing_receipt_are_rejected(memory):
         store.propose(
             owner="owner-a",
             rule_key=RULE,
-            source_run_id="fabricated", proposed_by="agent-a", ttl_seconds=100,
+            source_run_id="fabricated",
+            proposed_by="agent-a",
+            ttl_seconds=100,
         )
 
 
