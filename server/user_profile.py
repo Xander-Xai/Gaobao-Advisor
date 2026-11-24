@@ -204,7 +204,7 @@ def load_profile(session_id: str) -> UserProfile:
         if slot_data:
             return UserProfile.from_slots(slot_data)
     except Exception:
-        logger.warning("Failed to load profile for session %s", session_id)
+        logger.warning("Failed to load user profile (session ID redacted)")
     finally:
         db.close()
 
@@ -246,6 +246,6 @@ def save_profile(session_id: str, profile: UserProfile) -> None:
 
         save_slots(db, session_id, slots)
     except Exception:
-        logger.warning("Failed to save profile for session %s", session_id)
+        logger.warning("Failed to save user profile (session ID redacted)")
     finally:
         db.close()
