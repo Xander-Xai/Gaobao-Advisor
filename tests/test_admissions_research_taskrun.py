@@ -57,7 +57,8 @@ def test_maker_checker_idempotency_and_dataset_binding(journal, spec):
         journal.finish(run_id, lease, None, "cancelled")
 
 
-def test_worker_only_publishes_bound_verified_aggregate(journal, spec):
+@pytest.mark.parametrize("mismatch", [None, "input_sha256", "image_id", "cleanup_verified", "oracle"])
+def test_worker_only_publishes_bound_verified_aggregate(journal, spec, mismatch):
     item = journal.create("operator", "request-0002", spec)
     journal.approve(item["run_id"], "admin", item["spec_sha256"])
 
@@ -82,7 +83,7 @@ def test_worker_only_publishes_bound_verified_aggregate(journal, spec):
         ]
         evidence = {"admission-history": rows, "enrollment-plans": []}
         analysis = _expected(rows, ("school_id", "year"))
-        return {
+        report = {
             "status": "VERIFIED_PARTIAL_RESEARCH",
             "scope": spec["scope"],
             "approval_ref_sha256": digest(spec["approval_ref"]),
@@ -101,8 +102,18 @@ def test_worker_only_publishes_bound_verified_aggregate(journal, spec):
             "receipt_ids": {},
             "provider_usage": None,
         }
+        if mismatch == "oracle":
+            analysis["groups"][0]["best_min_rank"] = 1
+            report["sandbox_analysis"]["result_sha256"] = digest(analysis)
+        elif mismatch:
+            report["sandbox_analysis"][mismatch] = False
+        return report
 
     result = execute_approved(journal, item["run_id"], spec["dataset_ref"], None, runner=runner)
+    if mismatch:
+        assert result["status"] == "FAILED"
+        assert result["result"] is None
+        return
     assert result["status"] == "NEEDS_REVIEW"
     assert "evidence" not in result["result"]
     assert spec["approval_ref"] not in canonical(result)
@@ -127,3 +138,27 @@ def test_blocked_result_is_not_published(journal, spec):
     assert result["result"] is None
     with pytest.raises(ResearchConflict, match="No verified"):
         render_aggregate_report(result)
+
+
+def test_research_report_http_requires_authorized_owner_and_terminal_result(admin_client, monkeypatch, tmp_path, spec):
+    from tests.conftest import auth_header, login
+
+    tmp_path.chmod(0o700)
+    monkeypatch.setenv("ADMISSIONS_RESEARCH_ENABLED", "true")
+    monkeypatch.setenv("ADMISSIONS_RESEARCH_DATASET_REF", spec["dataset_ref"])
+    monkeypatch.setenv("ADMISSIONS_RESEARCH_JOURNAL", str(tmp_path / "research-http.sqlite"))
+    base = "/api/v1/admin/admissions-research/runs"
+    operator = auth_header(login(admin_client, "operator"))
+    administrator = auth_header(login(admin_client, "admin"))
+    viewer = auth_header(login(admin_client, "viewer"))
+    payload = {key: value for key, value in spec.items() if key != "dataset_ref"}
+    payload["idempotency_key"] = "research-http-001"
+    created = admin_client.post(base, json=payload, headers=operator)
+    assert created.status_code == 201, created.text
+    run_id = created.json()["run_id"]
+    report_url = f"{base}/{run_id}/report"
+    assert admin_client.get(report_url).status_code == 401
+    assert admin_client.get(report_url, headers=viewer).status_code == 403
+    assert admin_client.get(report_url, headers=operator).status_code == 409
+    assert admin_client.get(report_url, headers=administrator).status_code == 409
+    assert admin_client.post(f"{base}/{run_id}/execute", headers=operator).status_code == 404
