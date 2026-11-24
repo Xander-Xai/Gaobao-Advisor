@@ -1,6 +1,6 @@
 # Agent 工程标准 V1.0 — 高考顾问项目责任边界与验收台账
 
-> 状态：执行台账，不是模型效果或真实招生业务验收报告。基线：`master` @ `4b7e1cb13368bedb4797096f8cce139a1959885e`（2026-11-24 核查）。
+> 状态：执行台账，不是模型效果或真实招生业务验收报告。基线：`master` @ `6c489f4201410de0fef0414e57e25d18b078c221`（2026-11-25 核查；CI/CodeQL/Java Services 成功；不代表生产验收）。
 
 ## 求职项目定位、任职时间及代码归属
 
@@ -12,7 +12,7 @@
 
 | 模块 | 本仓责任 | 已有入口 | 当前证据边界 |
 | --- | --- | --- | --- |
-| M01/M02/M05 | Vue3/FastAPI/SSE、SQL/检索、LangGraph 确定性 17 节点业务图 | `server/` `frontend/` | 合成业务 E2E；不将节点数当模型自主工具步数 |
+| M01/M02/M05 | Vue3/FastAPI/SSE、SQL/检索、LangGraph 确定性 12 节点在线准备图 + SSE 唯一收尾；17 节点参考图 | `server/` `frontend/` | 合成业务 E2E；不将节点数当模型自主工具步数 |
 | M03/M04/M09 | 独立只读 Harness、Planner → Tool → Observation、预算与 TaskRun | `server/agent/readonly_harness.py` `server/agent/taskrun_store.py` | 有脚本化合成验收；真实模型完成率未测，Deep Agents 非默认在线业务 |
 | M07 | Context 预算、来源保护、Skills、可选持久证据记忆 | `server/agent/context_policy.py` `server/agent/governed_evidence_memory.py` `server/agent/skills/` | 部分实现；动态工具渐进披露、Prompt Caching、负向记忆与长期对照未完整验收 |
 | M13（主责） | 合成业务独立 SQL Oracle、模型运行对照、Bad Case、Holdout | `benchmarks/decision_card_business_eval.py` `benchmarks/model_run_comparison.py` | 8 个冻结合成任务；真实模型 Provider 执行、人工真值与统计稳健性未验证 |
@@ -21,12 +21,16 @@
 
 **明确不做**：把高考顾问重构为 9 Agent 客服系统；重复创建企业级退款 Ledger 或完整多模态 RAG 检索服务。真实业务事实优先 SQL，政策类文字走检索；模型只在明确许可的局部范围自主决策。
 
+## 架构收敛后的证据范围
+
+#192/#193 已合入；在线咨询、原生 Harness 基线与复杂研究职责分离，私有 operator journal 是批准研究的单一生命周期。Deep Agents 使用 InMemorySaver；私有任务恢复不等于跨进程图恢复。受限招生 Sandbox 已有业务链路，算术修复仅保留为合成安全夹具。已合入的授权研究 Eval 支持独立金标和私有回执（`benchmarks/authorized_research_eval.py`）；#194 是同一 journal 的聚合评测扩展，交付状态以实时 PR/CI 为准。真实数据许可、独立金标、实际模型/账单及同模型 A/B 均继续保持 OPEN。
+
 ## 第一批补全任务
 
 | 编号 | 执行项 | 通过标准 | 当前状态 / 关联变更 |
 | --- | --- | --- | --- |
 | GB-P0-01 | 真实模型受约束多步业务 Eval | 固定 8 合成任务 + 扩大独立 Holdout；模型版实跑、独立 SQL Oracle、正确拒答、轨迹、provider token 与失败分类 | **PARTIAL**；可选模型执行接口已实现，仍未完成真实模型结果 |
-| GB-P0-02 | 失败归因与任务覆盖审计 | 缺失案例/非法 identity/重复样本/Token 未知/意外拒答均被报告；不得把 scripted CI 当真实 LLM | **PR #143 Open**，未合并 |
+| GB-P0-02 | 失败归因与任务覆盖审计 | 缺失案例/非法 identity/重复样本/Token 未知/意外拒答均被报告；不得把 scripted CI 当真实 LLM | **MERGED**：#143 已合入；真实模型与数据仍待验收 |
 | GB-P0-03 | Context / Prompt / Skills 有效性 A/B | 同模型/同任务/同工具和价格快照，候选改动与基线分开保存；质量安全不退化后才能讨论 token 变化 | **PARTIAL**；既有实验工具，真实重复运行和独立 Holdout 仍缺 |
 | GB-P0-04 | 决策卡面向用户的业务质量闭环 | 关键事实必须来自 SQL，缺失数据拒答；真实模型回复与最终展示卡逐字段交叉验证，合成环境先验 | **PARTIAL**；隔离运营侧决策卡不等于公共 chat 已由模型自主编排 |
 | GB-P1-05 | Trace/评测回放/单任务 FinOps | 一条任务可关联 Trace、工具序列、状态、模型用量与真实账单，对照失败 Bad Case | **PARTIAL**；Provider 账单与端到端使用成本未验收 |

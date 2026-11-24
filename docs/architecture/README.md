@@ -14,7 +14,7 @@ record why the larger decisions were made.
 | Online chat | 保留 LangGraph 确定性图 | 单次事实查询不经自主 Loop；SQL/来源和选科、年份、省份、位次硬约束优先；模型解释不替代事实 |
 | 图节点 | 按责任裁剪 | 节点数不是自主调用次数；相邻纯规则节点只有在独立路由、观察或恢复有价值时保留；改动须保持 API/SSE、拒答和状态契约 |
 | Native readonly Harness | 保留为最小参考和可控评测基线 | 不成为第二套默认聊天引擎；不重复扩展通用生产运行时 |
-| Deep Agents | 唯一复杂研究候选执行引擎 | 已有 operator research runner；独立的确定性 SQL subgraph 不是自主模型专家；批准范围、工具预算、SQL 回执和结果验证优先；受控研究 API 与 worker 共用独立私有 journal；本分支实现不等于主线或生产验收 |
+| Deep Agents | 唯一复杂研究候选执行引擎 | 已有 operator research runner；独立的确定性 SQL subgraph 不是自主模型专家；批准范围、工具预算、SQL 回执和结果验证优先；受控研究 API 与 worker 共用独立私有 journal；已随 #192 合入 master；不等于真实模型/数据或生产验收 |
 | Sandbox | 仅招生分析有业务主责 | 算术代码修复是隔离回归 fixture，不是用户功能；只准批准数据快照、受限容器、独立 Oracle 校验；无 Docker socket/任意 host shell 暴露给模型 |
 | Memory / Context | 保留分层 | SQL 事实/当前任务不截断；摘要是非可信上下文；长期偏好独立且可撤回，不能替代录取依据 |
 | SQLite / MySQL / Redis / Java | 单体默认，外部组件可选 | Java 仅目录读服务 overlay；不建立另一套 chat/Agent 入口；扩容需求或隔离收益不足不扩展 |
@@ -26,7 +26,7 @@ record why the larger decisions were made.
 
 ### Entry-point and state ownership decision (#190)
 
-The following describes the integrated code in PR #192 (not a default-branch or production claim until merged and verified).
+The following describes the integrated architecture in merged PRs #192 and #193. On 2026-11-25, `master` at `6c489f4201410de0fef0414e57e25d18b078c221` passed [CI (all 11 jobs)](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45465142194), [CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45465142246) and [Java Services](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45465142139). This is a dated merged-code and CI receipt, not a production claim. Recheck live HEAD before reusing it.
 
 | Entry point | Actual responsibility | Architecture decision |
 |---|---|---|
@@ -45,7 +45,7 @@ Managed execution flow: operator submission → immutable spec digest → indepe
 
 Retain existing graph nodes until a behavior-preserving comparison justifies removal. Security scan, profile branching, data validation, source attribution, candidate gate and final persistence are distinct responsibilities; simple sequential edges alone are not evidence that a node is redundant. Any consolidation must preserve the SSE event/refusal contract, hard admissions constraints and single ownership of final persistence.
 
-Acceptance: exact-head CI, API and SSE contracts, deterministic negative cases and one research lifecycle authority; no real model/data calls are implied by this decision. Architecture issue #190 remains open until the structural changes and acceptance have been reviewed; capability additions are deferred.
+Acceptance: exact-head CI, API and SSE contracts, deterministic negative cases and one research lifecycle authority; no real model/data calls are implied by this decision. The structural architecture is frozen: do not add parallel engines or new frameworks. The merged SHA's CI includes no-key container smoke and Full Compose E2E; independently requested local smoke remains unverified (see #190). Evidence-only gap work may proceed without broadening the architecture; real-model/data/cost acceptance remains in #104/#147. The managed journal evaluation follow-up #194 is not a second engine; verify its actual merge/check status before claiming delivery.
 
 ## 1. System overview
 

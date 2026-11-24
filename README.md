@@ -32,6 +32,8 @@
 
 ## 仓库状态怎么查
 
+**2026-11-25 架构核验快照（非实时状态）**：#192/#193 已合并；`master` 当时的 `6c489f4` 对应 [CI](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45465142194)、[CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45465142246) 和 [Java Services](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45465142139) 均通过。公共 SSE 使用 12 节点准备图，路由唯一负责最终候选核验及持久化；17 节点完整图仅为兼容/参考。复杂招生研究采用独立 operator 审批的 Deep Agents + 受限招生分析，单主机私有 journal 持久化任务而非完整图 checkpoint。原生 Harness、合成 TaskRun 及算术 Coding Agent 仅用于参考/评测。真实模型、数据、成本、独立人工金标仍未验收；详见 [#190](https://github.com/Xander-Xai/Gaobao-Advisor/issues/190)、[#104](https://github.com/Xander-Xai/Gaobao-Advisor/issues/104)、[#147](https://github.com/Xander-Xai/Gaobao-Advisor/issues/147)。
+
 默认分支为 `master`。实时核对 [`master` 提交](https://github.com/Xander-Xai/Gaobao-Advisor/commits/master/) · [Pull Requests](https://github.com/Xander-Xai/Gaobao-Advisor/pulls) · [Issues](https://github.com/Xander-Xai/Gaobao-Advisor/issues) · [Actions](https://github.com/Xander-Xai/Gaobao-Advisor/actions?query=branch%3Amaster) · [Releases](https://github.com/Xander-Xai/Gaobao-Advisor/releases)。
 以同一提交核对代码、测试和 Actions。PR 正文中的历史决策与 CI 回执仅对应当时的提交。
 
@@ -57,7 +59,7 @@
 
 ## Agent Harness / Eval 实验
 
-合成业务 Context A/B 已随 [PR #160](https://github.com/Xander-Xai/Gaobao-Advisor/pull/160) 合入；`python -m benchmarks.context_ab_eval --scripted-smoke --out-dir /tmp/gaobao-context-ab` 可复现固定 SQL 真值对照。脚本化控制器不代表真实模型效果或 Token 降本。真实模型版本一致性增强见 [PR #162](https://github.com/Xander-Xai/Gaobao-Advisor/pull/162)，以其实时合并与 CI 状态为准。
+合成业务 Context A/B 已随 [PR #160](https://github.com/Xander-Xai/Gaobao-Advisor/pull/160) 合入；`python -m benchmarks.context_ab_eval --scripted-smoke --out-dir /tmp/gaobao-context-ab` 可复现固定 SQL 真值对照。脚本化控制器不代表真实模型效果或 Token 降本。真实模型版本一致性增强已随 [PR #162](https://github.com/Xander-Xai/Gaobao-Advisor/pull/162) 合入；真实模型结果仍未测量。
 
 与[公共问答业务图](docs/architecture/README.md)**分离**的只读执行层，位于 `server/agent/readonly_harness.py`、`readonly_model_planner.py` 和 `readonly_tools.py`。这里实现的是 **Planner → Tool → Observation → Finish/Abstain** 的受约束循环，不是把业务 LangGraph 节点数当成“工具步长”。
 
@@ -161,7 +163,7 @@ curl -sS -X POST http://localhost:8000/api/v1/admin/agent-experiments/research \
 | 引用正确但事实错误仍拒绝 | `benchmarks/harness_answer_eval.py` 与 `tests/test_readonly_model_verified_task.py` | 预先冻结的合成事实和工具来源双重验证 |
 | Ground Truth 候选冻结 | `benchmarks/groundtruth_pipeline.py` | 20 条合成候选、开发/holdout、SHA 和审核门禁；**默认待人工审核** |
 | 优化前后评价门禁 | `benchmarks/harness_optimizer.py` | 同模型/同数据集、质量与安全不退化、真实 Token 用量才可提交人工审查；尚无实测收益 |
-| 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；**独立最小 Python 镜像 + 可信测试脚本只读挂载（本次 PR 待验收）**；不是生产级多租户 OS 沙箱 |
+| 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；**独立最小 Python 镜像 + 可信测试脚本只读挂载（#152/#153/#161 已合入，非生产多租户验收）**；不是生产级多租户 OS 沙箱 |
 | Coding Agent 真实执行链路 | `benchmarks/sandbox_coding_agent.py` | **两个合成算术代码修复 2/2，通过真实容器测试；控制器为 SCRIPTED_NOT_LLM** |
 | 可选模型自主修复 | `benchmarks/sandbox_model_planner.py` | API 适配器已实现、显式授权与 Token 预算；**尚无真实模型跑分** |
 

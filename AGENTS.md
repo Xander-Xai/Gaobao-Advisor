@@ -11,7 +11,7 @@
 - Keep the public synchronous, legacy streaming and SSE final-candidate context behavior aligned; prove integration tests call the real construction path rather than merely an unused MemoryManager.
 - Snapshot cache requires both feature flags and explicit nonproduction APP_ENV; do not enable plaintext in production. Bind reuse to authenticated session/conversation PK, current committed history-prefix hash, policy/model/provider fingerprint, TTL and CAS version. Never truncate current SQL/RAG evidence to save summary tokens.
 - A stale/failed summary should surface explicit partial-context status; a backend read failure must not turn into a successful empty conversation; do not log raw user text or provider exception bodies.
-- Keep a single Alembic head. Session snapshot #149 is merged; isolated cross-task memory #159 proposes an explicit merge revision, pending exact-head SQLite/MySQL checks and privacy review. Do not merge the older stacked #135 independently.
+- Keep a single Alembic head. Session snapshot #149 and isolated cross-task preference vault #159 are merged; superseded #135 is closed without merge. Keep privacy/production validation separate and preserve the single Alembic head.
 - Synthetic tests or CI passing do not establish provider Token savings, factual answer quality, privacy compliance, or production availability. Validate real-model/no-compaction vs compaction vs snapshot reuse with same cases before making measured claims.
 - See `docs/architecture/memory-engineering-positioning-20261124.md` and `docs/validation/session-compaction-snapshot-20261124.md`.
 
@@ -24,4 +24,4 @@
 5. When changing a feature or interface, update its current documentation and existing generated contracts in the same PR. Keep dated audits labelled with the snapshot date.
 
 ## Architecture change gate
-- Follow [architecture decision freeze](docs/architecture/README.md#architecture-decision-freeze--2026-11-25). Default chat remains deterministic and SQL-grounded. Native readonly Harness is a reference/eval baseline; Deep Agents is the selected complex-research candidate, not a second default chat engine. Keep synthetic sandbox fixtures out of public business routes. Do not expand frameworks or duplicate task lifecycles before architecture simplification is accepted.
+- Follow [architecture decision freeze](docs/architecture/README.md#architecture-decision-freeze--2026-11-25). Default chat remains deterministic and SQL-grounded. Native readonly Harness is a reference/eval baseline; Deep Agents is the selected complex-research candidate, not a second default chat engine. Keep synthetic sandbox fixtures out of public business routes. PRs #192/#193 merged the architecture convergence; do not add parallel task lifecycles, new engines or production sandbox routes. Evidence-only work may proceed within that frozen architecture. See #190 for independent local smoke and #104/#147 for real acceptance.
