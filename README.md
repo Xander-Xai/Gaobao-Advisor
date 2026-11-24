@@ -5,15 +5,15 @@
 
 > **Memory 专项定位（2026-11-24）**：统一对话上下文、默认标准部署启用语义压缩、版本化 Session Snapshot 和独立的用户偏好机制；后两者受开关、隐私与 CI 门禁约束，不能用历史摘要代替招生 SQL 证据。见 [Memory 专项工程定位](docs/architecture/memory-engineering-positioning-20261124.md)。
 
-**AI 应用全栈交付 + 可信数据查询 + Agent 运行时可靠性实验**
+**AI 应用全栈交付 + 可信招生数据查询 + 受审批的复杂研究 Agent**
 
 围绕“考生如何在信息不完整时获得可追溯、可解释的志愿咨询结果”，实现 **画像追问 → 结构化 SQL 查询 → 合成知识检索 → 来源/风险检查 → SSE 交互** 的端到端业务链路。工程上包含 Vue 3、FastAPI、受约束的 LangGraph 工作流，以及正式架构中的 Java Gateway/Catalog、MySQL、Redis、Docker Compose 和 CI 集成验证。
 
-**Agent Harness 工程实验**独立于生产问答路由：用真正的只读业务工具检验模型/Planner 的多步工具执行、预算控制、Fail-Closed 和离线 Eval，不将使用框架或通过单测等同于业务成功。
+**复杂研究业务链路**采用独立审批 TaskRun → Deep Agents → 只读 SQL/招生分析沙箱 → 独立核验 → 私有报告。原生 Harness 是独立回归与评测基线：用真正的只读业务工具检验模型/Planner 的多步工具执行、预算控制、Fail-Closed 和离线 Eval，不将使用框架或通过单测等同于业务成功。
 
 > **代码归属：** 基于上游早期 MIT 许可代码继续二次开发与工程加固，保留原始许可声明；具体见 [第三方归属说明](THIRD_PARTY_NOTICES.md)。
 
-**Agent V1 Harness 工程验证**：[Skills / 合成规则记忆与 Eval 验收](docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md)。这些独立实验模块不属于默认聊天路径，除非经过明确集成和真实模型/业务评测，不能计为线上能力。
+**Agent V1 工程验收证据（非线上实验功能清单）**：[Skills / 合成规则记忆与 Eval 验收](docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md)。这些独立实验模块不属于默认聊天路径，除非经过明确集成和真实模型/业务评测，不能计为线上能力。
 
 > **数据边界先行：** 仓库默认只附带程序生成的 **SYNTHETIC_DEMO** 合成演示数据，不对应任何真实院校、专业或录取结果，**不可用于真实志愿决策**。真实数据导入能力保留在源码中，使用者需自行提供合法授权数据。
 
@@ -43,13 +43,15 @@
 
 在线对话的同步、传统流式和公开 SSE 最终候选生成，使用统一的
 `server/agent/chat_context.py` 来限制历史上下文并保留本轮 SQL/RAG 来源。
-标准本地合成数据部署默认开启 `GAOBAO_CHAT_COMPACTION_ENABLED=true` 与 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，按需摘要旧历史，保留近期原文，并按会话、版本、历史前缀哈希与 TTL 复用 SQL 快照。摘要不是招生证据，配置模型时可能增加调用费用。显式 false 可回滚；轻量 SQLite base 仍默认关闭，生产明文快照仍禁止启用。
+标准本地合成数据部署默认开启 `GAOBAO_CHAT_COMPACTION_ENABLED=true` 与 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，按需摘要旧历史，保留近期原文，并按会话、版本、历史前缀哈希与 TTL 复用 SQL 快照。摘要采用 AES-GCM 加密并绑定会话主键、历史前缀及策略；标准部署缺少密钥拒绝启动，Worker 有界清理过期快照。摘要不是招生证据，配置模型时可能增加调用费用。显式 false 可回滚；轻量 SQLite base 仍默认关闭，生产明文快照仍禁止启用。
 操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
 跨任务用户偏好记忆与会话压缩是不同机制。本实验提供显式创建的独立凭证、SQL 持久化、TTL、版本控制、凭证轮换及删除；仅允许显式非生产环境且默认关闭。详见 [跨任务记忆的使用与生产门槛](docs/cross-task-user-memory.md)。真实身份绑定、偏好加密和生产隐私验收尚未完成。旧 #135 已关闭，由本实现承接。
 
-进一步的**可复用会话摘要快照**已合入 master（PR #149），标准本地合成部署默认开启：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。可设置 `GAOBAO_CHAT_SNAPSHOT_ENABLED=false` 回滚，且当前明确禁止生产环境启用；具体限制与 Alembic 迁移冲突见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
+进一步的**可复用会话摘要快照**已合入 master（PR #149），标准本地合成部署默认开启：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。可设置 `GAOBAO_CHAT_SNAPSHOT_ENABLED=false` 回滚，且当前明确禁止生产环境启用；具体边界和迁移历史见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
 
 ## Agent Harness / Eval 实验
+
+**阅读说明：** 下文为隔离验证与历史工程证据，不是正式用户功能。正式复杂研究执行入口为 [授权研究 TaskRun](docs/admissions-research-taskrun.md)，公共咨询与研究生命周期分离。禁止把合成 fixture 直接开放给用户。
 
 合成业务 Context A/B 已随 [PR #160](https://github.com/Xander-Xai/Gaobao-Advisor/pull/160) 合入；`python -m benchmarks.context_ab_eval --scripted-smoke --out-dir /tmp/gaobao-context-ab` 可复现固定 SQL 真值对照。脚本化控制器不代表真实模型效果或 Token 降本。真实模型版本一致性增强见 [PR #162](https://github.com/Xander-Xai/Gaobao-Advisor/pull/162)，以其实时合并与 CI 状态为准。
 
@@ -289,6 +291,8 @@ flowchart LR
 
 ## 快速开始
 
+面向授权真实数据的 [工业部署候选与发布门禁](docs/architecture/industrial-release-contract.md) 采用外部 MySQL/Redis、Java 网关与 Catalog、独立迁移和外部 TLS 入口；默认禁止合成语料、自动种子及未经隐私验收的功能。它不是生产上线许可。下方标准本地环境仅使用合成数据。
+
 ### 方式一：Docker Compose（推荐，无需 LLM Key）
 
 要求：Docker 24+、Compose v2.24+、Python 3.10/3.11 与项目依赖。
@@ -311,7 +315,7 @@ python scripts/compose_standard.py up --build -d
 | API 健康检查 | http://localhost/api/v1/health |
 | Java Catalog | http://localhost/api/v1/catalog/schools?limit=2 |
 
-> 标准部署仅开放 Nginx 本地入口；Python、Java、MySQL、Redis 保持内部网络。首次启动迁移 MySQL 并生成合成数据。已有 `.env.full` 可运行 `python scripts/setup_full_env.py --add-java-reader` 补齐只读密码；不要覆盖原密码或自动迁移 SQLite 旧数据。
+> 标准部署仅开放 Nginx 本地入口；Python、Java、MySQL、Redis 保持内部网络。首次启动迁移 MySQL 并生成合成数据。已有 `.env.full` 可运行 `python scripts/setup_full_env.py --add-java-reader` 补齐只读密码及摘要加密密钥；不要覆盖原密码或自动迁移 SQLite 旧数据。
 
 验证：
 
@@ -382,7 +386,7 @@ Java Gateway 负责 API 路由和 Redis 全局限流；Catalog 使用独立只�
 
 | 维度 | 状态 |
 |---|---|
-| Code Complete（`master`） | 已交付：Python/FastAPI + LangGraph + Vue 3 +.MySQL / Redis / Java 标准架构 |
+| 标准部署架构 | 本文描述当前 checkout 的 Python/FastAPI + LangGraph + Vue 3 + MySQL / Redis / Java；是否已合并以 master 与 exact-head CI 为准 |
 | 该基线的自动化测试 | PASS：Python 3.10/3.11、前端、Compose E2E、CodeQL、Secret Scan（见 Actions） |
 | 功能分支验收（PR #89） | 已合入 `master`（`7c87686`）；合并后主 CI、CodeQL、Java Services 全绿，但仅为合成数据短时观测 |
 | 性能基准 | **部分达标**：`python-overview` 聚合已优化（16→9 次往返，PR #93），仓库内基准 `benchmarks/overview_perf_bench.py` 同配置 50 并发 median -45%、RPS +75%；短时合成数据结果不等于容量或 SLA，见 [性能文档](docs/performance/java-python-load.md) |
@@ -522,7 +526,7 @@ GitHub Actions 在 push / PR 上运行：
 - **检索**：默认 BM25；Dense 检索需要显式配置 provider。合成语料规模小，不构成生产级 RAG 质量证明。
 - **身份**：匿名会话使用 HMAC 能力令牌，无账号体系、密码找回或跨设备同步。
 - **架构**：单 LangGraph 状态图，不是多智能体系统；MySQL/Redis/Worker 与 Java 网关/Catalog 为标准架构组件，不承诺生产 SLA。
-- **生产部署**：仓库包含容器与 Compose 配置，但未声明可直接承载公网生产流量。Java overlay 仅在合成数据的 Compose 故障注入下验收：TLS、真实数据授权、专用凭据轮换、跨主机 HA 与容量/SLO 仍未满足（见 [docs/java-microservices.md](docs/java-microservices.md)）。
+- **生产部署**：仓库包含容器与 Compose 配置，但未声明可直接承载公网生产流量。Java 历史联调仅在合成数据的 Compose 故障注入下验收；新工业候选须独立验收：TLS、真实数据授权、专用凭据轮换、跨主机 HA 与容量/SLO 仍未满足（见 [docs/java-microservices.md](docs/java-microservices.md)）。
 
 安全边界与漏洞报告方式见 **[SECURITY.md](SECURITY.md)**；隐私说明见 **[PRIVACY.md](PRIVACY.md)**。
 

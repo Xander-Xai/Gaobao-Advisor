@@ -4,6 +4,7 @@ Product-facing documentation:
 
 - [Architecture](architecture/README.md) — components, LangGraph flow, RAG
   chain, data flow, worker flow, deployment topology, source map.
+- [Industrial release contract](architecture/industrial-release-contract.md) — current business paths, deployment candidate, release gates and open evidence.
 - [Tutorial](../TUTORIAL.md) — no-key demo and reproducible scripts.
 - [Data licence and provenance](../DATA_LICENSE.md)
 - [Privacy](../PRIVACY.md)
@@ -16,7 +17,7 @@ Product-facing documentation:
 Engineering evidence:
 
 - [ADRs](superpowers/adr/) — architecture decision records.
-- [Java microservices](java-microservices.md) — optional Java Gateway + read-only
+- [Java microservices](java-microservices.md) — standard Java Gateway + read-only
   Catalog overlay: startup, CI gates, distributed rate limiting, deployment
   boundaries.
 - [Performance](performance/) — MySQL/worker benchmarks, Redis delivery

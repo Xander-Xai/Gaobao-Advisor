@@ -14,7 +14,7 @@ record why the larger decisions were made.
 | Online chat | 保留 LangGraph 确定性图 | 单次事实查询不经自主 Loop；SQL/来源和选科、年份、省份、位次硬约束优先；模型解释不替代事实 |
 | 图节点 | 按责任裁剪 | 节点数不是自主调用次数；相邻纯规则节点只有在独立路由、观察或恢复有价值时保留；改动须保持 API/SSE、拒答和状态契约 |
 | Native readonly Harness | 保留为最小参考和可控评测基线 | 不成为第二套默认聊天引擎；不重复扩展通用生产运行时 |
-| Deep Agents | 唯一复杂研究候选执行引擎 | 已有 operator research runner；独立的确定性 SQL subgraph 不是自主模型专家；批准范围、工具预算、SQL 回执和结果验证优先；受控研究 API 与 worker 共用独立私有 journal；本分支实现不等于主线或生产验收 |
+| Deep Agents | 唯一复杂招生研究执行引擎 | 已有 operator research runner；独立的确定性 SQL subgraph 不是自主模型专家；批准范围、工具预算、SQL 回执和结果验证优先；受控研究 API 与 worker 共用独立私有 journal；已合并的 #192/#193/#194/#196 提供业务路径；真实模型、真实数据和生产验收仍独立 |
 | Sandbox | 仅招生分析有业务主责 | 算术代码修复是隔离回归 fixture，不是用户功能；只准批准数据快照、受限容器、独立 Oracle 校验；无 Docker socket/任意 host shell 暴露给模型 |
 | Memory / Context | 保留分层；标准本地合成部署默认启用语义压缩和持久快照 | SQL 事实/当前任务不截断；摘要是非可信上下文；长期偏好独立且可撤回，不能替代录取依据 |
 | MySQL / Redis / Java | 标准部署正式组件 | MySQL 为业务事实、会话与快照存储；Redis 为限流和质检队列；Java Gateway/Catalog 为入口和只读目录；Python 为唯一 Agent 入口；SQLite 仅轻量开发及独立受控 journal |
@@ -26,7 +26,7 @@ record why the larger decisions were made.
 
 ### Entry-point and state ownership decision (#190)
 
-The following describes the integrated code in PR #192 (not a default-branch or production claim until merged and verified).
+The integrated research lifecycle entered master in #192/#193/#194; #196 subsequently strengthens delegation binding and independently classified no-history rejection. The following describes the checked-out source, not a production claim.
 
 | Entry point | Actual responsibility | Architecture decision |
 |---|---|---|
@@ -49,7 +49,7 @@ Acceptance: exact-head CI, API and SSE contracts, deterministic negative cases a
 
 ## 1. System overview
 
-`gaobao-advisor` is a read/write web application with four runtime roles:
+`gaobao-advisor` is a read/write web application with five runtime roles:
 
 1. **Vue 3 SPA** — chat, structured recommendation cards, public data explorer,
    profile/report views, and the administrator workbench.
@@ -64,7 +64,7 @@ Acceptance: exact-head CI, API and SSE contracts, deterministic negative cases a
 
 5. **Java Gateway and Catalog** — standard ingress routing and read-only catalog queries.
 
-The standard local deployment (`python scripts/compose_standard.py up --build -d`) requires MySQL 8.4, Redis 7, Java Gateway/Catalog and the worker, with no LLM key required. The SQLite base remains a lightweight smoke/development compatibility path; private research journals remain isolated SQLite. Session compaction and SQL snapshots default on in the standard local synthetic stack; explicit false rolls back, and the existing production plaintext prohibition is unchanged.
+The standard local deployment (`python scripts/compose_standard.py up --build -d`) requires MySQL 8.4, Redis 7, Java Gateway/Catalog and the worker, with no LLM key required. The SQLite base remains a lightweight smoke/development compatibility path; private research journals remain isolated SQLite. Session compaction and AES-GCM SQL snapshots default on in the standard local synthetic stack; the API fails startup without a valid configured key, the worker prunes expired snapshots, and explicit false rolls back. Production snapshots remain blocked pending privacy approval.
 
 > **Standard Java gateway/catalog (original implementation merged in #89, squash `7c87686`):** PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89)
 > introduced Java 21 / Spring Boot 4.0.9 / Spring Cloud 2025.1.4 as a layer now required by the standard architecture: Nginx keeps `/ws/**` on Python, sends
@@ -427,3 +427,8 @@ Python application.
   synthetic data only. TLS, real-data authorization, dedicated credentials,
   cross-host HA and capacity/SLO remain open, so merging it is not approval to
   serve production traffic.
+
+
+## Industrial release contract
+
+The separate `docker-compose.industrial.yml` is the public SQL product release candidate, not the legacy credential smoke Compose. It requires externally managed MySQL and Redis, independently migrated schema, approved non-synthetic data, Java Gateway/Catalog, Python API and worker; it binds ingress to loopback behind external TLS. Startup rejects synthetic seeding, SQLite fallback, synthetic RAG, disabled required dependencies and unapproved experimental features. Redis failure makes readiness fail closed. Managed paid research remains an isolated approved operator service; no automatic paid dispatch is added to the public stack. See [release contract and acceptance matrix](industrial-release-contract.md). This design is not production verified.

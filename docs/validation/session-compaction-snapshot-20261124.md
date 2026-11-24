@@ -49,12 +49,10 @@ export APP_ENV=development  # explicitly required; "production" and unset are bl
 
 Only explicit `APP_ENV=development|test|testing|local` enables the experimental snapshot path; unset, staging and production environments **reject it** until an
 approved account/privacy design exists. Do not enable with real student data,
-sensitive conversations, or an unreviewed model provider: snapshot text is
-stored plaintext in the application database. There is no frontend consent
+sensitive conversations, or an unreviewed model provider: the legacy lightweight path can store plaintext. The standard local stack requires AES-GCM encryption; original conversation messages are not encrypted by this change. There is no frontend consent
 interface, encryption-at-rest integration, recovery interface or backup purge.
 
-Manual operator cleanup using the SQL store's `prune_expired(limit=100)`
-requires a separate scheduled maintenance process. Removing a session through
+The standard Quality Worker now performs bounded expiry cleanup during its recovery cycle, including when no chat snapshot is being written. Manual operator cleanup remains available via the SQL store. Removing a session through
 SQLAlchemy ORM deletes its associated snapshot; bulk SQL deletion on SQLite
 without FK enforcement and external report/backup erasure are **not proven**.
 
@@ -96,3 +94,8 @@ the exact feature-branch commit, not inherited from #148 or historical green CI.
 CI validation note: the first GitHub Actions lint run flagged an incorrect
 `typing.Callable` import (UP035); the branch now uses `collections.abc.Callable`.
 Use a new workflow run at the updated commit to verify formatting and tests.
+
+
+## Current standard deployment update
+
+The local full stack sets `GAOBAO_CHAT_SNAPSHOT_REQUIRE_ENCRYPTION=true`. `setup_full_env.py` generates a 32-byte secret (64 hex characters) and `--add-java-reader` extends older files without replacing existing keys. AES-GCM ciphertext is bound to conversation PK, covered count, prefix digest and policy digest. Wrong key, tampering, cross-session ciphertext and old plaintext in encrypted mode are cache misses; no plaintext fallback. The original dialogue remains canonical. Key rotation invalidates cached summaries; securely destroy old keys/caches and retain backups according to approved policy. This is not a full conversation encryption or production privacy approval. Fresh CI and MySQL runtime verification are required.
