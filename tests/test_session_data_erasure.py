@@ -317,3 +317,33 @@ def test_containment_rejects_sibling_prefix_and_absolute_path(isolated):
         with pytest.raises(ValueError, match="Unsafe"):
             storage._contained_child(root, name)
     assert storage._contained_child(root, "valid-session") == root / "valid-session"
+
+
+def test_authenticated_erasure_preserves_every_other_session_record(isolated, monkeypatch):
+    session_factory, storage = isolated
+    target = "synthetic-target"
+    other = "synthetic-other"
+    target_dir = seed(session_factory, storage, target)
+    other_dir = seed(session_factory, storage, other)
+    other_report = other_dir / "synthetic-report.json"
+    original = other_report.read_bytes()
+    monkeypatch.setattr(profile_routes, "_report_storage", storage)
+    app = FastAPI()
+    app.include_router(profile_routes.router)
+    url = f"/api/v1/profile/{target}/data"
+    with TestClient(app) as client:
+        wrong = client.delete(url, headers={"Authorization": "Bearer " + create_session_token(other)})
+        assert wrong.status_code == 401
+        assert target_dir.exists()
+        response = client.delete(url, headers={"Authorization": "Bearer " + create_session_token(target)})
+        assert response.status_code == 200, response.text
+    assert not target_dir.exists()
+    assert other_report.read_bytes() == original
+    with session_factory() as db:
+        remaining = db.query(Conversation).one()
+        assert remaining.session_id == other
+        assert db.query(ConversationMessage).one().conversation_id == remaining.id
+        assert db.query(SessionCompactionSnapshot).one().conversation_id == remaining.id
+        assert db.query(Feedback).one().session_id == other
+        assert db.query(Highlight).one().session_id == other
+        assert db.query(QualityScore).one().conversation_id == other
