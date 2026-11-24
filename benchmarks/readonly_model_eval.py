@@ -141,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-cases", type=int, default=5)
     parser.add_argument("--max-total-tokens", type=int, default=12000)
     parser.add_argument("--reviewed-dataset", type=Path, help="Explicit groundtruth review declaration JSON")
+    parser.add_argument("--skill-policy", choices=("baseline", "staged-v1"), default="baseline")
     parser.add_argument("--permit-external-model", action="store_true")
     args = parser.parse_args(argv)
     if not args.permit_external_model:
@@ -159,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         timeout=20.0,
         max_retries=0,
     )
-    planner = OpenAIJsonPlanner(client, args.model)
+    planner = OpenAIJsonPlanner(client, args.model, skill_policy=args.skill_policy)
     # Unreviewed cases are exploratory only and cannot enter optimizer gates.
     if args.reviewed_dataset:
         reviewed = json.loads(args.reviewed_dataset.read_text(encoding="utf-8"))
@@ -197,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         from db.database import engine
 
         engine.dispose()
+    report["skill_policy"] = planner.skill_policy_receipt()
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(

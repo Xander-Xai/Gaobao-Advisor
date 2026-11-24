@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from db.database import Base
-from db.models import UserMemoryEntry, UserMemoryVault, _utcnow
+from db.models import Conversation, UserMemoryEntry, UserMemoryVault, _utcnow
 from server import user_memory as service
 from server.routes import chat as chat_routes
 from server.routes import user_memory as memory_routes
@@ -27,6 +27,7 @@ def client_db(tmp_path, monkeypatch):
     factory = sessionmaker(bind=engine)
     monkeypatch.setattr(service, "get_session", factory)
     monkeypatch.setattr("db.database.get_session", factory)
+    monkeypatch.setattr("server.graph.nodes.memory.get_session", factory)
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("USER_MEMORY_ENABLED", "true")
     app = FastAPI()
@@ -153,7 +154,7 @@ def test_delete_rotate_and_vault_erasure_revoke_credentials(client_db):
 
 
 def test_cross_session_chat_injects_only_explicit_owner_memory(client_db, monkeypatch):
-    client, _ = client_db
+    client, factory = client_db
     token = create_token(client)
     assert put(client, token, key="response_style", value="concise").status_code == 200
     seen = []
@@ -161,7 +162,7 @@ def test_cross_session_chat_injects_only_explicit_owner_memory(client_db, monkey
     class StubGraph:
         def invoke(self, initial):
             seen.append(initial)
-            return {"reply": "这是合成测试回复", "reply_source": "graph", "rag_state": "RAG_DISABLED"}
+            return {**initial, "reply": "这是合成测试回复", "reply_source": "graph", "rag_state": "RAG_DISABLED"}
 
     monkeypatch.setattr(chat_routes, "get_advisor_graph", lambda: StubGraph())
     payload = {"session_id": "client-chosen-test", "scene": "gaokao", "message": "请介绍专业"}
@@ -176,7 +177,15 @@ def test_cross_session_chat_injects_only_explicit_owner_memory(client_db, monkey
     response = client.post("/api/v1/chat", json=payload)
     assert response.status_code == 200
     assert seen[-1]["user_memory"] == []
+    assert '"type": "done"' in response.text
     assert client.get("/api/v1/memory/entries", headers=headers(token)).json()["count"] == 1
+    with factory() as db:
+        for state in seen:
+            conversation = db.query(Conversation).filter_by(session_id=state["session_id"]).one()
+            assert [msg.role for msg in conversation.messages] == ["user", "assistant"]
+            assert conversation.messages[0].content == payload["message"]
+            assert all(token not in msg.content for msg in conversation.messages)
+            assert all("concise" not in msg.content for msg in conversation.messages)
 
 
 def test_invalid_memory_credential_fails_before_sse(client_db, monkeypatch):
