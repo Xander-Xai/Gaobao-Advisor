@@ -92,3 +92,7 @@ MySQL transaction isolation under load or legal erasure of backups.
 The CI run for this Draft feature branch is deliberately separate from a
 real-provider evaluation. Tests and migration checks must be interpreted against
 the exact feature-branch commit, not inherited from #148 or historical green CI.
+
+CI validation note: the first GitHub Actions lint run flagged an incorrect
+`typing.Callable` import (UP035); the branch now uses `collections.abc.Callable`.
+Use a new workflow run at the updated commit to verify formatting and tests.
