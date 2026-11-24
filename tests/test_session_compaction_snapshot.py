@@ -165,7 +165,10 @@ def test_modified_history_invalidates_cache_and_allows_versioned_replacement(db_
     store = SessionCompactionStore(db_factory)
     initial = _history(db_factory)
     assert store.publish(
-        "session-alpha", initial, covered_count=6, summary="old summary",
+        "session-alpha",
+        initial,
+        covered_count=6,
+        summary="old summary",
         policy_sha256=POLICY,
     )
     with db_factory() as db:
@@ -176,7 +179,10 @@ def test_modified_history_invalidates_cache_and_allows_versioned_replacement(db_
     assert history_digest(changed[:6]) != history_digest(initial[:6])
     assert store.load("session-alpha", changed, policy_sha256=POLICY) is None
     assert store.publish(
-        "session-alpha", changed, covered_count=6, summary="corrected summary",
+        "session-alpha",
+        changed,
+        covered_count=6,
+        summary="corrected summary",
         policy_sha256=POLICY,
     )
     updated = store.load("session-alpha", changed, policy_sha256=POLICY)
