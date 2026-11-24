@@ -64,9 +64,10 @@ def data_query_node(state: dict[str, Any]) -> dict[str, Any]:
                     history = query_history(db, province=province, score=score, subject=subject, year=year)
                 finally:
                     db.close()
-        return {"data_query_results": {"industrial_history": history}, "trace": list(state.get("trace", [])) + [
-            {"node": "data_query", "event": "industrial_exact_history"}
-        ]}
+        return {
+            "data_query_results": {"industrial_history": history},
+            "trace": list(state.get("trace", [])) + [{"node": "data_query", "event": "industrial_exact_history"}],
+        }
     results: dict[str, Any] = {}
 
     try:

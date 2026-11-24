@@ -225,9 +225,9 @@ async def _sse_generator(
     final source gate, quality evaluation and durable conversation turn. No
     unchecked provider chunks are ever emitted to the browser.
     """
-    graph = get_advisor_graph()
     from server.industrial_runtime import industrial_enabled
 
+    graph = get_advisor_graph()
     try:
         persisted_slots, query_state = await asyncio.to_thread(_load_chat_state, session_id, existing_slots)
     except Exception:

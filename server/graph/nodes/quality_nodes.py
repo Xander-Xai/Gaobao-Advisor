@@ -42,7 +42,9 @@ def quality_orchestrate_node(state: dict[str, Any]) -> dict[str, Any]:
     from server.industrial_runtime import industrial_enabled
 
     if industrial_enabled():
-        return {"trace": list(state.get("trace", [])) + [{"node": "quality_orchestrate", "event": "industrial_sql_only"}]}
+        return {
+            "trace": list(state.get("trace", [])) + [{"node": "quality_orchestrate", "event": "industrial_sql_only"}]
+        }
     orch = _get_orchestrator()
     skill_svc = _get_skill_service()
     text = state.get("input_text", "")

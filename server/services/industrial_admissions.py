@@ -29,6 +29,8 @@ def approved_year() -> int:
 def query_history(db, *, province: str, score: int, subject: str, year: int) -> dict:
     """Use no nearest-score, other-year, other-subject or inferred-rank fallback."""
     base = {"year": year, "province": province, "score": score, "subject": subject}
+    if not 100 <= score <= 750 or not province.strip():
+        return {**base, "status": "INVALID_SCOPE"}
     aliases = next((group for group in _COHORTS if subject in group), ())
     if not aliases:
         return {**base, "status": "UNSUPPORTED_COHORT"}
@@ -97,8 +99,8 @@ def build_history_reply(state: dict) -> tuple[str, dict]:
         summary = "当前发布范围仅为高考历史招生数据查询。"
     elif evidence.get("status") == "YEAR_MISMATCH":
         summary = f"当前发布只支持{year}年历史数据，不能回答其他年份。"
-    elif state.get("missing_fields"):
-        summary = "请补充省份、分数和招生科类（物理类、历史类、理科、文科或综合）。"
+    elif state.get("missing_fields") or evidence.get("status") == "UNSUPPORTED_COHORT":
+        summary = "请补充省份、明确分数和招生科类（物理类、历史类、理科、文科或综合）。"
     elif evidence.get("status") in {"HISTORICAL_ROWS", "NO_SCHOOL_ROWS"}:
         cohort = f"{year}年{evidence['province']}{evidence['subject']}"
         summary = f"{cohort}，同年同科类历史记录；不代表当年或未来录取资格。"
@@ -117,8 +119,13 @@ def build_history_reply(state: dict) -> tuple[str, dict]:
         summary = "没有唯一、同年同省同科类的精确位次依据，无法提供匹配结果。"
     risks = ["历史记录不是录取预测；专业、选科组合、批次资格及当年计划须以官方公告核实。"]
     card = StructuredPlanningCard(
-        title=title, scene="gaokao", summary=summary, facts=facts, sources=sources,
-        risks=risks, next_actions=["核对省教育考试院及院校当年招生简章。"],
+        title=title,
+        scene="gaokao",
+        summary=summary,
+        facts=facts,
+        sources=sources,
+        risks=risks,
+        next_actions=["核对省教育考试院及院校当年招生简章。"],
         confidence=0.0,
     ).model_dump()
     return "\n".join([title, summary, *facts, *risks]), card

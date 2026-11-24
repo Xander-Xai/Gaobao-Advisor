@@ -75,7 +75,11 @@ def validate_industrial_dependencies() -> None:
     try:
         if not db.query(YiFenYiDuan.id).filter(YiFenYiDuan.year == year).first():
             raise RuntimeError("Approved year has no rank records")
-        if not db.query(AdmissionScore.id).filter(AdmissionScore.year == year, AdmissionScore.major_id.is_(None)).first():
+        if not (
+            db.query(AdmissionScore.id)
+            .filter(AdmissionScore.year == year, AdmissionScore.major_id.is_(None))
+            .first()
+        ):
             raise RuntimeError("Approved year has no school-level admission records")
     finally:
         db.close()
