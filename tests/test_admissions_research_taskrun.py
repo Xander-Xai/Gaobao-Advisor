@@ -9,6 +9,7 @@ from server.agent.admissions_research_taskrun import (
     canonical,
     digest,
     execute_approved,
+    render_aggregate_report,
 )
 
 
@@ -65,22 +66,53 @@ def test_worker_only_publishes_bound_verified_aggregate(journal, spec):
         assert kwargs["analysis_image_id"] == spec["image_id"]
         assert kwargs["authorized"] and kwargs["model_authorized"]
         kwargs["lease_guard"]()
-        evidence = {"admission-history": [{"id": 17}], "enrollment-plans": []}
-        analysis = {"groups": []}
+        from server.agent.admissions_analysis_sandbox import _expected
+        from server.agent.admissions_deepagents import _coverage
+
+        rows = [
+            {
+                "id": 17,
+                "school_id": 101,
+                "major_id": 42,
+                "year": 2022,
+                "min_score": 600,
+                "max_score": 620,
+                "min_rank": 12000,
+            }
+        ]
+        evidence = {"admission-history": rows, "enrollment-plans": []}
+        analysis = _expected(rows, ("school_id", "year"))
         return {
-            "status": "VERIFIED_PARTIAL_RESEARCH", "scope": spec["scope"],
+            "status": "VERIFIED_PARTIAL_RESEARCH",
+            "scope": spec["scope"],
             "approval_ref_sha256": digest(spec["approval_ref"]),
             "admission_recommendation_verified": False,
-            "evidence": evidence, "evidence_sha256": digest(evidence),
-            "sandbox_analysis": {"status": "VERIFIED_DESCRIPTIVE_ANALYSIS", "result": analysis,
-                                 "result_sha256": digest(analysis)},
-            "coverage": {"missing": [102]}, "receipt_ids": {}, "provider_usage": None,
+            "evidence": evidence,
+            "evidence_sha256": digest(evidence),
+            "sandbox_analysis": {
+                "status": "VERIFIED_DESCRIPTIVE_ANALYSIS",
+                "result": analysis,
+                "result_sha256": digest(analysis),
+                "cleanup_verified": True,
+                "image_id": spec["image_id"],
+                "input_sha256": digest({"rows": rows, "group_by": ["school_id", "year"]}),
+            },
+            "coverage": {kind: _coverage(records, scope, kind) for kind, records in evidence.items()},
+            "receipt_ids": {},
+            "provider_usage": None,
         }
 
     result = execute_approved(journal, item["run_id"], spec["dataset_ref"], None, runner=runner)
     assert result["status"] == "NEEDS_REVIEW"
     assert "evidence" not in result["result"]
     assert spec["approval_ref"] not in canonical(result)
+    rendered = render_aggregate_report(result)
+    assert "NEEDS_REVIEW" in rendered
+    assert "12000" in rendered
+    assert spec["approval_ref"] not in rendered
+    result["result"]["analysis"]["groups"][0]["best_min_rank"] = 1
+    with pytest.raises(ResearchConflict, match="evidence mismatch"):
+        render_aggregate_report(result)
     with pytest.raises(ResearchConflict):
         journal.claim(item["run_id"], spec["dataset_ref"])
 
@@ -93,3 +125,5 @@ def test_blocked_result_is_not_published(journal, spec):
     )
     assert result["status"] == "FAILED"
     assert result["result"] is None
+    with pytest.raises(ResearchConflict, match="No verified"):
+        render_aggregate_report(result)

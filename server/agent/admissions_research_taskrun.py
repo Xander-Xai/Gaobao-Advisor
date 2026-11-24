@@ -19,7 +19,8 @@ from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 
-from server.agent.admissions_deepagents import MODEL_RE, ResearchScope, run_admissions_research
+from server.agent.admissions_analysis_sandbox import _expected
+from server.agent.admissions_deepagents import MODEL_RE, ResearchScope, _coverage, run_admissions_research
 
 ID = re.compile(r"research_[0-9a-f]{32}")
 KEY = re.compile(r"[A-Za-z0-9_.:-]{8,96}")
@@ -216,7 +217,12 @@ class ResearchJournal:
         with self.tx() as db:
             row = self._row(db, run_id)
             spec = json.loads(row["spec"])
-            if row["state"] != "APPROVED" or not row["approver"] or spec["dataset_ref"] != dataset_ref:
+            if (
+                row["state"] != "APPROVED"
+                or not row["approver"]
+                or spec["dataset_ref"] != dataset_ref
+                or digest(spec) != row["spec_sha256"]
+            ):
                 raise ResearchConflict("Approved matching dataset required; paid runs are never replayed")
             lease = secrets.token_hex(16)
             now = time.time()
@@ -279,10 +285,24 @@ def execute_approved(journal, run_id, dataset_ref, session_factory, *, runner=ru
             or report.get("approval_ref_sha256") != digest(spec["approval_ref"])
             or report.get("admission_recommendation_verified") is not False
             or not isinstance(evidence, dict)
+            or set(evidence) != {"admission-history", "enrollment-plans"}
             or report.get("evidence_sha256") != digest(evidence)
             or not isinstance(analysis, dict)
             or analysis.get("status") != "VERIFIED_DESCRIPTIVE_ANALYSIS"
             or analysis.get("result_sha256") != digest(analysis.get("result"))
+            or analysis.get("cleanup_verified") is not True
+            or analysis.get("image_id") != spec["image_id"]
+            or analysis.get("input_sha256")
+            != digest({"rows": evidence["admission-history"], "group_by": ["school_id", "year"]})
+        ):
+            return journal.finish(run_id, lease, None, "unverified_research")
+        coverage = {kind: _coverage(rows, scope, kind) for kind, rows in evidence.items()}
+        partial = any(gaps for dimension in coverage.values() for gaps in dimension.values())
+        if (
+            coverage != report.get("coverage")
+            or partial != (report["status"] == "VERIFIED_PARTIAL_RESEARCH")
+            or canonical(_expected(evidence["admission-history"], ("school_id", "year")))
+            != canonical(analysis["result"])
         ):
             return journal.finish(run_id, lease, None, "unverified_research")
         # Retain only bounded aggregate results, coverage and source hashes.
@@ -302,6 +322,32 @@ def execute_approved(journal, run_id, dataset_ref, session_factory, *, runner=ru
         raise
     except Exception:
         return journal.finish(run_id, lease, None, "research_execution_failed")
+
+
+def render_aggregate_report(item: dict) -> str:
+    """Render only the owner-authorized journal projection, never raw SQL or model prose."""
+    result = item.get("result")
+    if item.get("status") not in {"SUCCEEDED", "NEEDS_REVIEW"} or not isinstance(result, dict):
+        raise ResearchConflict("No verified aggregate report")
+    if (
+        result.get("spec_sha256") != item.get("spec_sha256")
+        or result.get("analysis_sha256") != digest(result.get("analysis"))
+        or result.get("admission_recommendation_verified") is not False
+    ):
+        raise ResearchConflict("Report evidence mismatch")
+    return "\n".join(
+        [
+            "高考志愿历史数据研究（内部汇总，不是录取预测）",
+            "任务: " + canonical(item["run_id"]),
+            "状态: " + item["status"],
+            "研究范围: " + canonical(item["spec"]["scope"]),
+            "覆盖缺口: " + canonical(result["coverage"]),
+            "历史分数与位次统计: " + canonical(result["analysis"]),
+            "证据摘要: " + result["evidence_sha256"],
+            "招生计划仅为覆盖核验；选科资格与数据来源真实性尚未独立认证。",
+            "",
+        ]
+    )
 
 
 def main(argv=None):

@@ -1,6 +1,7 @@
 """Operator-only approved real-data research submission and inspection."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from server.admin.auth import AdminPrincipal, require_role
@@ -9,6 +10,7 @@ from server.agent.admissions_research_taskrun import (
     ResearchNotFound,
     configured_dataset,
     open_configured_journal,
+    render_aggregate_report,
 )
 
 router = APIRouter(
@@ -73,6 +75,14 @@ def create_run(request: NewResearch, principal: AdminPrincipal = Depends(require
 def get_run(run_id: str, principal: AdminPrincipal = Depends(require_role("operator"))):
     journal = store()
     return translate(lambda: journal.get(run_id, principal.username, admin=principal.role == "admin"))
+
+
+@router.get("/runs/{run_id}/report", response_class=PlainTextResponse)
+def get_report(run_id: str, principal: AdminPrincipal = Depends(require_role("operator"))):
+    journal = store()
+    item = translate(lambda: journal.get(run_id, principal.username, admin=principal.role == "admin"))
+    rendered = translate(lambda: render_aggregate_report(item))
+    return PlainTextResponse(rendered, headers={"Cache-Control": "private, no-store"})
 
 
 @router.post("/runs/{run_id}/approve")

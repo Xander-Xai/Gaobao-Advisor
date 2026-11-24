@@ -28,3 +28,11 @@ or provider secrets. This is a private local operator workflow, not anonymous
 chat, distributed queue, hard process cancellation or production deployment.
 Admin RBAC and actual source authorization are deployment requirements.
 Fixture tests do not constitute real-data or paid-provider acceptance.
+
+The worker independently recomputes descriptive statistics from the captured SQL
+history, checks the sandbox input digest, immutable image and cleanup flag, and
+recomputes coverage before publishing. A verified aggregate is available as a
+private no-store text response from GET /runs/{id}/report, using the same
+owner/admin access rule as run inspection. Failed, expired or cancelled runs
+cannot produce a report. No raw rows, personal data, or approval reference are
+included. This is not a browser UI or a production/provider acceptance result.
