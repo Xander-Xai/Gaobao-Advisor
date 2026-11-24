@@ -262,20 +262,27 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
         db.close()
 
 
-def delete_memory(token: str, key: str) -> None:
+def delete_memory(token: str, key: str, *, expected_version: int) -> None:
+    """Delete only the live preference revision that the client confirmed."""
     _require_enabled()
     if key not in ALLOWED_KEYS:
         raise MemoryInvalid("Unsupported memory category")
+    if type(expected_version) is not int or not 1 <= expected_version <= MAX_MEMORY_VERSION:
+        raise MemoryInvalid("Invalid expected version")
     db = get_session()
     try:
         owner = _owner(db, token, write=True)
-        changed = (
-            db.query(UserMemoryEntry)
-            .filter(UserMemoryEntry.vault_id == owner.id, UserMemoryEntry.memory_key == key)
-            .delete(synchronize_session=False)
+        now = _utcnow()
+        live = db.query(UserMemoryEntry).filter(
+            UserMemoryEntry.vault_id == owner.id,
+            UserMemoryEntry.memory_key == key,
+            UserMemoryEntry.expires_at > now,
         )
-        if changed == 0:
-            raise MemoryNotFound("Memory entry not found")
+        changed = live.filter(UserMemoryEntry.version == expected_version).delete(synchronize_session=False)
+        if changed != 1:
+            if live.first() is None:
+                raise MemoryNotFound("Memory entry not found")
+            raise MemoryConflict("Memory version conflict")
         db.commit()
     except Exception:
         db.rollback()

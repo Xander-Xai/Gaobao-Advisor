@@ -11,10 +11,13 @@ from pydantic import BaseModel, Field
 
 from server.auth import require_session_auth
 from server.deps import get_soul_query_engine
+from server.report.storage import ReportStorage
 from server.soul_query import QueryState
 from server.user_profile import load_profile, save_profile
 
 router = APIRouter(prefix="/api/v1", tags=["profile"])
+
+_report_storage = ReportStorage()
 
 
 def _require_auth(session_id: str, authorization: str | None = None) -> None:
@@ -88,6 +91,20 @@ async def update_profile_field(session_id: str, req: ProfileUpdateRequest, autho
     )
 
 
+@router.delete("/profile/{session_id}/data")
+async def delete_profile_session_data(session_id: str, authorization: str | None = Header(None)):
+    """Remove authenticated session's live DB state and generated JSON reports."""
+    _require_auth(session_id, authorization)
+    from server.user_data_erasure import erase_live_session_data
+
+    try:
+        return erase_live_session_data(session_id, _report_storage)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Unsafe session report storage") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Session erasure incomplete; operator review required") from exc
+
+
 @router.get("/profile/{session_id}/next-question", response_model=NextQuestionResponse)
 async def get_next_question(session_id: str, authorization: str | None = Header(None)):
     """Get the next soul query question for this session."""
@@ -142,7 +159,7 @@ def _load_query_state(session_id: str) -> QueryState:
     except Exception as exc:
         import logging
 
-        logging.getLogger(__name__).debug("Failed to load query state: %s", exc)
+        logging.getLogger(__name__).debug("Failed to load query state: %s", type(exc).__name__)
         return QueryState()
     finally:
         db.close()
@@ -166,6 +183,6 @@ def _save_query_state(session_id: str, state: QueryState) -> None:
     except Exception as exc:
         import logging
 
-        logging.getLogger(__name__).warning("Failed to save query state: %s", exc)
+        logging.getLogger(__name__).warning("Failed to save query state: %s", type(exc).__name__)
     finally:
         db.close()
