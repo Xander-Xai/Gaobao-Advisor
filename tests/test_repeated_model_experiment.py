@@ -194,3 +194,52 @@ def test_paid_preflight_rejects_excessive_trials_before_any_provider_call(tmp_pa
     with pytest.raises(SystemExit) as exc:
         main(["--model", "test", "--out-dir", str(tmp_path / "runs"), "--trials", "6"])
     assert exc.value.code == 2
+
+
+def test_dry_run_exposes_full_experiment_budget(tmp_path, capsys):
+    assert main(
+        [
+            "--model",
+            "test",
+            "--out-dir",
+            str(tmp_path / "runs"),
+            "--max-provider-calls-per-arm",
+            "40",
+            "--stop-after-reported-tokens-per-arm",
+            "10000",
+        ]
+    ) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["aggregate_request_cap"] == 160
+    assert plan["sum_of_reported_token_stop_thresholds"] == 40_000
+    assert plan["hard_token_cap"] is False
+    assert not (tmp_path / "runs").exists()
+
+
+def test_paid_run_stops_after_first_missing_budget_receipt(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key-not-used")
+    calls = []
+
+    def fake_arm(model, arm, output, timeout_seconds, **kwargs):
+        calls.append((arm, kwargs))
+        return fixture("not-a-real-run", arm)
+
+    monkeypatch.setattr("benchmarks.repeated_model_experiment._run_arm", fake_arm)
+    with pytest.raises(ValueError, match="reconciled provider budget"):
+        main(
+            [
+                "--model",
+                "frozen-provider-model",
+                "--out-dir",
+                str(tmp_path / "runs"),
+                "--execute",
+                "--permit-external-model",
+                "--confirm-provider-charges",
+                "--max-provider-calls-per-arm",
+                "40",
+                "--stop-after-reported-tokens-per-arm",
+                "10000",
+            ]
+        )
+    assert calls == [("baseline", {"max_calls": 40, "stop_tokens": 10000})]
+    assert not (tmp_path / "runs" / "repeated-experiment-summary.json").exists()

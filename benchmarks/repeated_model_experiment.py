@@ -16,11 +16,13 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from benchmarks.model_run_comparison import _validate, compare_model_runs
+from benchmarks.model_run_comparison import _validate, _validate_budget, compare_model_runs
 
 ARMS = ("baseline", "evidence_first")
 CASES_PER_RUN = 8
 MAX_DECISIONS_PER_CASE = 8
+DEFAULT_ARM_CALLS = 64
+DEFAULT_ARM_TOKENS = 120_000
 
 
 def compare_repeated_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> dict[str, Any]:
@@ -33,6 +35,7 @@ def compare_repeated_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) 
         raise ValueError("Repeated A/B comparison requires 2..5 complete pairs")
     seen_runs: set[str] = set()
     common: tuple[str, str, str, int | float] | None = None
+    common_budget: tuple[int, int] | None = None
     prompt_sha: dict[str, str] = {}
     details: list[dict[str, Any]] = []
     regressions: list[str] = []
@@ -45,6 +48,13 @@ def compare_repeated_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) 
         baseline, candidate = pair
         _validate(baseline)
         _validate(candidate)
+        budget = _validate_budget(baseline)
+        if budget != _validate_budget(candidate):
+            raise ValueError("Provider budget differs between arms")
+        if trial_index == 1:
+            common_budget = budget
+        elif budget != common_budget:
+            raise ValueError("Provider budget drift across trials")
         if baseline.get("prompt_variant") != ARMS[0] or candidate.get("prompt_variant") != ARMS[1]:
             raise ValueError("Both frozen experimental prompt arms are required")
         if baseline["model_prompt_sha256"] == candidate["model_prompt_sha256"]:
@@ -96,6 +106,7 @@ def compare_repeated_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) 
         "dataset_sha256": common[1],
         "tool_contract_sha256": common[2],
         "temperature": common[3],
+        "provider_budget_per_arm": list(common_budget) if common_budget is not None else None,
         "prompt_sha256_by_arm": prompt_sha,
         "repeated_trials": True,
         "trial_count": len(pairs),
@@ -126,7 +137,9 @@ def compare_repeated_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) 
     }
 
 
-def _plan(trials: int, model: str) -> dict[str, Any]:
+def _plan(
+    trials: int, model: str, max_calls: int = DEFAULT_ARM_CALLS, stop_tokens: int = DEFAULT_ARM_TOKENS
+) -> dict[str, Any]:
     return {
         "model_id": model,
         "trial_count": trials,
@@ -134,13 +147,26 @@ def _plan(trials: int, model: str) -> dict[str, Any]:
         "cases_per_run": CASES_PER_RUN,
         "total_synthetic_case_executions": trials * len(ARMS) * CASES_PER_RUN,
         "maximum_possible_model_decisions": trials * len(ARMS) * CASES_PER_RUN * MAX_DECISIONS_PER_CASE,
+        "provider_request_cap_per_arm": max_calls,
+        "provider_reported_token_stop_per_arm": stop_tokens,
+        "aggregate_request_cap": trials * len(ARMS) * max_calls,
+        "sum_of_reported_token_stop_thresholds": trials * len(ARMS) * stop_tokens,
+        "hard_token_cap": False,
         "provider_usd_upper_bound": "UNKNOWN",
         "requires_explicit_paid_provider_consent": True,
         "real_admissions_accuracy": "NOT_MEASURED",
     }
 
 
-def _run_arm(model: str, arm: str, output: Path, timeout_seconds: int) -> dict[str, Any]:
+def _run_arm(
+    model: str,
+    arm: str,
+    output: Path,
+    timeout_seconds: int,
+    *,
+    max_calls: int = DEFAULT_ARM_CALLS,
+    stop_tokens: int = DEFAULT_ARM_TOKENS,
+) -> dict[str, Any]:
     cmd = [
         sys.executable,
         "-m",
@@ -154,6 +180,10 @@ def _run_arm(model: str, arm: str, output: Path, timeout_seconds: int) -> dict[s
         "--permit-external-model",
         "--max-cases",
         str(CASES_PER_RUN),
+        "--max-provider-calls",
+        str(max_calls),
+        "--stop-after-reported-tokens",
+        str(stop_tokens),
         "--out",
         str(output),
     ]
@@ -175,6 +205,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--trials", type=int, default=2, help="2..5 paired repeated runs")
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--timeout-seconds", type=int, default=900)
+    parser.add_argument("--max-provider-calls-per-arm", type=int, default=DEFAULT_ARM_CALLS)
+    parser.add_argument("--stop-after-reported-tokens-per-arm", type=int, default=DEFAULT_ARM_TOKENS)
     parser.add_argument("--execute", action="store_true", help="Actually call a paid external model")
     parser.add_argument("--permit-external-model", action="store_true")
     parser.add_argument("--confirm-provider-charges", action="store_true")
@@ -183,7 +215,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Explicit nonempty model ID is required")
     if not 2 <= args.trials <= 5 or not 60 <= args.timeout_seconds <= 3600:
         parser.error("Trials must be 2..5 and timeout 60..3600 seconds")
-    plan = _plan(args.trials, args.model)
+    if not 1 <= args.max_provider_calls_per_arm <= 128 or not 1 <= args.stop_after_reported_tokens_per_arm <= 500_000:
+        parser.error("Per-arm provider budget out of range")
+    budget = (args.max_provider_calls_per_arm, args.stop_after_reported_tokens_per_arm)
+    plan = _plan(args.trials, args.model, *budget)
     if not args.execute:
         if args.permit_external_model or args.confirm_provider_charges:
             parser.error("Do not authorize provider charges in dry-run mode")
@@ -203,7 +238,11 @@ def main(argv: list[str] | None = None) -> int:
         order = ARMS if i % 2 else tuple(reversed(ARMS))
         for arm in order:
             path = args.out_dir / f"trial-{i}-{arm}.json"
-            reports[arm] = _run_arm(args.model, arm, path, args.timeout_seconds)
+            reports[arm] = _run_arm(
+                args.model, arm, path, args.timeout_seconds, max_calls=budget[0], stop_tokens=budget[1]
+            )
+            if _validate_budget(reports[arm]) != budget:
+                raise ValueError("Executed arm lacks the requested reconciled provider budget; stop experiment")
         pairs.append((reports[ARMS[0]], reports[ARMS[1]]))
     result = compare_repeated_trials(pairs)
     result["execution_plan"] = plan
