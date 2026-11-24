@@ -29,9 +29,14 @@ def run_model_cases(
     model_id: str = "unspecified",
     dataset_sha256: str = "",
     groundtruth_review: str = "UNREVIEWED",
+    max_total_tokens: int = 12000,
 ) -> dict[str, Any]:
     """Score tool trajectory against manually declared synthetic task requirements."""
+    if type(max_total_tokens) is not int or not 1 <= max_total_tokens <= 180000:
+        raise ValueError("max_total_tokens must be 1..180000")
     reports = []
+    total = 0
+    stop_reason = None
     tools = synthetic_readonly_tools()
     for case in cases:
         expected = case.get("expect") or {
@@ -43,7 +48,12 @@ def run_model_cases(
             case["task"],
             planner,
             _capturing_tools(tools, captured),
-            HarnessLimits(max_model_steps=8, max_tool_calls=5, max_reported_tokens=6000, require_provider_usage=True),
+            HarnessLimits(
+                max_model_steps=8,
+                max_tool_calls=5,
+                max_reported_tokens=min(6000, max_total_tokens - total),
+                require_provider_usage=True,
+            ),
         )
         # Path membership is a loose signal. The answer is scored separately
         # against facts frozen before the model run and bound tool provenance.
@@ -61,7 +71,17 @@ def run_model_cases(
                 "observed": result.public_report(),
             }
         )
-    known = all(item["observed"]["prompt_tokens"] is not None for item in reports)
+        if result.prompt_tokens is None or result.completion_tokens is None:
+            stop_reason = "provider_usage_unknown"
+            break
+        total += result.prompt_tokens + result.completion_tokens
+        if total >= max_total_tokens:
+            stop_reason = "suite_reported_token_budget_exhausted"
+            break
+    known = bool(reports) and all(
+        item["observed"]["prompt_tokens"] is not None and item["observed"]["completion_tokens"] is not None
+        for item in reports
+    )
     scored = [r for r in reports if r["answer_facts"]["status"] == "SCORED"]
     return {
         "suite": "synthetic_model_driven_tool_trajectory",
@@ -70,6 +90,12 @@ def run_model_cases(
         "dataset_sha256": dataset_sha256,
         "groundtruth_review": groundtruth_review,
         "cases": len(reports),
+        "planned_cases": len(cases),
+        "unexecuted_case_ids": [case["id"] for case in cases[len(reports) :]],
+        "suite_complete": len(reports) == len(cases),
+        "stop_reason": stop_reason,
+        "max_total_reported_tokens": max_total_tokens,
+        "budget_boundary": "post-response accounting; not a hard provider billing cap",
         "paired_cases": [
             {
                 "case_id": row["case_id"],
@@ -112,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--model", required=True)
     parser.add_argument("--max-cases", type=int, default=5)
+    parser.add_argument("--max-total-tokens", type=int, default=12000)
     parser.add_argument("--reviewed-dataset", type=Path, help="Explicit groundtruth review declaration JSON")
     parser.add_argument("--permit-external-model", action="store_true")
     args = parser.parse_args(argv)
@@ -119,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Refusing paid provider calls without --permit-external-model")
     if not 1 <= args.max_cases <= 30:
         parser.error("--max-cases must be 1..30")
+    if not 1 <= args.max_total_tokens <= 180000:
+        parser.error("--max-total-tokens must be 1..180000")
     if not os.environ.get("OPENAI_API_KEY"):
         parser.error("OPENAI_API_KEY required for explicit paid model probe")
     from openai import OpenAI
@@ -162,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             model_id=args.model,
             dataset_sha256=dataset_sha256,
             groundtruth_review=groundtruth_review,
+            max_total_tokens=args.max_total_tokens,
         )
         from db.database import engine
 
