@@ -37,9 +37,17 @@ def history_digest(history: list[dict[str, Any]]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def policy_digest(*, model_id: str, keep_recent_rounds: int, summary_trigger_tokens: int) -> str:
+def policy_digest(
+    *,
+    model_id: str,
+    keep_recent_rounds: int,
+    summary_trigger_tokens: int,
+    provider_identity: str = "",
+) -> str:
     if not isinstance(model_id, str) or not model_id.strip() or len(model_id) > 200:
         raise ChatContextError("Invalid summary model identity")
+    if not isinstance(provider_identity, str) or len(provider_identity) > 2048:
+        raise ChatContextError("Invalid summary provider identity")
     if type(keep_recent_rounds) is not int or keep_recent_rounds <= 0:
         raise ChatContextError("Invalid compaction rounds")
     if type(summary_trigger_tokens) is not int or summary_trigger_tokens <= 0:
@@ -49,6 +57,7 @@ def policy_digest(*, model_id: str, keep_recent_rounds: int, summary_trigger_tok
     data = {
         "version": 1,
         "model": model_id,
+        "provider": provider_identity,
         "rounds": keep_recent_rounds,
         "trigger": summary_trigger_tokens,
         "prompt": SUMMARY_PROMPT,
