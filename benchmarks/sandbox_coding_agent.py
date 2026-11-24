@@ -175,7 +175,6 @@ def run_repair(
         (work / ".synthetic_workspace").write_text("SYNTHETIC_ONLY\n", encoding="utf-8")
         solution = work / "solution.py"
         solution.write_text(spec["broken"], encoding="utf-8")
-        (work / "probe.py").write_text(_TEST_RUNNER.format(oracle=spec["oracle"]), encoding="utf-8")
         for index in range(1, max_steps + 1):
             model_steps = index
             try:
@@ -238,7 +237,11 @@ def run_repair(
                 test_runs += 1
                 tool_calls += 1
                 actions.append("test")
-                result = run_sandbox_probe(image_id, work)
+                result = run_sandbox_probe(
+                    image_id,
+                    work,
+                    oracle_source=_TEST_RUNNER.format(oracle=spec["oracle"]),
+                )
                 last_test_pass = result["passed"] and (work / "artifact.txt").is_file()
                 observations.append(
                     {"kind": "test", "passed": last_test_pass, "reason": result.get("error", "completed")}
