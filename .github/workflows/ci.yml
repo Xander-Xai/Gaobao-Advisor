@@ -254,9 +254,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t gb-advisor:ci .
+      - name: Build separate execution image with no application code
+        run: |
+          docker build -f Dockerfile.sandbox -t gb-advisor:sandbox-ci .
+          docker run --rm --network none --entrypoint python gb-advisor:sandbox-ci -c "from pathlib import Path; assert not Path('/app').exists(); assert not Path('/workspace/solution.py').exists()"
       - name: Verify synthetic workspace Docker sandbox
         run: |
-          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
           python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/gaobao-harness-sandbox.json
           python - <<'PY'
           import json
@@ -267,7 +271,7 @@ jobs:
           PY
       - name: Execute two synthetic code repairs inside Docker workspace
         run: |
-          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
           python -m benchmarks.sandbox_coding_agent --image "$IMAGE_ID" --out /tmp/gaobao-coding-agent.json
           python - <<'PY'
           import json
