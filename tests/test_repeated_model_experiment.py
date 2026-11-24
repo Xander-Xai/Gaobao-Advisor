@@ -197,18 +197,21 @@ def test_paid_preflight_rejects_excessive_trials_before_any_provider_call(tmp_pa
 
 
 def test_dry_run_exposes_full_experiment_budget(tmp_path, capsys):
-    assert main(
-        [
-            "--model",
-            "test",
-            "--out-dir",
-            str(tmp_path / "runs"),
-            "--max-provider-calls-per-arm",
-            "40",
-            "--stop-after-reported-tokens-per-arm",
-            "10000",
-        ]
-    ) == 0
+    assert (
+        main(
+            [
+                "--model",
+                "test",
+                "--out-dir",
+                str(tmp_path / "runs"),
+                "--max-provider-calls-per-arm",
+                "40",
+                "--stop-after-reported-tokens-per-arm",
+                "10000",
+            ]
+        )
+        == 0
+    )
     plan = json.loads(capsys.readouterr().out)
     assert plan["aggregate_request_cap"] == 160
     assert plan["sum_of_reported_token_stop_thresholds"] == 40_000
