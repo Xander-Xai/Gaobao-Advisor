@@ -436,10 +436,14 @@ class TestExcludedAssetsAbsent:
         assert gaokao_data.query_match_schools_v2(600, "示例省·甲", "物理", "稳")
 
     def test_tracked_file_count_is_bounded(self) -> None:
-        """A clean public repo should be a few hundred files, not thousands."""
-        # Added review/eval code is intentionally tracked. Retain a finite
-        # size guard while checking forbidden assets separately above.
-        assert 50 < len(_tracked_files()) < 750
+        """Bound repository growth independently of the prohibited-asset gates."""
+        # 2026-11-24: the reviewed master tree contains 749 tracked blobs.
+        # Native Harness and Eval code/tests consume the old 750-file budget.
+        # Allow bounded source growth (150 additional files); this is a size
+        # heuristic only. The prefix, suffix, synthetic provenance, persona
+        # and attribution checks above remain unchanged and mandatory.
+        count = len(_tracked_files())
+        assert 50 < count < 900, f"tracked file count {count} exceeds the repository growth budget"
 
 
 # ── 5. Session auth round-trip through the real FastAPI app ──────────────
