@@ -51,6 +51,7 @@ def test_current_critical_query_is_not_truncated_to_fit_budget():
     with pytest.raises(ChatContextError, match="exceed input budget"):
         build_chat_context([], "SYSTEM", "SQL SOURCE=" + "x" * 10000, max_estimated_tokens=128)
 
+
 @pytest.mark.asyncio
 async def test_compaction_preserves_recent_and_marks_summary_untrusted():
     summarize = AsyncMock(return_value="用户希望广东；尚未核验任何招生事实")
@@ -112,7 +113,6 @@ async def test_small_history_does_not_call_summarizer():
     assert out.messages[1:-1] == history
 
 
-
 @pytest.mark.asyncio
 async def test_oversize_summary_input_is_not_sent_to_provider():
     summarize = AsyncMock(return_value="should never be called")
@@ -157,7 +157,6 @@ def test_sync_and_legacy_stream_use_identical_context_policy(monkeypatch):
     assert seen[0]["messages"] == seen[1]["messages"]
     assert "上下文不完整" in seen[0]["messages"][1]["content"]
     assert seen[0]["messages"][-1]["content"].find("ref-123") != -1
-
 
 
 @pytest.mark.asyncio
