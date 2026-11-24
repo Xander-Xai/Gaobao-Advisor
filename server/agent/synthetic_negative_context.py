@@ -38,17 +38,13 @@ def build_reviewed_synthetic_context(
     """
     if scene != Scene.GAOKAO:
         raise ValueError("Synthetic admissions negative rules require GAOKAO scene")
-    base = skill_service.build_disclosed_context(
-        scene, tuple(sections), max_chars=max_chars
-    )
+    base = skill_service.build_disclosed_context(scene, tuple(sections), max_chars=max_chars)
     rules = rule_store.active_rules(owner=owner)
     if any(rule not in ALLOWED_RULES or rule not in _STATIC_TEXT for rule in rules):
         raise ValueError("Unrecognized reviewed rule")
     if not rules:
         return base
-    policy = "[SERVER_REVIEWED_SYNTHETIC_NEGATIVE_RULES]\n" + "\n".join(
-        "- " + _STATIC_TEXT[rule] for rule in rules
-    )
+    policy = "[SERVER_REVIEWED_SYNTHETIC_NEGATIVE_RULES]\n" + "\n".join("- " + _STATIC_TEXT[rule] for rule in rules)
     merged = base + "\n\n" + policy
     if len(merged) > max_chars:
         raise SkillContextBudgetExceeded("Reviewed context exceeds safe budget")
