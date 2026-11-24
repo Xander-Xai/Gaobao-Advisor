@@ -146,6 +146,7 @@ curl -sS -X POST http://localhost:8000/api/v1/admin/agent-experiments/research \
 | Ground Truth 候选冻结 | `benchmarks/groundtruth_pipeline.py` | 20 条合成候选、开发/holdout、SHA 和审核门禁；**默认待人工审核** |
 | 优化前后评价门禁 | `benchmarks/harness_optimizer.py` | 同模型/同数据集、质量与安全不退化、真实 Token 用量才可提交人工审查；尚无实测收益 |
 | 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；不是生产级多租户 OS 沙箱 |
+| 沙箱安全加固与反例验收 | [docs/security/gaobao-agent-sandbox-contract-20261124.md](docs/security/gaobao-agent-sandbox-contract-20261124.md) | Docker 客户端输出 64 KiB 上限、IPC/FD 限制、硬链接拒绝、真实容器网络/根文件系统/身份负例探测；仅合成实验 |
 | Coding Agent 真实执行链路 | `benchmarks/sandbox_coding_agent.py` | **两个合成算术代码修复 2/2，通过真实容器测试；控制器为 SCRIPTED_NOT_LLM** |
 | 可选模型自主修复 | `benchmarks/sandbox_model_planner.py` | API 适配器已实现、显式授权与 Token 预算；**尚无真实模型跑分** |
 
