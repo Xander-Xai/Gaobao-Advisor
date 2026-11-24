@@ -289,7 +289,7 @@ export type SyntheticTaskRunStatus =
 export interface SyntheticTaskRun {
   run_id: string
   owner: string
-  engine: 'deterministic' | 'deepagents'
+  engine: 'deterministic' | 'deepagents' | 'native_harness'
   status: SyntheticTaskRunStatus
   approved_by: string | null
   version: number
