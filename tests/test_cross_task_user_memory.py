@@ -369,3 +369,48 @@ def test_revision_exhaustion_fails_closed(client_db):
         db.commit()
     assert put(client, token, version=first, value="不应保存").status_code == 409
     assert client.get("/api/v1/memory/entries", headers=headers(token)).json()["items"][0]["value"] == "华南"
+
+
+@pytest.mark.parametrize(
+    "invalid_fields",
+    [
+        {"expected_version": False},
+        {"expected_version": "0"},
+        {"expected_version": 0.0},
+        {"ttl_days": True},
+        {"ttl_days": "180"},
+        {"ttl_days": 180.0},
+        {"value": "PRIVATE_PREFERENCE_SENTINEL" * 10},
+    ],
+)
+def test_http_validation_is_strict_and_does_not_echo_input(client_db, invalid_fields):
+    client, factory = client_db
+    token = create_token(client)
+    payload = {"value": "PRIVATE_PREFERENCE_SENTINEL", "expected_version": 0, "ttl_days": 180}
+    payload.update(invalid_fields)
+    response = client.put(
+        "/api/v1/memory/entries/preferred_regions",
+        json=payload,
+        headers=headers(token),
+    )
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid memory request"}
+    assert response.headers["cache-control"] == "no-store"
+    assert "PRIVATE_PREFERENCE_SENTINEL" not in response.text
+    assert token not in response.text
+    with factory() as db:
+        assert db.query(UserMemoryEntry).count() == 0
+
+
+def test_memory_credential_and_conflict_errors_are_not_cacheable(client_db):
+    client, _ = client_db
+    token = create_token(client)
+    assert put(client, token).status_code == 200
+    missing = client.get("/api/v1/memory/entries")
+    invalid = client.get("/api/v1/memory/entries", headers=headers("invalid"))
+    conflict = put(client, token, version=0)
+    for response, status in [(missing, 401), (invalid, 401), (conflict, 409)]:
+        assert response.status_code == status
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["pragma"] == "no-cache"
+        assert token not in response.text
