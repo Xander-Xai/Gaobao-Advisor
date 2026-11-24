@@ -1,5 +1,8 @@
 # Gaobao Advisor｜可核验的高考志愿辅助决策系统
 
+> **架构治理（2026-11-25）**：确定性 LangGraph 咨询为默认主线；Deep Agents 是经批准的复杂招生研究候选，原生只读 Harness 作为参考和 Eval 基线，沙箱只面向受控招生分析。Java 为可选目录 overlay。见 [架构裁决与裁剪门禁](docs/architecture/README.md#architecture-decision-freeze--2026-11-25)。
+
+
 > **Memory 专项定位（2026-11-24）**：统一对话上下文、可选语义压缩、版本化 Session Snapshot 和独立的用户偏好机制；后两者受开关、隐私与 CI 门禁约束，不能用历史摘要代替招生 SQL 证据。见 [Memory 专项工程定位](docs/architecture/memory-engineering-positioning-20261124.md)。
 
 **AI 应用全栈交付 + 可信数据查询 + Agent 运行时可靠性实验**
