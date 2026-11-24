@@ -1,10 +1,9 @@
 """LangGraph advisor graph — wires nodes into a compiled pipeline.
 
 NOTE: The llm_reason node has been removed from the graph.
-LLM streaming is handled directly by the SSE handler in chat.py
-to avoid double LLM calls. The graph stops at structure_output
-(complete path) or question_generate (incomplete path),
-and the SSE handler streams tokens from llm_node_stream.
+The public SSE path uses the preparation graph ending at render_reply.
+The route buffers, validates and persists the final candidate before emitting
+chunks. Blocked input ends immediately at security_scan.
 """
 
 from __future__ import annotations
@@ -53,6 +52,17 @@ def _profile_has_data(state: AdvisorState) -> str:
     return "incomplete"
 
 
+def _after_security_scan(state: AdvisorState) -> str:
+    return "blocked" if state.get("security_blocked") else "allowed"
+
+
+def _intent_and_scene(state: AdvisorState) -> dict:
+    """One graph step; preserve the legacy scene_route trace event."""
+    detected = intent_detect_node(state)
+    routed = scene_route_node({**state, **detected})
+    return {**detected, **routed}
+
+
 def build_advisor_graph(*, finalize: bool = True):
     """Build the full graph or a preparation-only graph for SSE finalization.
 
@@ -64,8 +74,7 @@ def build_advisor_graph(*, finalize: bool = True):
 
     # ── Register nodes (llm_reason removed) ─────────────────────
     graph.add_node("security_scan", security_scan_node)
-    graph.add_node("intent_detect", intent_detect_node)
-    graph.add_node("scene_route", scene_route_node)
+    graph.add_node("intent_detect", _intent_and_scene)
     graph.add_node("slot_extract", slot_extract_node)
     graph.add_node("profile_check", profile_check_node)
     graph.add_node("question_generate", question_generate_node)
@@ -87,9 +96,10 @@ def build_advisor_graph(*, finalize: bool = True):
     graph.set_entry_point("security_scan")
 
     # ── Linear chain up to profile_check ──────────────────────
-    graph.add_edge("security_scan", "intent_detect")
-    graph.add_edge("intent_detect", "scene_route")
-    graph.add_edge("scene_route", "slot_extract")
+    graph.add_conditional_edges(
+        "security_scan", _after_security_scan, {"blocked": END, "allowed": "intent_detect"}
+    )
+    graph.add_edge("intent_detect", "slot_extract")
     graph.add_edge("slot_extract", "profile_check")
 
     # ── Conditional edge from profile_check ───────────────────
