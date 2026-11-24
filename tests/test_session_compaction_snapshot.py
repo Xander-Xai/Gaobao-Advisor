@@ -98,7 +98,7 @@ async def test_delta_is_kept_verbatim_until_incremental_threshold(db_factory):
         summarizer=summarize,
         keep_recent_rounds=2,
         summary_trigger_tokens=1,
-        incremental_trigger_tokens=200,
+        incremental_trigger_tokens=100,
     )
     assert (await build_durable_chat_context(history=_history(db_factory), **options)).status == "SNAPSHOT_PUBLISHED"
 
