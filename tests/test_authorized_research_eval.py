@@ -59,6 +59,10 @@ def fixture():
             "coverage": coverage,
             "evidence": evidence,
             "evidence_sha256": digest(evidence),
+            "receipt_ids": {
+                kind: digest({"task": "research_" + format(i, "032x"), "scope": scope, "kind": kind, "rows": rows})
+                for kind, rows in evidence.items()
+            },
             "sandbox_analysis": {
                 "status": "VERIFIED_DESCRIPTIVE_ANALYSIS",
                 "result": analysis,
@@ -123,6 +127,23 @@ def test_full_receipt_does_not_credit_unclassified_block(error):
     assert result["status"] == "FAILED"
     assert result["splits"]["development"]["passed"] == 1
     assert "full_receipt_block_reason_not_independently_classified" in result["cases"][1]["reasons"]
+
+
+@pytest.mark.parametrize("replacement", [None, {}, {"admission-history": "0" * 64, "enrollment-plans": "1" * 64}])
+def test_full_receipt_requires_task_bound_delegation(replacement):
+    manifest, receipts = fixture()
+    receipts["case-0"]["receipt_ids"] = replacement
+    result = evaluate(manifest, receipts)
+    assert result["status"] == "FAILED"
+    assert "delegation_receipt_binding_mismatch" in result["cases"][0]["reasons"]
+
+
+@pytest.mark.parametrize("coordinate", [[9999, 2022], [103, 2020], [103, 2022]])
+def test_gold_rejects_out_of_scope_or_duplicate_coverage(coordinate):
+    manifest, receipts = fixture()
+    manifest["cases"][1]["expected_coverage"]["enrollment-plans"]["ambiguous"].append(coordinate)
+    with pytest.raises(ValueError, match="Coverage coordinate outside scope or repeated"):
+        evaluate(manifest, receipts)
 
 
 def managed_fixture(tmp_path):

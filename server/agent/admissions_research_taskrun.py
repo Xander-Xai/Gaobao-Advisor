@@ -414,14 +414,26 @@ def _execute_approved_under_lock(journal, run_id, dataset_ref, session_factory, 
         guard()
         evidence = report.get("evidence")
         analysis = report.get("sandbox_analysis")
+        task_id = report.get("task_id")
+        receipts = report.get("receipt_ids")
         if (
-            report.get("status") not in {"VERIFIED_RESEARCH", "VERIFIED_PARTIAL_RESEARCH"}
+            report.get("schema") != "admissions-research/v1"
+            or report.get("engine") != "deepagents"
+            or not isinstance(task_id, str)
+            or not ID.fullmatch(task_id)
+            or report.get("status") not in {"VERIFIED_RESEARCH", "VERIFIED_PARTIAL_RESEARCH"}
             or canonical(report.get("scope")) != canonical(asdict(scope))
             or report.get("approval_ref_sha256") != digest(spec["approval_ref"])
             or report.get("admission_recommendation_verified") is not False
             or not isinstance(evidence, dict)
             or set(evidence) != {"admission-history", "enrollment-plans"}
             or report.get("evidence_sha256") != digest(evidence)
+            or not isinstance(receipts, dict)
+            or receipts
+            != {
+                kind: digest({"task": task_id, "scope": asdict(scope), "kind": kind, "rows": rows})
+                for kind, rows in evidence.items()
+            }
             or not isinstance(analysis, dict)
             or analysis.get("status") != "VERIFIED_DESCRIPTIVE_ANALYSIS"
             or analysis.get("result_sha256") != digest(analysis.get("result"))

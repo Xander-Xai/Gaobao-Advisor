@@ -62,7 +62,10 @@ def test_maker_checker_idempotency_and_dataset_binding(journal, spec):
         journal.finish(run_id, lease, None, "cancelled")
 
 
-@pytest.mark.parametrize("mismatch", [None, "input_sha256", "image_id", "cleanup_verified", "oracle"])
+@pytest.mark.parametrize(
+    "mismatch",
+    [None, "input_sha256", "image_id", "cleanup_verified", "oracle", "missing_receipt", "wrong_receipt", "engine"],
+)
 def test_worker_only_publishes_bound_verified_aggregate(journal, spec, mismatch):
     item = journal.create("operator", "request-0002", spec)
     journal.approve(item["run_id"], "admin", item["spec_sha256"])
@@ -88,7 +91,11 @@ def test_worker_only_publishes_bound_verified_aggregate(journal, spec, mismatch)
         ]
         evidence = {"admission-history": rows, "enrollment-plans": []}
         analysis = _expected(rows, ("school_id", "year"))
+        task_id = "research_" + "1" * 32
         report = {
+            "schema": "admissions-research/v1",
+            "engine": "deepagents",
+            "task_id": task_id,
             "status": "VERIFIED_PARTIAL_RESEARCH",
             "scope": spec["scope"],
             "approval_ref_sha256": digest(spec["approval_ref"]),
@@ -104,12 +111,21 @@ def test_worker_only_publishes_bound_verified_aggregate(journal, spec, mismatch)
                 "input_sha256": digest({"rows": rows, "group_by": ["school_id", "year"]}),
             },
             "coverage": {kind: _coverage(records, scope, kind) for kind, records in evidence.items()},
-            "receipt_ids": {},
+            "receipt_ids": {
+                kind: digest({"task": task_id, "scope": spec["scope"], "kind": kind, "rows": records})
+                for kind, records in evidence.items()
+            },
             "provider_usage": None,
         }
         if mismatch == "oracle":
             analysis["groups"][0]["best_min_rank"] = 1
             report["sandbox_analysis"]["result_sha256"] = digest(analysis)
+        elif mismatch == "missing_receipt":
+            report["receipt_ids"] = {}
+        elif mismatch == "wrong_receipt":
+            report["receipt_ids"]["admission-history"] = "0" * 64
+        elif mismatch == "engine":
+            report["engine"] = "injected_test_controller"
         elif mismatch:
             report["sandbox_analysis"][mismatch] = False
         return report
