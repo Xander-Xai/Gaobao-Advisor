@@ -148,3 +148,44 @@ def test_vault_revision_migration_does_not_guess_deleted_history(tmp_path, legac
                     assert connection.execute(text("SELECT last_version FROM user_memory_vaults")).scalar_one() == 0
     finally:
         engine.dispose()
+
+
+@pytest.mark.parametrize("prior_head", ["20261124_0006", "20261124_0007"])
+def test_memory_merge_head_upgrades_either_existing_branch(tmp_path, prior_head):
+    db = tmp_path / "prior-head.db"
+    env = {**os.environ, "DATABASE_URL": f"sqlite:///{db}", "APP_ENV": "development"}
+    script = (
+        "from alembic import command; from db.migrate import alembic_config; "
+        "import sys; command.upgrade(alembic_config(), sys.argv[1])"
+    )
+    initial = subprocess.run(
+        [sys.executable, "-c", script, prior_head],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if initial.returncode != 0 and "No module named 'alembic'" in initial.stderr:
+        pytest.skip("alembic is not installed")
+    assert initial.returncode == 0, initial.stderr
+    engine = create_engine(f"sqlite:///{db}")
+    try:
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == prior_head
+        before = set(inspect(engine).get_table_names())
+        if prior_head == "20261124_0006":
+            assert "session_compaction_snapshots" in before
+            assert "user_memory_vaults" not in before
+        else:
+            assert "user_memory_vaults" in before
+            assert "session_compaction_snapshots" not in before
+        upgraded = _run(db, "upgrade")
+        assert upgraded.returncode == 0, upgraded.stderr
+        assert verify_tables(engine, ALL_TABLES) == []
+        with engine.connect() as connection:
+            assert (
+                connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261124_0008"
+            )
+        assert before <= set(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()
