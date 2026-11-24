@@ -138,9 +138,8 @@ def test_industrial_middleware_fails_closed_without_local_fallback(monkeypatch):
 
     # Unit CI deliberately omits the optional Redis package. Exercise the real
     # limiter and middleware; the separate Redis smoke tests execute the Lua.
-    monkeypatch.setitem(
-        sys.modules, "redis", SimpleNamespace(Redis=SimpleNamespace(from_url=lambda *a, **kw: FakeRedis()))
-    )
+    fake_module = SimpleNamespace(Redis=SimpleNamespace(from_url=lambda *a, **kw: FakeRedis()))
+    monkeypatch.setitem(sys.modules, "redis", fake_module)
     app = FastAPI()
     app.add_middleware(RateLimitMiddleware)
 
