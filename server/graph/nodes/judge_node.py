@@ -8,6 +8,10 @@ from quality.judge import QualityJudge
 logger = logging.getLogger(__name__)
 
 
+class _DeferredPersistence(Exception):
+    """Public chat persists the final score with its answer transaction."""
+
+
 def quality_judge_node(state: dict) -> dict:
     """Evaluate AI reply quality using LLM judge."""
     reply = state.get("reply", "")
@@ -25,21 +29,27 @@ def quality_judge_node(state: dict) -> dict:
     }
 
     result = judge.evaluate_sync(query, reply, context)
+    # A placeholder score (e.g. 50 when the provider is unavailable) is
+    # NOT proof that the final response has been evaluated.
+    scored = bool(result.dimensions) and all(not d.unscored for d in result.dimensions)
 
     # Record Prometheus metrics
     try:
         from server.metrics import record_hallucination, record_judge_score
 
-        for dim, score in result.scores.items():
-            record_judge_score(dim, score)
-        for flag in result.hallucination_flags:
-            flag_type = flag.split(":")[0] if ":" in flag else "unknown"
-            record_hallucination(flag_type)
+        if scored:
+            for dim, score in result.scores.items():
+                record_judge_score(dim, score)
+            for flag in result.hallucination_flags:
+                flag_type = flag.split(":")[0] if ":" in flag else "unknown"
+                record_hallucination(flag_type)
     except Exception:
         logger.warning("Failed to record judge metrics", exc_info=True)
 
     # Persist to DB
     try:
+        if state.get("defer_quality_persistence") or not scored:
+            raise _DeferredPersistence()
         from db.database import SessionLocal
         from db.models import QualityScore
 
@@ -58,6 +68,8 @@ def quality_judge_node(state: dict) -> dict:
             )
             session.add(qs)
             session.commit()
+    except _DeferredPersistence:
+        pass
     except Exception:
         logger.warning("Failed to persist quality score to DB", exc_info=True)
 
@@ -65,5 +77,9 @@ def quality_judge_node(state: dict) -> dict:
         "quality_scores": result.scores,
         "aggregate_score": result.aggregate_score,
         "hallucination_flags": result.hallucination_flags,
-        "quality_grade": result.grade,
+        "quality_grade": result.grade if scored else "unscored",
+        "quality_scored": scored,
+        "judge_needs_rewrite": result.should_rewrite if scored else False,
+        "judge_model": result.judge_model,
+        "judge_latency_ms": result.latency_ms,
     }
