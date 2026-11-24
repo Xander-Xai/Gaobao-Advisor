@@ -563,6 +563,7 @@ name = "gaobao-advisor"
 version = "3.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "langchain-core" },
@@ -588,7 +589,6 @@ dev = [
 ]
 mysql = [
     { name = "alembic" },
-    { name = "cryptography" },
     { name = "pymysql" },
 ]
 worker = [
@@ -599,7 +599,7 @@ worker = [
 requires-dist = [
     { name = "alembic", marker = "extra == 'dev'", specifier = ">=1.13,<2" },
     { name = "alembic", marker = "extra == 'mysql'", specifier = ">=1.13,<2" },
-    { name = "cryptography", marker = "extra == 'mysql'", specifier = ">=42" },
+    { name = "cryptography", specifier = ">=42" },
     { name = "fastapi", specifier = ">=0.100.0" },
     { name = "httpx", specifier = ">=0.25.0" },
     { name = "langchain-core", specifier = ">=0.1.0" },

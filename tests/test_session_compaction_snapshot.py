@@ -285,3 +285,38 @@ async def test_public_async_context_uses_snapshot_only_with_both_explicit_flags(
     builder.assert_awaited_once()
     assert builder.await_args.kwargs["session_id"] == "test-session"
     assert len(builder.await_args.kwargs["policy_sha256"]) == 64
+
+
+def test_encrypted_snapshot_is_bound_to_session_and_key(db_factory):
+    _seed(db_factory)
+    _seed(db_factory, "session-beta")
+    key = bytes.fromhex("ab" * 32)
+    store = SessionCompactionStore(db_factory, encryption_key=key)
+    history = _history(db_factory)
+    for session_id in ("session-alpha", "session-beta"):
+        assert store.publish(session_id, history, covered_count=6, summary="private summary", policy_sha256=POLICY)
+    assert store.load("session-alpha", history, policy_sha256=POLICY).summary == "private summary"
+    wrong_key = SessionCompactionStore(db_factory, encryption_key=bytes.fromhex("cd" * 32))
+    assert wrong_key.load("session-alpha", history, policy_sha256=POLICY) is None
+    with db_factory() as db:
+        rows = db.query(SessionCompactionSnapshot).order_by(SessionCompactionSnapshot.conversation_id).all()
+        assert all(row.summary.startswith("enc:v1:") and "private summary" not in row.summary for row in rows)
+        rows[1].summary = rows[0].summary
+        db.commit()
+    assert store.load("session-beta", history, policy_sha256=POLICY) is None
+
+
+def test_snapshot_startup_requires_configured_key(monkeypatch):
+    from server.agent.session_compaction_store import validate_snapshot_startup
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("GAOBAO_CHAT_SNAPSHOT_ENABLED", "true")
+    monkeypatch.setenv("GAOBAO_CHAT_SNAPSHOT_REQUIRE_ENCRYPTION", "true")
+    monkeypatch.delenv("GAOBAO_CHAT_SNAPSHOT_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="encryption key is required"):
+        validate_snapshot_startup()
+    monkeypatch.setenv("GAOBAO_CHAT_SNAPSHOT_KEY", "ab" * 32)
+    validate_snapshot_startup()
+    monkeypatch.setenv("APP_ENV", "production")
+    with pytest.raises(RuntimeError, match="privacy approval"):
+        validate_snapshot_startup()

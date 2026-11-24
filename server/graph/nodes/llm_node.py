@@ -275,7 +275,11 @@ async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
                 raise RuntimeError("Explicit non-production APP_ENV is required for plaintext snapshots")
             from db.database import get_session
             from server.agent.durable_chat_context import build_durable_chat_context
-            from server.agent.session_compaction_store import SessionCompactionStore, policy_digest
+            from server.agent.session_compaction_store import (
+                SessionCompactionStore,
+                policy_digest,
+                snapshot_encryption_key,
+            )
 
             policy = policy_digest(
                 model_id=str(_get_config().get("model") or ""),
@@ -288,7 +292,7 @@ async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
                 history=history,
                 system_prompt=system_prompt,
                 current_prompt=current,
-                store=SessionCompactionStore(get_session),
+                store=SessionCompactionStore(get_session, encryption_key=snapshot_encryption_key()),
                 policy_sha256=policy,
                 summarizer=manager._summarize_history,
                 summary_trigger_tokens=manager.max_token_limit,
