@@ -199,9 +199,7 @@ def test_security_scan_is_terminal_before_slot_updates(finalize):
         patch("server.graph.graph.quality_judge_node") as judge,
     ):
         graph = build_advisor_graph(finalize=finalize)
-        result = graph.invoke(
-            {"input_text": "我改成620分", "scene": "gaokao", "slots": slots, "trace": []}
-        )
+        result = graph.invoke({"input_text": "我改成620分", "scene": "gaokao", "slots": slots, "trace": []})
     assert result["security_blocked"] is True
     assert result["slots"] == slots
     assert [event["node"] for event in result["trace"]] == ["security_scan"]

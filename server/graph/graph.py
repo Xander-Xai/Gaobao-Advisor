@@ -96,9 +96,7 @@ def build_advisor_graph(*, finalize: bool = True):
     graph.set_entry_point("security_scan")
 
     # ── Linear chain up to profile_check ──────────────────────
-    graph.add_conditional_edges(
-        "security_scan", _after_security_scan, {"blocked": END, "allowed": "intent_detect"}
-    )
+    graph.add_conditional_edges("security_scan", _after_security_scan, {"blocked": END, "allowed": "intent_detect"})
     graph.add_edge("intent_detect", "slot_extract")
     graph.add_edge("slot_extract", "profile_check")
 
