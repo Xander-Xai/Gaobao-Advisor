@@ -20,7 +20,14 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
     directory remains inaccessible to ordinary report lookup for recovery.
     """
     from db.database import get_session
-    from db.models import Conversation, ConversationMessage, Feedback, Highlight, QualityScore, SessionCompactionSnapshot
+    from db.models import (
+        Conversation,
+        ConversationMessage,
+        Feedback,
+        Highlight,
+        QualityScore,
+        SessionCompactionSnapshot,
+    )
 
     staged = reports.stage_session_deletion(session_id)
     try:
