@@ -14,6 +14,14 @@ export const useChatStore = defineStore('chat', () => {
   const sessionTokens = ref({}) // Private, in-memory credentials by server-owned session ID.
   // Last user-visible stream/network error. Cleared at the start of each turn.
   const lastError = ref(null)
+  // Explicit opt-in capability; never written to local/session storage.
+  let memoryCredential = null
+  const memoryEnabled = ref(false)
+  function setMemoryCredential(token) {
+    if (token !== null && !/^mem1_[A-Za-z0-9_-]{64}$/.test(token)) throw new Error('Invalid memory credential')
+    memoryCredential = token
+    memoryEnabled.value = Boolean(token)
+  }
   watch(currentSessionId, id => { sessionToken.value = id ? (sessionTokens.value[id] || null) : null })
 
   function createSession(scene = 'gaokao') {
@@ -143,7 +151,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       // Consume events incrementally: `onEvent` fires as each SSE frame is
       // decoded, so tokens render before the stream ends.
-      await chatAPI.send(initiatingId, text, slots.value, 'gaokao', credential, { onEvent: applyEvent })
+      await chatAPI.send(initiatingId, text, slots.value, 'gaokao', credential, { onEvent: applyEvent, ...(memoryCredential ? { memoryToken: memoryCredential } : {}) })
 
       // The backend always terminates a stream with an explicit `done`. If it
       // never arrived (connection cut, proxy timeout), do not present the turn
@@ -174,6 +182,8 @@ export const useChatStore = defineStore('chat', () => {
     slots,
     sessionToken,
     lastError,
+    memoryEnabled,
+    setMemoryCredential,
     createSession,
     sendMessage,
   }
