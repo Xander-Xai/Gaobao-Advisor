@@ -48,11 +48,13 @@
 摘要目前不持久化，不具备 Pi/OpenCode 的完整会话分叉与增量恢复机制，
 也没有真实模型 A/B、Token 降本证明或生产个人信息许可。
 操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
-跨任务用户偏好记忆仍在独立 Draft PR #135，不应与会话压缩混同。
+跨任务用户偏好记忆由独立 Draft PR #159 承接（旧 #135 仍为历史依赖栈），尚未合并，不应与会话压缩混同。
 
 进一步的**可复用会话摘要快照**已合入 master（PR #149），默认关闭：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。仍需单独授权开关 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，且当前明确禁止生产环境启用；具体限制与 Alembic 迁移冲突见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
 
 ## Agent Harness / Eval 实验
+
+合成业务 Context A/B 已随 [PR #160](https://github.com/Xander-Xai/Gaobao-Advisor/pull/160) 合入；`python -m benchmarks.context_ab_eval --scripted-smoke --out-dir /tmp/gaobao-context-ab` 可复现固定 SQL 真值对照。脚本化控制器不代表真实模型效果或 Token 降本。真实模型版本一致性增强见 [PR #162](https://github.com/Xander-Xai/Gaobao-Advisor/pull/162)，以其实时合并与 CI 状态为准。
 
 与[公共问答业务图](docs/architecture/README.md)**分离**的只读执行层，位于 `server/agent/readonly_harness.py`、`readonly_model_planner.py` 和 `readonly_tools.py`。这里实现的是 **Planner → Tool → Observation → Finish/Abstain** 的受约束循环，不是把业务 LangGraph 节点数当成“工具步长”。
 

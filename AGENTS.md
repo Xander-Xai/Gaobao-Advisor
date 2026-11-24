@@ -11,7 +11,7 @@
 - Keep the public synchronous, legacy streaming and SSE final-candidate context behavior aligned; prove integration tests call the real construction path rather than merely an unused MemoryManager.
 - Snapshot cache requires both feature flags and explicit nonproduction APP_ENV; do not enable plaintext in production. Bind reuse to authenticated session/conversation PK, current committed history-prefix hash, policy/model/provider fingerprint, TTL and CAS version. Never truncate current SQL/RAG evidence to save summary tokens.
 - A stale/failed summary should surface explicit partial-context status; a backend read failure must not turn into a successful empty conversation; do not log raw user text or provider exception bodies.
-- Keep migration heads linear. Draft cross-task memory PR #135 and session snapshot PR #149 have independent 0006 children and need explicit rebase/migration reconciliation before both are merged.
+- Keep a single Alembic head. Session snapshot #149 is merged; isolated cross-task memory #159 proposes an explicit merge revision, pending exact-head SQLite/MySQL checks and privacy review. Do not merge the older stacked #135 independently.
 - Synthetic tests or CI passing do not establish provider Token savings, factual answer quality, privacy compliance, or production availability. Validate real-model/no-compaction vs compaction vs snapshot reuse with same cases before making measured claims.
 - See `docs/architecture/memory-engineering-positioning-20261124.md` and `docs/validation/session-compaction-snapshot-20261124.md`.
 
