@@ -202,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         f"model_verified_task_passed={report['verified_task_passed']}/{report['cases']} "
         f"(tool_path={report['goal_path_passed']}/{report['cases']})"
     )
-    return 0 if report["verified_task_passed"] == report["cases"] else 1
+    return 0 if report["suite_complete"] and report["cases"] and report["verified_task_passed"] == report["cases"] else 1
 
 
 if __name__ == "__main__":

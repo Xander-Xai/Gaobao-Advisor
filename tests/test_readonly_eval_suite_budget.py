@@ -66,3 +66,12 @@ def test_remaining_budget_is_applied_per_case(monkeypatch):
 def test_invalid_budget_rejected(budget):
     with pytest.raises(ValueError, match="max_total_tokens"):
         evaluation.run_model_cases(cases(), object(), max_total_tokens=budget)
+
+
+def test_incomplete_report_cannot_enter_optimizer(monkeypatch):
+    from benchmarks.harness_optimizer import compare_holdout
+
+    install_runner(monkeypatch, 6, 4)
+    report = evaluation.run_model_cases(cases(), object(), max_total_tokens=15, groundtruth_review="REVIEW_DECLARED")
+    with pytest.raises(ValueError, match="Incomplete"):
+        compare_holdout(report, report)
