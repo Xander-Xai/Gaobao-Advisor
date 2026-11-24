@@ -8,7 +8,7 @@
 
 > **代码归属：** 基于上游早期 MIT 许可代码继续二次开发与工程加固，保留原始许可声明；具体见 [第三方归属说明](THIRD_PARTY_NOTICES.md)。
 
-**V1.0 项目责任与验收**：[全栈 Harness/Eval 责任清单](docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md)。本项目来自另一段更近期任职阶段，与同一前任职阶段的客服 Agent / 化妆品 RAG 分开陈述。持续独立维护的新模块只有在 PR 合并并取得对应验收后才计为仓库默认分支的能力，不能倒填为过去企业生产部署。
+**Agent V1 Harness 工程验证**：[Skills / 合成规则记忆与 Eval 验收](docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md)。这些独立实验模块不属于默认聊天路径，除非经过明确集成和真实模型/业务评测，不能计为线上能力。
 
 > **数据边界先行：** 仓库默认只附带程序生成的 **SYNTHETIC_DEMO** 合成演示数据，不对应任何真实院校、专业或录取结果，**不可用于真实志愿决策**。真实数据导入能力保留在源码中，使用者需自行提供合法授权数据。
 
@@ -22,6 +22,20 @@
 **目录：** [Agent Harness 实验](#agent-harness--eval-实验) · [项目预览](#项目预览) · [核心功能](#核心功能) · [系统架构](#系统架构) · [技术栈](#技术栈) · [快速开始](#快速开始) · [数据说明](#数据说明) · [功能演示](#功能演示) · [开发与测试](#开发与测试) · [已知限制](#已知限制) · [Roadmap](#roadmap) · [License](#license)
 
 ---
+
+## 会话上下文管理（独立于跨任务长期记忆）
+
+在线对话的同步、传统流式和公开 SSE 最终候选生成，使用统一的
+`server/agent/chat_context.py` 来限制历史上下文并保留本轮 SQL/RAG 来源。
+默认只保留最近 20 轮并显式标记丢失的旧历史；需要语义压缩时，可在**授权的开发环境**
+开启 `GAOBAO_CHAT_COMPACTION_ENABLED=true`，再由现有 `MemoryManager`
+对旧历史按需摘要、保留最近 10 轮。摘要是**未经核验的用户对话线索**，不构成招生证据或工具审批。
+
+该开关默认关闭，因为启用后每次满足条件的请求可能增加模型调用费用。
+摘要目前不持久化，不具备 Pi/OpenCode 的完整会话分叉与增量恢复机制，
+也没有真实模型 A/B、Token 降本证明或生产个人信息许可。
+操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
+跨任务用户偏好记忆仍在独立 Draft PR #135，不应与会话压缩混同。
 
 ## Agent Harness / Eval 实验
 
