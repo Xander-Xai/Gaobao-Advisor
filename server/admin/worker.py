@@ -285,8 +285,7 @@ def run_forever(*, timeout: int = 2) -> None:
         logger.exception("worker startup recovery failed; will retry in the loop")
 
     logger.info(
-        "quality worker started, queue=%s key=%s lease=%ss delivery_lease=%ss recovery_interval=%ss",
-        queue.url,
+        "quality worker started, key=%s lease=%ss delivery_lease=%ss recovery_interval=%ss",
         queue.key,
         stale_lease,
         delivery_lease,
@@ -303,6 +302,18 @@ def run_forever(*, timeout: int = 2) -> None:
     logger.info("quality worker stopped")
 
 
+def _prune_snapshots() -> None:
+    if os.getenv("GAOBAO_CHAT_SNAPSHOT_MAINTENANCE_ENABLED", "false").lower() != "true":
+        return
+    from server.agent.session_compaction_store import SessionCompactionStore
+
+    try:
+        count = SessionCompactionStore(SessionLocal).prune_expired(limit=200)
+        log_event("worker.snapshot_prune", deleted=count)
+    except Exception as exc:
+        log_error("worker.snapshot_prune_failed", error=type(exc).__name__)
+
+
 def _worker_loop(
     *,
     queue: Any,
@@ -314,6 +325,7 @@ def _worker_loop(
 ) -> None:
     """Run recovery and consumption in one testable loop."""
     last_recovery = time.monotonic()
+    _prune_snapshots()
     while not stop["flag"]:
         try:
             if time.monotonic() - last_recovery >= recovery_interval:
@@ -324,6 +336,7 @@ def _worker_loop(
                     )
                 except Exception:
                     logger.exception("periodic worker recovery failed")
+                _prune_snapshots()
                 last_recovery = time.monotonic()
             result = run_once(timeout=timeout, queue=queue)
             if result.get("job_id"):

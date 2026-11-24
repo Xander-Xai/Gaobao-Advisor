@@ -76,6 +76,7 @@ services:
       # the queue. Start it after the API is actually ready to avoid two
       # concurrent seeders racing on the same empty MySQL database.
       AUTO_SEED_DEMO: "false"
+      GAOBAO_CHAT_SNAPSHOT_MAINTENANCE_ENABLED: "true"
     depends_on:
       api:
         condition: service_healthy

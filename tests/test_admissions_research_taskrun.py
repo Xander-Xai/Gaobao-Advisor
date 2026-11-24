@@ -203,6 +203,7 @@ def test_research_report_http_requires_authorized_owner_and_terminal_result(admi
     payload["idempotency_key"] = "research-http-001"
     created = admin_client.post(base, json=payload, headers=operator)
     assert created.status_code == 201, created.text
+    assert "no-store" in created.headers["cache-control"]
     run_id = created.json()["run_id"]
     report_url = f"{base}/{run_id}/report"
     assert admin_client.get(report_url).status_code == 401

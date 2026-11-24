@@ -14,6 +14,7 @@ from fastapi import APIRouter, Response
 
 from db.database import is_db_connected
 from server import __version__
+from server.industrial_runtime import industrial_enabled, redis_ready
 from server.services import rag
 from server.services.data_profile import current_data_profile
 
@@ -40,7 +41,9 @@ async def readiness():
     """
     db_status = "connected" if is_db_connected() else "disconnected"
     rag_status = rag.status()
-    ready = db_status == "connected"
+    required_redis = industrial_enabled()
+    redis_status = "connected" if required_redis and redis_ready() else "unavailable"
+    ready = db_status == "connected" and (not required_redis or redis_status == "connected")
     body = {
         "status": "ready" if ready else "not_ready",
         "version": __version__,
@@ -49,6 +52,8 @@ async def readiness():
             "rag": {"state": rag_status["state"], "reason": rag_status["reason"]},
         },
     }
+    if required_redis:
+        body["redis"] = redis_status
     return Response(
         content=json.dumps(body),
         media_type="application/json",
