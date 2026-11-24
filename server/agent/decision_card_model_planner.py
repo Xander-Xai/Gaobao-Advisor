@@ -130,36 +130,47 @@ class DecisionCardModelPlanner:
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False, sort_keys=True)},
             ],
         )
-        raw = json.loads(response.choices[0].message.content)
-        if not isinstance(raw, dict):
-            raise ValueError("Model output must be a JSON object")
-        kind = raw.get("kind")
-        if kind not in {"tool", "finish", "abstain"}:
-            raise ValueError("Unsupported model action")
         usage = getattr(response, "usage", None)
         tokens = {
             "prompt_tokens": getattr(usage, "prompt_tokens", None),
             "completion_tokens": getattr(usage, "completion_tokens", None),
         }
+        # Malformed responses may still be billable. Preserve usage without
+        # persisting raw output or executing any proposed action.
+        try:
+            raw = json.loads(response.choices[0].message.content)
+        except (AttributeError, IndexError, TypeError, ValueError):
+            return Decision("invalid", **tokens)
+        if not isinstance(raw, dict) or not isinstance(raw.get("kind"), str):
+            return Decision("invalid", **tokens)
+        kind = raw["kind"]
+        if kind not in {"tool", "finish", "abstain"}:
+            return Decision("invalid", **tokens)
         if kind == "abstain":
             if set(raw) != {"kind"}:
-                raise ValueError("Abstention must not contain free-form text or actions")
+                return Decision("invalid", **tokens)
             return Decision("abstain", **tokens)
         if kind == "tool":
             if set(raw) != {"kind", "tool", "arguments"}:
-                raise ValueError("Tool action has forbidden extra fields")
+                return Decision("invalid", **tokens)
             name, args = raw["tool"], raw["arguments"]
-            identity = (
-                args.get("major_name")
-                if name == "major_lookup" and isinstance(args, dict)
-                else (args.get("school_name") if isinstance(args, dict) else None)
-            )
+            if not isinstance(name, str) or not isinstance(args, dict):
+                return Decision("invalid", **tokens)
+            identity = args.get("major_name" if name == "major_lookup" else "school_name")
+            if not isinstance(identity, str):
+                return Decision("invalid", **tokens)
             target = (name, identity)
-            if target not in self._required or target in seen or args != self._required[target] or observation_failed:
-                raise ValueError("Unapproved, repeated or unsafe model tool arguments")
+            if (
+                target not in self._required
+                or target in seen
+                or args != self._required[target]
+                or any(type(args[key]) is not type(value) for key, value in self._required[target].items())
+                or observation_failed
+            ):
+                return Decision("invalid", **tokens)
             return Decision("tool", tool=name, arguments=args, **tokens)
         if set(raw) != {"kind", "evidence_ids"}:
-            raise ValueError("Finish cannot include unverified model-produced prose or facts")
+            return Decision("invalid", **tokens)
         proposed = raw["evidence_ids"]
         if (
             observation_failed
@@ -170,7 +181,7 @@ class DecisionCardModelPlanner:
             or len(set(proposed)) != len(proposed)
             or set(proposed) != set(references)
         ):
-            raise ValueError("Finish requires all five exact source-bound observations")
+            return Decision("invalid", **tokens)
         # Critically, final card contents are re-derived from SQL observations;
         # the model cannot directly set admission scores, ranks or conclusions.
         answer = json.dumps({"synthetic_demo": True, "sources": proposed}, ensure_ascii=False)
