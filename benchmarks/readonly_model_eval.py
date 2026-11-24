@@ -134,22 +134,78 @@ def run_model_cases(
     }
 
 
+def build_eval_plan(
+    reviewed: dict[str, Any] | None, max_cases: int | None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Select the frozen suite before importing or calling any provider."""
+    if max_cases is not None and (type(max_cases) is not int or not 1 <= max_cases <= 30):
+        raise ValueError("max_cases must be 1..30")
+    if reviewed is not None:
+        validate_reviewed_export(reviewed)
+        # The review export may have a different order; keep selection deterministic.
+        population = sorted(reviewed["cases"], key=lambda case: case["id"])
+        cases = population[:max_cases]
+        review = "REVIEW_DECLARED" if len(cases) == len(population) else "REVIEW_DECLARED_SUBSET"
+        dataset_sha256 = reviewed["source_sha256"]
+    else:
+        population = [case for case in load_suite() if case["expect"]["status"] == "completed"]
+        cases = population[: max_cases or 5]
+        review = "UNREVIEWED"
+        dataset_sha256 = hashlib.sha256(
+            json.dumps(cases, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+    if not 1 <= len(cases) <= 30:
+        raise ValueError("selected case population must be 1..30")
+    holdout = sum(case.get("split") == "holdout" for case in cases)
+    return cases, {
+        "dataset_sha256": dataset_sha256,
+        "groundtruth_review": review,
+        "population_cases": len(population),
+        "planned_cases": len(cases),
+        "planned_case_ids": [case["id"] for case in cases],
+        "holdout_cases": holdout,
+        "optimizer_input_eligible_if_complete": review == "REVIEW_DECLARED" and holdout >= 5,
+        "selection_sha256": hashlib.sha256(
+            json.dumps(cases, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest(),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--max-cases", type=int, default=5)
+    parser.add_argument("--max-cases", type=int, help="Default: all reviewed cases, or five exploratory cases")
     parser.add_argument("--max-total-tokens", type=int, default=12000)
     parser.add_argument("--reviewed-dataset", type=Path, help="Explicit groundtruth review declaration JSON")
     parser.add_argument("--skill-policy", choices=("baseline", "staged-v1"), default="baseline")
+    parser.add_argument("--plan-only", action="store_true", help="Write a frozen no-network evaluation plan")
     parser.add_argument("--permit-external-model", action="store_true")
     args = parser.parse_args(argv)
-    if not args.permit_external_model:
+    if not args.plan_only and not args.permit_external_model:
         parser.error("Refusing paid provider calls without --permit-external-model")
-    if not 1 <= args.max_cases <= 30:
-        parser.error("--max-cases must be 1..30")
     if not 1 <= args.max_total_tokens <= 180000:
         parser.error("--max-total-tokens must be 1..180000")
+    if args.out.exists() or args.out.is_symlink():
+        parser.error("Output must be a new evidence file")
+    try:
+        reviewed = (
+            json.loads(args.reviewed_dataset.read_text(encoding="utf-8")) if args.reviewed_dataset else None
+        )
+        cases, plan = build_eval_plan(reviewed, args.max_cases)
+    except (OSError, ValueError) as exc:
+        parser.error(str(exc))
+    plan.update(
+        model_id=args.model,
+        skill_policy=args.skill_policy,
+        max_total_reported_tokens=args.max_total_tokens,
+    )
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    if args.plan_only:
+        with args.out.open("x", encoding="utf-8") as handle:
+            json.dump({**plan, "controller": "NOT_EXECUTED", "provider_called": False}, handle, indent=2)
+            handle.write("\\n")
+        return 0
     if not os.environ.get("OPENAI_API_KEY"):
         parser.error("OPENAI_API_KEY required for explicit paid model probe")
     from openai import OpenAI
@@ -161,23 +217,8 @@ def main(argv: list[str] | None = None) -> int:
         max_retries=0,
     )
     planner = OpenAIJsonPlanner(client, args.model, skill_policy=args.skill_policy)
-    # Unreviewed cases are exploratory only and cannot enter optimizer gates.
-    if args.reviewed_dataset:
-        reviewed = json.loads(args.reviewed_dataset.read_text(encoding="utf-8"))
-        try:
-            validate_reviewed_export(reviewed)
-        except ValueError as exc:
-            parser.error(str(exc))
-        expected_source = reviewed["source_sha256"]
-        cases = reviewed["cases"][: args.max_cases]
-        groundtruth_review = "REVIEW_DECLARED"
-        dataset_sha256 = expected_source
-    else:
-        cases = [case for case in load_suite() if case["expect"]["status"] == "completed"][: args.max_cases]
-        groundtruth_review = "UNREVIEWED"
-        dataset_sha256 = hashlib.sha256(
-            json.dumps(cases, ensure_ascii=False, sort_keys=True).encode("utf-8")
-        ).hexdigest()
+    groundtruth_review = plan["groundtruth_review"]
+    dataset_sha256 = plan["dataset_sha256"]
     with tempfile.TemporaryDirectory(prefix="gaobao-live-agent-eval-") as directory:
         target = Path(directory) / "synthetic.db"
         os.environ["DATABASE_URL"] = f"sqlite:///{target}"
@@ -199,8 +240,9 @@ def main(argv: list[str] | None = None) -> int:
 
         engine.dispose()
     report["skill_policy"] = planner.skill_policy_receipt()
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    report["evaluation_plan"] = plan
+    with args.out.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     print(
         f"model_verified_task_passed={report['verified_task_passed']}/{report['cases']} "
         f"(tool_path={report['goal_path_passed']}/{report['cases']})"
