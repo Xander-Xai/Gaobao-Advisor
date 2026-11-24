@@ -27,6 +27,7 @@ def client_db(tmp_path, monkeypatch):
     factory = sessionmaker(bind=engine)
     monkeypatch.setattr(service, "get_session", factory)
     monkeypatch.setattr("db.database.get_session", factory)
+    monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("USER_MEMORY_ENABLED", "true")
     app = FastAPI()
     app.include_router(memory_routes.router)
@@ -251,6 +252,8 @@ def test_llm_stream_receives_bounded_user_memory_without_token(monkeypatch):
     ) == [("ok", False)]
     message_text = "\n".join(item["content"] for item in captured[0]["messages"])
     assert "广州" in message_text
+    assert all("广州" not in item["content"] for item in captured[0]["messages"] if item["role"] == "system")
+    assert captured[0]["messages"][-1]["role"] == "user"
     assert "不可信输入" in message_text
     assert "mem1_" not in message_text
     assert list(llm.llm_node_stream({"session_id": "session-two"})) == [("ok", False)]
@@ -269,3 +272,12 @@ def test_storage_error_does_not_log_secret_or_sql_details(client_db, monkeypatch
     assert response.status_code == 503
     assert "user-memory-secret-canary" not in caplog.text + response.text
     assert "RuntimeError" in caplog.text
+
+
+@pytest.mark.parametrize("environment", ["production", "prod", "staging", "", "unknown"])
+def test_memory_opt_in_cannot_enable_plaintext_vault_outside_explicit_dev(monkeypatch, environment):
+    monkeypatch.setenv("APP_ENV", environment)
+    monkeypatch.setenv("USER_MEMORY_ENABLED", "true")
+    assert service.enabled() is False
+    with pytest.raises(service.MemoryDisabled):
+        service.create_vault()
