@@ -20,7 +20,7 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
     directory remains inaccessible to ordinary report lookup for recovery.
     """
     from db.database import get_session
-    from db.models import Conversation, ConversationMessage, Feedback, Highlight, QualityScore
+    from db.models import Conversation, ConversationMessage, Feedback, Highlight, QualityScore, SessionCompactionSnapshot
 
     staged = reports.stage_session_deletion(session_id)
     try:
@@ -42,9 +42,17 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
         )
         session_row = db.query(Conversation).filter(Conversation.session_id == session_id).first()
         if session_row is None:
+            removed["compaction_snapshots"] = 0
             removed["messages"] = 0
             removed["conversations"] = 0
         else:
+            # Bulk SQL deletes bypass ORM cascades; explicitly erase the summary
+            # even when SQLite foreign-key enforcement is disabled.
+            removed["compaction_snapshots"] = (
+                db.query(SessionCompactionSnapshot)
+                .filter(SessionCompactionSnapshot.conversation_id == session_row.id)
+                .delete(synchronize_session=False)
+            )
             removed["messages"] = (
                 db.query(ConversationMessage)
                 .filter(ConversationMessage.conversation_id == session_row.id)

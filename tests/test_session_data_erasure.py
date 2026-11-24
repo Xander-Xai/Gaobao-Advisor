@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -9,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from db.database import Base
-from db.models import Conversation, ConversationMessage, Feedback, Highlight, QualityScore
+from db.models import Conversation, ConversationMessage, Feedback, Highlight, QualityScore, SessionCompactionSnapshot
 from server.auth import create_session_token
 from server.report.models import Report
 from server.report.storage import ReportStorage
@@ -34,6 +36,17 @@ def seed(session_factory, storage, session_id="synthetic-session-privacy"):
         db.add(conversation)
         db.flush()
         db.add(ConversationMessage(conversation_id=conversation.id, role="user", content="private message"))
+        db.add(
+            SessionCompactionSnapshot(
+                conversation_id=conversation.id,
+                covered_count=1,
+                covered_sha256="a" * 64,
+                policy_sha256="b" * 64,
+                summary="private compacted history",
+                version=1,
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1),
+            )
+        )
         db.add(Feedback(session_id=session_id, message_index=1, rating="helpful"))
         db.add(Highlight(session_id=session_id, content="private highlight"))
         db.add(
@@ -60,6 +73,7 @@ def test_erasure_covers_sql_and_report_file(isolated):
         "quality_scores": 1,
         "feedback": 1,
         "highlights": 1,
+        "compaction_snapshots": 1,
         "messages": 1,
         "conversations": 1,
         "reports": 1,
@@ -69,6 +83,7 @@ def test_erasure_covers_sql_and_report_file(isolated):
     with session_factory() as db:
         assert db.query(Conversation).count() == 0
         assert db.query(ConversationMessage).count() == 0
+        assert db.query(SessionCompactionSnapshot).count() == 0
         assert db.query(Feedback).count() == 0
         assert db.query(QualityScore).count() == 0
         assert db.query(Highlight).count() == 0
