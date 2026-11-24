@@ -241,3 +241,29 @@ def test_valid_finish_at_exact_budget_is_accepted():
     assert result.status == "completed"
     assert result.model_steps == 2
     assert result.prompt_tokens + result.completion_tokens == 100
+
+
+def test_planner_receipt_rejects_missing_or_drifting_provider_model():
+    class Chat:
+        model = "resolved-version-1"
+
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                model=self.model,
+                choices=[SimpleNamespace(message=SimpleNamespace(content='{"kind":"abstain"}'))],
+            )
+
+    chat = Chat()
+    planner = OpenAIJsonPlanner(SimpleNamespace(chat=SimpleNamespace(completions=chat)), "requested-model")
+    assert planner.model_identity_receipt()["provider_model_identity_consistent"] is False
+    planner.decide("synthetic", [], {})
+    assert planner.model_identity_receipt()["provider_reported_model"] == "resolved-version-1"
+    chat.model = "resolved-version-2"
+    planner.decide("synthetic", [], {})
+    assert planner.model_identity_receipt()["provider_model_identity_consistent"] is False
+    assert planner.model_identity_receipt()["provider_reported_model"] is None
+
+    chat.model = None
+    missing = OpenAIJsonPlanner(SimpleNamespace(chat=SimpleNamespace(completions=chat)), "requested-model")
+    missing.decide("synthetic", [], {})
+    assert missing.model_identity_receipt()["provider_model_identity_consistent"] is False

@@ -13,6 +13,25 @@ def paired_fixture():
         "dataset_sha256": "a" * 64,
         "model_id": "explicit-demo-model",
         "groundtruth_review": "REVIEW_DECLARED",
+        "run_id": "baseline-run",
+        "model_identity": {
+            "requested_model": "explicit-demo-model",
+            "provider_reported_model": "resolved-version-1",
+            "provider_model_identity_consistent": True,
+            "attempted_requests": 25,
+            "returned_responses": 25,
+        },
+        "max_total_reported_tokens": 12000,
+        "evaluation_plan": {
+            "optimizer_input_eligible_if_complete": True,
+            "dataset_sha256": "a" * 64,
+            "model_id": "explicit-demo-model",
+            "planned_cases": 5,
+            "planned_case_ids": [f"holdout-{i}" for i in range(5)],
+            "holdout_cases": 5,
+            "selection_sha256": "b" * 64,
+            "max_total_reported_tokens": 12000,
+        },
         "suite_complete": True,
         "unexecuted_case_ids": [],
         "paired_cases": [
@@ -29,6 +48,7 @@ def paired_fixture():
         ],
     }
     candidate = copy.deepcopy(baseline)
+    candidate["run_id"] = "candidate-run"
     for row in candidate["paired_cases"]:
         row["tool_calls"] = 3
         row["total_tokens"] = 90
@@ -80,6 +100,7 @@ def test_missing_provider_usage_or_split_change_fails_closed():
         compare_holdout(base, candidate)
     base, candidate = paired_fixture()
     candidate["paired_cases"][0]["split"] = "development"
+    candidate["evaluation_plan"]["holdout_cases"] = 4
     with pytest.raises(ValueError, match="split changed"):
         compare_holdout(base, candidate)
 
@@ -166,6 +187,8 @@ def test_candidate_development_safety_violation_also_blocks_review():
         case = copy.deepcopy(run["paired_cases"][0])
         case.update(case_id="development-0", split="development", safety_violation=True)
         run["paired_cases"].append(case)
+        run["evaluation_plan"]["planned_cases"] = 6
+        run["evaluation_plan"]["planned_case_ids"].append("development-0")
     report = compare_holdout(base, candidate)
     assert report["candidate_safety_violations"] == 0
     assert report["candidate_unsafe_case_ids"] == ["development-0"]
@@ -179,3 +202,36 @@ def test_resolving_baseline_safety_violation_allows_review_if_other_gates_pass()
     assert report["absolute_gate_passed"] is True
     assert report["decision"] == "REVIEW_REQUIRED"
     assert report["production_deployment_authorized"] is False
+
+
+@pytest.mark.parametrize("field", ["model_identity", "evaluation_plan", "run_id"])
+def test_legacy_unbound_report_cannot_promote_candidate(field):
+    base, candidate = paired_fixture()
+    candidate.pop(field)
+    with pytest.raises(ValueError):
+        compare_holdout(base, candidate)
+
+
+def test_same_requested_model_but_different_provider_version_is_rejected():
+    base, candidate = paired_fixture()
+    candidate["model_identity"]["provider_reported_model"] = "resolved-version-2"
+    with pytest.raises(ValueError, match="mismatch"):
+        compare_holdout(base, candidate)
+
+
+def test_frozen_plan_selection_drift_is_rejected():
+    base, candidate = paired_fixture()
+    candidate["evaluation_plan"]["selection_sha256"] = "c" * 64
+    with pytest.raises(ValueError, match="mismatch"):
+        compare_holdout(base, candidate)
+
+
+def test_reused_run_and_incomplete_response_receipt_are_rejected():
+    base, candidate = paired_fixture()
+    candidate["run_id"] = base["run_id"]
+    with pytest.raises(ValueError, match="mismatch"):
+        compare_holdout(base, candidate)
+    base, candidate = paired_fixture()
+    candidate["model_identity"]["returned_responses"] -= 1
+    with pytest.raises(ValueError, match="identity"):
+        compare_holdout(base, candidate)

@@ -39,6 +39,8 @@ class OpenAIJsonPlanner:
             raise ValueError("A model name is required")
         self._client = client
         self._model = model
+        self._attempted_requests = 0
+        self._returned_models: list[str | None] = []
         if skill_policy not in {"baseline", "staged-v1"}:
             raise ValueError("Unsupported skill policy")
         self._skill_policy = skill_policy
@@ -62,6 +64,23 @@ class OpenAIJsonPlanner:
             "context_chars": {stage: len(text) for stage, text in self._skill_contexts.items()},
         }
 
+    def model_identity_receipt(self) -> dict[str, Any]:
+        """Provider-declared identity, not independent attestation or billing."""
+        models = sorted({model for model in self._returned_models if model is not None})
+        consistent = (
+            self._attempted_requests > 0
+            and len(self._returned_models) == self._attempted_requests
+            and all(model is not None for model in self._returned_models)
+            and len(models) == 1
+        )
+        return {
+            "requested_model": self._model,
+            "provider_reported_model": models[0] if consistent else None,
+            "provider_model_identity_consistent": consistent,
+            "attempted_requests": self._attempted_requests,
+            "returned_responses": len(self._returned_models),
+        }
+
     def _system_context(self, history: list[dict[str, Any]]) -> str:
         if not self._skill_contexts:
             return _SYSTEM
@@ -71,6 +90,7 @@ class OpenAIJsonPlanner:
         return _SYSTEM + "\n\n" + self._skill_contexts[stage]
 
     def decide(self, task: str, history: list[dict[str, Any]], tool_schemas: dict[str, dict[str, str]]) -> Decision:
+        self._attempted_requests += 1
         response = self._client.chat.completions.create(
             model=self._model,
             temperature=0,
@@ -90,6 +110,10 @@ class OpenAIJsonPlanner:
                     ),
                 },
             ],
+        )
+        returned_model = getattr(response, "model", None)
+        self._returned_models.append(
+            returned_model if isinstance(returned_model, str) and returned_model.strip() else None
         )
         content = response.choices[0].message.content
         payload = json.loads(content)
