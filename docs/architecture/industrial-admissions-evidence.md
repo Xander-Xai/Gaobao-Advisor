@@ -9,6 +9,7 @@ Vue 3 → Nginx/Java Gateway → FastAPI / Java Catalog（SELECT-only）→ MySQ
 | 问题 | 处理 |
 |---|---|
 | legacy 一分一段未按科类过滤 | 明确科类别名组，命中必须唯一，院校行与实际位次科类一致 |
+| 分数误解析（截断数字、位次、分差、冲突字段） | 工业专用 exact_score，只接受明确整数分数或规范分数/位次组合；歧义拒绝，保留旧开发解析器 |
 | 跨年、邻近分数、反推位次兜底 | 指定历史年度、省份和精确分数；无唯一依据拒答 |
 | 专业反查可能使用其他专业录取线 | 仅展示院校级历史记录，保留批次，不宣称专业资格 |
 | 卡片、生成文字与来源独立，画像完整度误作置信度 | 同一 SQL 行构造文字和卡片，内部表/行 ID；confidence=0（未测） |
@@ -22,4 +23,4 @@ GAOBAO_ADMISSIONS_YEAR 必填。±5% 位次邻域仅为历史数据展示，最�
 ## 验收
 `pytest -q tests/test_industrial_admissions_history.py tests/test_industrial_runtime.py tests/test_industrial_deployment_contract.py --no-cov -o addopts=''`
 
-新增测试使用 SQLite 合成夹具验证科类/年份隔离、歧义拒答、同源卡片与缺政策依据拒答。真实 MySQL、真实授权数据、API/SSE 全链路、生产容器、负载及安全验收未执行。仍缺：#199 全局限流、同会话并发/幂等/删除竞态、数据快照与行级来源绑定、当年计划与资格规则、证据报告/语音安全交付、真实模型和 Context A/B、真实部署与运维。保留 NO-GO。私有研究 journal 不等于分布式图 checkpoint 或已测真实业务效果。近期公开增量不追溯为历史任职交付。
+新增测试使用 SQLite 合成夹具验证科类/年份隔离、歧义拒答、同源卡片、缺政策依据拒答，以及明确分数/位次组合、冲突、分差、越界、非整数和布尔值的解析回归。真实 MySQL、真实授权数据、API/SSE 全链路、生产容器、负载及安全验收未执行。仍缺：#199 全局限流、同会话并发/幂等/删除竞态、数据快照与行级来源绑定、当年计划与资格规则、证据报告/语音安全交付、真实模型和 Context A/B、真实部署与运维。保留 NO-GO。私有研究 journal 不等于分布式图 checkpoint 或已测真实业务效果。近期公开增量不追溯为历史任职交付。
