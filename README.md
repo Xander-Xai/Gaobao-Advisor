@@ -10,6 +10,8 @@
 
 > **代码归属：** 基于上游早期 MIT 许可代码继续二次开发与工程加固，保留原始许可声明；具体见 [第三方归属说明](THIRD_PARTY_NOTICES.md)。
 
+**Agent V1 Harness 工程验证**：[Skills / 合成规则记忆与 Eval 验收](docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md)。这些独立实验模块不属于默认聊天路径，除非经过明确集成和真实模型/业务评测，不能计为线上能力。
+
 > **数据边界先行：** 仓库默认只附带程序生成的 **SYNTHETIC_DEMO** 合成演示数据，不对应任何真实院校、专业或录取结果，**不可用于真实志愿决策**。真实数据导入能力保留在源码中，使用者需自行提供合法授权数据。
 
 [![CI](https://github.com/Xander-Xai/gaobao-advisor/actions/workflows/ci.yml/badge.svg)](https://github.com/Xander-Xai/gaobao-advisor/actions/workflows/ci.yml)
@@ -37,7 +39,7 @@
 操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
 跨任务用户偏好记忆仍在独立 Draft PR #135，不应与会话压缩混同。
 
-进一步的**可复用会话摘要快照**已在独立堆叠 Draft 中实现：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。仍需单独授权开关 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，且当前明确禁止生产环境启用；具体限制与 Alembic 迁移冲突见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
+进一步的**可复用会话摘要快照**已合入 master（PR #149），默认关闭：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。仍需单独授权开关 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，且当前明确禁止生产环境启用；具体限制与 Alembic 迁移冲突见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
 
 ## Agent Harness / Eval 实验
 
