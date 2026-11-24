@@ -1,5 +1,7 @@
 # Gaobao Advisor｜可核验的高考志愿辅助决策系统
 
+> **Memory 专项定位（2026-11-24）**：统一对话上下文、可选语义压缩、版本化 Session Snapshot 和独立的用户偏好机制；后两者受开关、隐私与 CI 门禁约束，不能用历史摘要代替招生 SQL 证据。见 [Memory 专项工程定位](docs/architecture/memory-engineering-positioning-20261124.md)。
+
 **AI 应用全栈交付 + 可信数据查询 + Agent 运行时可靠性实验**
 
 围绕“考生如何在信息不完整时获得可追溯、可解释的志愿咨询结果”，实现 **画像追问 → 结构化 SQL 查询 → 合成知识检索 → 来源/风险检查 → SSE 交互** 的端到端业务链路。工程上包含 Vue 3、FastAPI、受约束的 LangGraph 工作流，以及可选的 Java Gateway、MySQL、Redis、Docker Compose 和 CI 集成验证。
@@ -7,6 +9,8 @@
 **Agent Harness 工程实验**独立于生产问答路由：用真正的只读业务工具检验模型/Planner 的多步工具执行、预算控制、Fail-Closed 和离线 Eval，不将使用框架或通过单测等同于业务成功。
 
 > **代码归属：** 基于上游早期 MIT 许可代码继续二次开发与工程加固，保留原始许可声明；具体见 [第三方归属说明](THIRD_PARTY_NOTICES.md)。
+
+**Agent V1 Harness 工程验证**：[Skills / 合成规则记忆与 Eval 验收](docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md)。这些独立实验模块不属于默认聊天路径，除非经过明确集成和真实模型/业务评测，不能计为线上能力。
 
 > **数据边界先行：** 仓库默认只附带程序生成的 **SYNTHETIC_DEMO** 合成演示数据，不对应任何真实院校、专业或录取结果，**不可用于真实志愿决策**。真实数据导入能力保留在源码中，使用者需自行提供合法授权数据。
 
@@ -31,6 +35,22 @@
 - 公共问答先校验并持久化最终答复，再通过 SSE 推送，见 [架构时序](docs/architecture/README.md)和 [PR #139](https://github.com/Xander-Xai/Gaobao-Advisor/pull/139)。
 - SQL/RAG 串并行对照是合成评测，见 [实验记录](docs/performance/sql-rag-parallelization-gate-20261124.md)和 [PR #141](https://github.com/Xander-Xai/Gaobao-Advisor/pull/141)。决策卡独立判分会拒绝重复或替换院校，见 [PR #142](https://github.com/Xander-Xai/Gaobao-Advisor/pull/142)。
 - Java Gateway/Catalog 随 [PR #89](https://github.com/Xander-Xai/Gaobao-Advisor/pull/89) 合入，属于可选部署。该 PR 正文的 `Draft / Owner HOLD` 是合并前记录。
+
+## 会话上下文管理（独立于跨任务长期记忆）
+
+在线对话的同步、传统流式和公开 SSE 最终候选生成，使用统一的
+`server/agent/chat_context.py` 来限制历史上下文并保留本轮 SQL/RAG 来源。
+默认只保留最近 20 轮并显式标记丢失的旧历史；需要语义压缩时，可在**授权的开发环境**
+开启 `GAOBAO_CHAT_COMPACTION_ENABLED=true`，再由现有 `MemoryManager`
+对旧历史按需摘要、保留最近 10 轮。摘要是**未经核验的用户对话线索**，不构成招生证据或工具审批。
+
+该开关默认关闭，因为启用后每次满足条件的请求可能增加模型调用费用。
+摘要目前不持久化，不具备 Pi/OpenCode 的完整会话分叉与增量恢复机制，
+也没有真实模型 A/B、Token 降本证明或生产个人信息许可。
+操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
+跨任务用户偏好记忆仍在独立 Draft PR #135，不应与会话压缩混同。
+
+进一步的**可复用会话摘要快照**已合入 master（PR #149），默认关闭：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。仍需单独授权开关 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，且当前明确禁止生产环境启用；具体限制与 Alembic 迁移冲突见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
 
 ## Agent Harness / Eval 实验
 
@@ -136,17 +156,21 @@ curl -sS -X POST http://localhost:8000/api/v1/admin/agent-experiments/research \
 | 引用正确但事实错误仍拒绝 | `benchmarks/harness_answer_eval.py` 与 `tests/test_readonly_model_verified_task.py` | 预先冻结的合成事实和工具来源双重验证 |
 | Ground Truth 候选冻结 | `benchmarks/groundtruth_pipeline.py` | 20 条合成候选、开发/holdout、SHA 和审核门禁；**默认待人工审核** |
 | 优化前后评价门禁 | `benchmarks/harness_optimizer.py` | 同模型/同数据集、质量与安全不退化、真实 Token 用量才可提交人工审查；尚无实测收益 |
-| 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；不是生产级多租户 OS 沙箱 |
+| 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；**独立最小 Python 镜像 + 可信测试脚本只读挂载（本次 PR 待验收）**；不是生产级多租户 OS 沙箱 |
 | Coding Agent 真实执行链路 | `benchmarks/sandbox_coding_agent.py` | **两个合成算术代码修复 2/2，通过真实容器测试；控制器为 SCRIPTED_NOT_LLM** |
 | 可选模型自主修复 | `benchmarks/sandbox_model_planner.py` | API 适配器已实现、显式授权与 Token 预算；**尚无真实模型跑分** |
 
 [最新 CI 证据（1288 passed / 34 skipped）](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/44579602863) · [CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/44579602669)
 
+| 沙箱安全加固与反例验收 | [docs/security/gaobao-agent-sandbox-contract-20261124.md](docs/security/gaobao-agent-sandbox-contract-20261124.md) | Docker 客户端输出 64 KiB 上限、IPC/FD 限制、硬链接拒绝、真实容器网络/根文件系统/身份负例探测；仅合成实验 |
+
+[Pi / OpenCode 沙箱设计与安全边界](docs/security/pi-opencode-sandbox-architecture-20261124.md) — 仅强化高报离线 Coding Agent 合成实验，**不开放公开聊天任意代码执行**；本 PR 最新 CI 未通过前不宣称生产隔离完成。
+
 沙箱演示（Docker 环境，全部为虚构代码，脚本控制器不产生外部模型费用）：
 
 ```bash
-docker build -t gb-advisor:ci .
-IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+docker build -f Dockerfile.sandbox -t gb-advisor:sandbox-ci .
+IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
 python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/workspace-eval.json
 python -m benchmarks.sandbox_coding_agent --image "$IMAGE_ID" --out /tmp/coding-eval.json
 ```

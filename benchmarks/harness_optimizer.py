@@ -49,6 +49,8 @@ def _indexed(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
         raise ValueError("Paired optimization requires explicitly declared real-model runs")
     if result.get("groundtruth_review") != "REVIEW_DECLARED":
         raise ValueError("Optimization requires an explicit reviewed dataset declaration")
+    if result.get("suite_complete") is False or result.get("unexecuted_case_ids"):
+        raise ValueError("Incomplete model evaluation suite is not eligible for optimization")
     cases = result.get("paired_cases")
     if not isinstance(cases, list) or not cases:
         raise ValueError("Missing paired result cases")

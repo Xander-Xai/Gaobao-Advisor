@@ -51,7 +51,9 @@ def test_model_planner_consumes_observations_and_reports_provider_tokens(monkeyp
     assert stub.requests[-1]["response_format"] == {"type": "json_object"}
     assert stub.requests[-1]["temperature"] == 0
 
-    def fake_sandbox(_image, work):
+    def fake_sandbox(_image, work, *, oracle_source):
+        assert "import importlib.util" in oracle_source
+        assert "SYNTHETIC_WORKSPACE_PASS" in oracle_source
         good = "return a + b" in (work / "solution.py").read_text(encoding="utf-8")
         if good:
             (work / "artifact.txt").write_text("PASS", encoding="utf-8")
