@@ -175,7 +175,9 @@ def _refresh_synthetic_taskrun_metrics() -> None:
 async def metrics_middleware(request: Request, call_next):
     """Middleware to automatically collect HTTP metrics."""
     start_time = time.monotonic()
-    method = request.method if request.method in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"} else "OTHER"
+    method = (
+        request.method if request.method in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"} else "OTHER"
+    )
 
     try:
         response = await call_next(request)
