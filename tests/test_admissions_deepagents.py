@@ -130,6 +130,34 @@ def test_missing_plan_is_explicit_partial(sessions):
     assert receipt["coverage"]["enrollment-plans"]["missing"] == [[2, 2024]]
 
 
+def test_empty_history_blocks_before_model_or_sandbox(sessions):
+    with sessions() as session:
+        session.query(AdmissionScore).filter(AdmissionScore.school_id.in_(SCOPE.school_ids)).delete(
+            synchronize_session=False
+        )
+        session.commit()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Empty history must not construct a paid model")
+
+    result = research.run_admissions_research(
+        SCOPE,
+        sessions,
+        "openai:test-model",
+        approval_ref="local-approval",
+        authorized=True,
+        model_authorized=True,
+        agent_factory=forbidden,
+        analysis_image_id="sha256:" + "a" * 64,
+    )
+    assert result["status"] == "BLOCKED"
+    assert result["engine"] == "deterministic_preflight"
+    assert result["error"] == research.NO_HISTORY_REASON
+    assert result["observed_model_messages"] == 0
+    assert result["provider_usage"] is None
+    assert "evidence" not in result
+
+
 def test_requires_model_consent(sessions):
     with pytest.raises(ValueError, match="authorization"):
         research.run_admissions_research(
