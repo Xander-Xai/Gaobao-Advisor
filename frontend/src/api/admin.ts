@@ -1,6 +1,8 @@
 import type {
   AdminTokenResponse,
   AdminUser,
+  AuthorizedResearchCreate,
+  AuthorizedResearchRun,
   AuditLog,
   FilterOptions,
   JobQuery,
@@ -52,6 +54,7 @@ interface RequestOptions {
   token?: string | null
   idempotencyKey?: string
   timeoutMs?: number
+  responseText?: boolean
 }
 
 function toQuery(params: object): string {
@@ -114,6 +117,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       requestId: typeof payload?.request_id === 'string' ? payload.request_id : undefined,
     })
   }
+  if (options.responseText) return text as T
   return (payload ?? {}) as T
 }
 
@@ -168,6 +172,27 @@ export const adminApi = {
       method: 'POST',
       body: payload,
       token,
+    })
+  },
+  createAuthorizedResearch(payload: AuthorizedResearchCreate, token: string): Promise<AuthorizedResearchRun> {
+    return request<AuthorizedResearchRun>('/admin/admissions-research/runs', { method: 'POST', body: payload, token })
+  },
+  getAuthorizedResearch(runId: string, token: string): Promise<AuthorizedResearchRun> {
+    return request<AuthorizedResearchRun>(`/admin/admissions-research/runs/${encodeURIComponent(runId)}`, { token })
+  },
+  approveAuthorizedResearch(runId: string, digest: string, token: string): Promise<AuthorizedResearchRun> {
+    return request<AuthorizedResearchRun>(`/admin/admissions-research/runs/${encodeURIComponent(runId)}/approve`, {
+      method: 'POST', body: { spec_sha256: digest }, token,
+    })
+  },
+  cancelAuthorizedResearch(runId: string, token: string): Promise<AuthorizedResearchRun> {
+    return request<AuthorizedResearchRun>(`/admin/admissions-research/runs/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST', token,
+    })
+  },
+  authorizedResearchReport(runId: string, token: string): Promise<string> {
+    return request<string>(`/admin/admissions-research/runs/${encodeURIComponent(runId)}/report`, {
+      token, responseText: true,
     })
   },
   createSyntheticTaskRun(payload: SyntheticTaskRunCreate, token: string): Promise<SyntheticTaskRun> {

@@ -212,3 +212,28 @@ describe('chat cross-session isolation on abnormal stream end', () => {
     expect(store.messages.every(m => !m.incomplete && !m.error)).toBe(true)
   })
 })
+
+it('sends explicit memory capability across new chats and stops after disconnect', async () => {
+  const store = useChatStore()
+  const token = 'mem1_' + 'a'.repeat(64)
+  const responses = []
+  global.fetch = vi.fn(async (url, options) => {
+    responses.push({ url, options })
+    const stream = createGatedStream()
+    stream.push(frame({ type: 'done', session_id: 'server-' + responses.length, session_token: 'session-token' }))
+    stream.close()
+    return { ok: true, status: 200, body: { getReader: () => stream.reader } }
+  })
+  store.setMemoryCredential(token)
+  store.createSession()
+  await store.sendMessage('第一次咨询')
+  store.createSession()
+  await store.sendMessage('第二次咨询')
+  store.setMemoryCredential(null)
+  await store.sendMessage('不用记忆')
+  expect(responses[0].options.headers['X-User-Memory-Token']).toBe(token)
+  expect(responses[1].options.headers['X-User-Memory-Token']).toBe(token)
+  expect(responses[2].options.headers['X-User-Memory-Token']).toBeUndefined()
+  expect(responses[0].options.body).not.toContain(token)
+  expect(JSON.stringify(store.$state)).not.toContain(token)
+})

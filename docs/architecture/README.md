@@ -14,19 +14,19 @@ record why the larger decisions were made.
 | Online chat | 保留 LangGraph 确定性图 | 单次事实查询不经自主 Loop；SQL/来源和选科、年份、省份、位次硬约束优先；模型解释不替代事实 |
 | 图节点 | 按责任裁剪 | 节点数不是自主调用次数；相邻纯规则节点只有在独立路由、观察或恢复有价值时保留；改动须保持 API/SSE、拒答和状态契约 |
 | Native readonly Harness | 保留为最小参考和可控评测基线 | 不成为第二套默认聊天引擎；不重复扩展通用生产运行时 |
-| Deep Agents | 唯一复杂研究候选执行引擎 | 已有 operator research runner；独立的确定性 SQL subgraph 不是自主模型专家；批准范围、工具预算、SQL 回执和结果验证优先；未合并持久研究 API 不算现有业务 |
+| Deep Agents | 唯一复杂研究候选执行引擎 | 已有 operator research runner；独立的确定性 SQL subgraph 不是自主模型专家；批准范围、工具预算、SQL 回执和结果验证优先；受控研究 API 与 worker 共用独立私有 journal；本分支实现不等于主线或生产验收 |
 | Sandbox | 仅招生分析有业务主责 | 算术代码修复是隔离回归 fixture，不是用户功能；只准批准数据快照、受限容器、独立 Oracle 校验；无 Docker socket/任意 host shell 暴露给模型 |
 | Memory / Context | 保留分层 | SQL 事实/当前任务不截断；摘要是非可信上下文；长期偏好独立且可撤回，不能替代录取依据 |
 | SQLite / MySQL / Redis / Java | 单体默认，外部组件可选 | Java 仅目录读服务 overlay；不建立另一套 chat/Agent 入口；扩容需求或隔离收益不足不扩展 |
 | Eval | 独立业务真值优先 | 合成 Oracle 与真实模型、真实招生效果分开；A/B 只允许一个明确变量，不自动发布模型修改 |
 
-**目标边界（非已上线）**：简单咨询 → 确定性业务图；复杂研究 → 经批准的 Deep Agents 执行 → 只读 SQL/分析沙箱 → 独立证据核验 → 报告。现有 operator runner 的 InMemorySaver 不等于持久任务恢复；待合并研究 TaskRun 必须复用单一权威生命周期、身份/审批和执行回执，不能又建平行生产队列。原生 Harness、合成实验、旧 benchmark 保留用于对照或回归，不为每条路径重复增设功能。
+**目标边界（非已上线）**：简单咨询 → 确定性业务图；复杂研究 → 经批准的 Deep Agents 执行 → 只读 SQL/分析沙箱 → 独立证据核验 → 报告。Deep Agents 的 InMemorySaver 不等于持久图恢复；受控研究 journal 持久化任务生命周期、身份/审批和执行回执，过期任务不自动重放，不建立平行生产队列。原生 Harness、合成实验、旧 benchmark 保留用于对照或回归，不为每条路径重复增设功能。
 
 **架构裁剪门禁**：先确认默认路由、operator 入口、实验入口的调用关系和兼容合同；再做等价状态/失败回归和简单基线对比。没有证据不删除安全检查，不自动开启模型、沙箱、真实数据或付费调用。未完成架构裁剪前暂停新增技术栈和能力缺口扩展。
 
 ### Entry-point and state ownership decision (#190)
 
-The following describes the default branch before integrating the open research work, not a production claim.
+The following describes the integrated code in PR #192 (not a default-branch or production claim until merged and verified).
 
 | Entry point | Actual responsibility | Architecture decision |
 |---|---|---|
@@ -34,11 +34,14 @@ The following describes the default branch before integrating the open research 
 | `server/graph/graph.py::get_advisor_graph` | Full 17-node graph with finalizers | Retain compatibility/reference; never count 17 nodes as 17 online model calls. |
 | `server/agent/readonly_harness.py` / `native_taskrun_harness.py` | Bounded loop reference and synthetic evaluation | Not another public chat engine or production research runtime. |
 | `server/routes/agent_taskruns.py` / `taskrun_store.py` | Synthetic operator journal | Keep physically isolated from private admissions and real research data; its receipts cannot authorize private work. |
-| `server/agent/admissions_deepagents.py` | Authorized local operator research with InMemorySaver | Sole complex-research engine candidate; process restart is not graph-resume support. |
+| `server/agent/admissions_deepagents.py` | Shared Deep Agents research engine with InMemorySaver | Sole complex-research engine; standalone CLI is disabled when managed research is enabled. Process restart is not graph-resume support. |
 | `server/agent/admissions_analysis_sandbox.py` / `sandbox_runtime.py` | Restricted admissions analysis / synthetic security fixtures | Use deterministic SQL/functions first; no arbitrary shell from public chat. |
-| Open integrated research PR #192 | Proposed private research journal/API/dispatcher plus other changes | Not current mainline. Review lifecycle authority and privacy isolation before enabling or merging. |
+| `server/routes/admissions_research_runs.py` → `admissions_research_taskrun.py` | Operator-only API, private SQLite journal, exact-spec approval and CAS state transitions | Single managed research lifecycle; no HTTP model execution. |
+| `server/agent/admissions_research_dispatch.py` | Bounded operator dispatch of approved runs | Calls the same execution slot and journal claim; not a separate queue. |
 
 A physically separate synthetic journal is a trust boundary, not a second production engine. The private research path must have exactly one authoritative owner/approval/lease/receipt/state transition contract. Do not expose a second queue, allow synthetic approvals to authorize real work, or interpret a persisted job row as a persisted graph checkpoint. If recovery of a paid or externally uncertain action is not proven, park the run for reconciliation rather than replaying it.
+
+Managed execution flow: operator submission → immutable spec digest → independent admin approval → exclusive local worker slot → journal claim → shared Deep Agents engine → SQL/sandbox evidence verification → guarded terminal result. Cancellation or lease expiry prohibits later publication; in-flight provider work may still finish. Expired paid runs are not automatically replayed. Synthetic TaskRun storage is separate by transactional schema checks. This is single-host local task durability, not distributed graph checkpoint resume, production multi-tenancy, or measured provider success. See [private research taskrun](../admissions-research-taskrun.md) and [dispatch](../admissions-research-dispatch.md).
 
 Retain existing graph nodes until a behavior-preserving comparison justifies removal. Security scan, profile branching, data validation, source attribution, candidate gate and final persistence are distinct responsibilities; simple sequential edges alone are not evidence that a node is redundant. Any consolidation must preserve the SSE event/refusal contract, hard admissions constraints and single ownership of final persistence.
 

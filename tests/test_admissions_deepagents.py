@@ -217,13 +217,23 @@ def test_actual_sdk_task_and_todos_with_scripted_model(sessions, monkeypatch):
     assert receipt["provider_billing_verified"] is False
 
 
-def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatch):
+@pytest.mark.parametrize("first_error", [None, "oracle_mismatch", "sandbox_cleanup_unverified"])
+def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatch, first_error):
     from server.agent import admissions_analysis_sandbox
+
+    calls = []
 
     def sandbox(rows, scope, group_by, program, **kwargs):
         assert {row["school_id"] for row in rows} == {1, 2}
         assert group_by == ("school_id", "year")
         assert kwargs["authorized"] is True
+        calls.append(program)
+        if first_error and len(calls) == 1:
+            return {
+                "status": "BLOCKED",
+                "error": first_error,
+                "cleanup_verified": first_error != "sandbox_cleanup_unverified",
+            }
         result = admissions_analysis_sandbox._expected(rows, group_by)
         encode = admissions_analysis_sandbox._json
         digest = admissions_analysis_sandbox._digest
@@ -244,7 +254,18 @@ def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatc
                 for spec in subagents:
                     result = spec["runnable"].invoke({"messages": [{"role": "user", "content": "research"}]})
                     refs[spec["name"]] = json.loads(result["messages"][-1].content)["receipt"]
-                tools[1]("print('bounded analysis')")
+                first = json.loads(tools[1]("print('bounded analysis')"))
+                if first["retry_allowed"]:
+                    assert first["error"] == "oracle_mismatch"
+                    second = json.loads(tools[1]("print('corrected analysis')"))
+                    assert second["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS"
+                    assert second["retry_allowed"] is False
+                elif first_error:
+                    with pytest.raises(ValueError, match="not authorized"):
+                        tools[1]("print('unsafe retry')")
+                    return {"messages": []}
+                with pytest.raises(ValueError, match="not authorized"):
+                    tools[1]("print('unnecessary retry')")
                 tools[0](refs["admission-history"], refs["enrollment-plans"])
                 return {"messages": []}
 
@@ -260,6 +281,13 @@ def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatc
         agent_factory=factory,
         analysis_image_id="sha256:" + "a" * 64,
     )
+    if first_error == "sandbox_cleanup_unverified":
+        assert receipt["status"] == "BLOCKED"
+        assert len(calls) == 1
+        assert "evidence" not in receipt
+        return
+    assert len(calls) == (2 if first_error else 1)
+    assert len(receipt["sandbox_attempts"]) == len(calls)
     assert receipt["status"] == "VERIFIED_RESEARCH"
     assert receipt["sandbox_analysis"]["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS"
     assert "独立核验的沙箱描述性统计" in research.render_verified_research(receipt)
@@ -290,3 +318,40 @@ def test_private_report_preserves_partial_and_blocks_unsubmitted(sessions):
     assert '"missing":[[2,2024]]' in rendered
     with pytest.raises(ValueError, match="verified"):
         research.render_verified_research(run(sessions, controller(submit=False)))
+
+
+def test_managed_research_rejects_direct_cli_before_io(monkeypatch, tmp_path):
+    from server.agent.admissions_deepagents import main
+
+    monkeypatch.setenv("ADMISSIONS_RESEARCH_ENABLED", "true")
+    output = tmp_path / "unapproved.json"
+    with pytest.raises(SystemExit) as exc:
+        main(
+            [
+                "--authorized-data",
+                "--authorize-model-call",
+                "--approval-ref",
+                "offline",
+                "--school-ids",
+                "101",
+                "102",
+                "--major-id",
+                "42",
+                "--province",
+                "广东",
+                "--subject-type",
+                "物理",
+                "--batch",
+                "本科",
+                "--year-from",
+                "2022",
+                "--year-to",
+                "2024",
+                "--model",
+                "openai:approved-model",
+                "--out",
+                str(output),
+            ]
+        )
+    assert exc.value.code == 2
+    assert not output.exists()

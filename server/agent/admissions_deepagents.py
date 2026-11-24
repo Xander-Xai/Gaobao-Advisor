@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any
 
 MAX_ROWS = 100
+MAX_ANALYSIS_ATTEMPTS = 2
+RECOVERABLE_ANALYSIS_ERRORS = frozenset({"oracle_mismatch", "invalid_analysis_output", "execution_failed"})
 MODEL_RE = re.compile(r"openai:[A-Za-z0-9_.-]{2,100}")
 _SKILL = """---
 name: admissions-research
@@ -36,7 +38,7 @@ _SYSTEM = (
     "Read the admissions-research skill and use write_todos. Delegate both named "
     "subagents with task; their fixed SQL scope cannot be changed. "
     "Submit both opaque receipt IDs using submit_research. Final prose is not evidence. "
-    "Do not request arbitrary SQL, code, external searches, or personal data."
+    "Do not request arbitrary SQL, external searches, personal data, or code outside the explicitly offered sandbox."
 )
 
 
@@ -147,7 +149,7 @@ def build_research_subgraph(name: str, collect: Callable[[str], str]):
     return graph.compile()
 
 
-def build_deep_agent(model_id: str, tools: list, subagents: list):
+def build_deep_agent(model_id: str, tools: list, subagents: list, *, lease_guard=None):
     """Optional SDK construction. Restrict default tools but keep task/todos."""
     from deepagents import (
         GeneralPurposeSubagentProfile,
@@ -157,7 +159,7 @@ def build_deep_agent(model_id: str, tools: list, subagents: list):
     )
     from deepagents.backends import StateBackend
     from deepagents.middleware import FilesystemMiddleware
-    from langchain.agents.middleware import ModelCallLimitMiddleware, TodoListMiddleware
+    from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddleware, TodoListMiddleware
     from langchain_openai import ChatOpenAI
     from langgraph.checkpoint.memory import InMemorySaver
 
@@ -178,6 +180,13 @@ def build_deep_agent(model_id: str, tools: list, subagents: list):
         timeout=20,
         max_retries=0,
     )
+
+    class LeaseMiddleware(AgentMiddleware):
+        def before_model(self, state, runtime):
+            if lease_guard is not None:
+                lease_guard()
+            return None
+
     return create_deep_agent(
         model=model,
         tools=tools,
@@ -186,6 +195,7 @@ def build_deep_agent(model_id: str, tools: list, subagents: list):
         middleware=[
             FilesystemMiddleware(backend=backend, tools=["read_file"]),
             TodoListMiddleware(),
+            LeaseMiddleware(),
             ModelCallLimitMiddleware(run_limit=8, exit_behavior="end"),
         ],
         skills=["/skills/"],
@@ -204,6 +214,7 @@ def run_admissions_research(
     model_authorized: bool = False,
     agent_factory: Callable = build_deep_agent,
     analysis_image_id: str | None = None,
+    lease_guard: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Private operator entrypoint. Only validated SQL evidence may be returned."""
     if authorized is not True or model_authorized is not True:
@@ -217,18 +228,26 @@ def run_admissions_research(
     attempted: set[str] = set()
     submitted = False
     analysis_receipt: dict[str, Any] | None = None
-    analysis_attempted = False
+    analysis_attempts = 0
+    analysis_running = False
+    analysis_attempt_log: list[dict[str, Any]] = []
     if analysis_image_id is not None and not re.fullmatch(r"sha256:[0-9a-f]{64}", analysis_image_id):
         raise ValueError("Invalid immutable sandbox image")
     kinds = ("admission-history", "enrollment-plans")
 
+    def guard() -> None:
+        if lease_guard is not None:
+            lease_guard()
+
     def collect(kind: str) -> str:
+        guard()
         with lock:
             if kind not in kinds or kind in attempted or submitted:
                 raise ValueError("Unapproved or repeated research delegation")
             attempted.add(kind)
         with session_factory() as session:
             rows = read_research_rows(session, scope, kind)
+        guard()
         coverage = _coverage(rows, scope, kind)
         ref = _digest({"task": task_id, "scope": asdict(scope), "kind": kind, "rows": rows})
         with lock:
@@ -252,31 +271,70 @@ def run_admissions_research(
         Read /input/rows.json; group by school_id and year, emit the exact
         descriptive statistics schema specified in the system instructions.
         """
-        nonlocal analysis_attempted, analysis_receipt
+        nonlocal analysis_attempts, analysis_running, analysis_receipt
+        guard()
         from server.agent.admissions_analysis_sandbox import Scope, execute_admissions_analysis
 
         with lock:
-            if analysis_image_id is None or analysis_attempted or submitted or kinds[0] not in snapshots:
-                raise ValueError("Sandbox requires approved history and one execution budget")
-            analysis_attempted = True
+            if (
+                analysis_image_id is None
+                or analysis_running
+                or submitted
+                or kinds[0] not in snapshots
+                or analysis_attempts >= MAX_ANALYSIS_ATTEMPTS
+                or (
+                    analysis_attempts > 0
+                    and (
+                        analysis_receipt is None
+                        or analysis_receipt.get("status") != "BLOCKED"
+                        or analysis_receipt.get("cleanup_verified") is not True
+                        or analysis_receipt.get("error") not in RECOVERABLE_ANALYSIS_ERRORS
+                    )
+                )
+            ):
+                raise ValueError("Sandbox execution or repair not authorized")
+            analysis_attempts += 1
+            analysis_running = True
             rows = [dict(row) for row in snapshots[kinds[0]]]
-        sandbox_scope = Scope(scope.province, scope.subject_type, scope.batch, scope.year_from, scope.year_to, "major")
-        result = execute_admissions_analysis(
-            rows,
-            sandbox_scope,
-            ("school_id", "year"),
-            code.encode(),
-            image_id=analysis_image_id,
-            approval_ref=approval_ref,
-            authorized=True,
-        )
-        with lock:
-            analysis_receipt = result
-        return _canonical({"status": result["status"], "result_sha256": result.get("result_sha256")})
+        try:
+            sandbox_scope = Scope(
+                scope.province, scope.subject_type, scope.batch, scope.year_from, scope.year_to, "major"
+            )
+            result = execute_admissions_analysis(
+                rows,
+                sandbox_scope,
+                ("school_id", "year"),
+                code.encode(),
+                image_id=analysis_image_id,
+                approval_ref=approval_ref,
+                authorized=True,
+            )
+            guard()
+            with lock:
+                analysis_receipt = result
+                retry_allowed = (
+                    result.get("status") == "BLOCKED"
+                    and result.get("cleanup_verified") is True
+                    and result.get("error") in RECOVERABLE_ANALYSIS_ERRORS
+                    and analysis_attempts < MAX_ANALYSIS_ATTEMPTS
+                )
+                observation = {
+                    "status": result["status"],
+                    "result_sha256": result.get("result_sha256"),
+                    "error": result.get("error"),
+                    "attempt": analysis_attempts,
+                    "retry_allowed": retry_allowed,
+                }
+                analysis_attempt_log.append(observation)
+            return _canonical(observation)
+        finally:
+            with lock:
+                analysis_running = False
 
     def submit_research(history_receipt: str, plans_receipt: str) -> str:
         """Submit exactly the two returned opaque receipt IDs after delegation."""
         nonlocal submitted
+        guard()
         with lock:
             if (
                 submitted
@@ -311,7 +369,12 @@ def run_admissions_research(
     }
     try:
         tools = [submit_research] if analysis_image_id is None else [submit_research, analyze_history]
-        agent = agent_factory(model_id, tools, subagents)
+        guard()
+        agent = (
+            build_deep_agent(model_id, tools, subagents, lease_guard=lease_guard)
+            if agent_factory is build_deep_agent
+            else agent_factory(model_id, tools, subagents)
+        )
         if agent_factory is build_deep_agent:
             from deepagents.backends.utils import create_file_data
 
@@ -333,7 +396,8 @@ def run_admissions_research(
                                 "highest_min_score, best_min_rank, worst_min_rank. "
                                 "Score metrics use non-null min_score, rank metrics non-null min_rank. "
                                 "Use statistics.median; unavailable metrics are null. "
-                                "Only submit research after sandbox verification."
+                                "If retry_allowed is true, revise the code once using the error code; "
+                                "never change the approved data scope. Only submit after sandbox verification."
                                 if analysis_image_id is not None
                                 else ""
                             )
@@ -344,6 +408,7 @@ def run_admissions_research(
             },
             config={"configurable": {"thread_id": task_id}, "recursion_limit": 64},
         )
+        guard()
         messages = outcome.get("messages", []) if isinstance(outcome, dict) else []
         usage = [getattr(msg, "usage_metadata", None) for msg in messages if getattr(msg, "type", "") == "ai"]
         report["observed_model_messages"] = len(usage)
@@ -362,6 +427,7 @@ def run_admissions_research(
             return report
         with session_factory() as session:
             fresh = {kind: read_research_rows(session, scope, kind) for kind in kinds}
+        guard()
         if any(fresh[kind] != snapshots[kind] for kind in kinds):
             report["error"] = "source_changed"
             return report
@@ -382,6 +448,7 @@ def run_admissions_research(
         report["error_type"] = type(exc).__name__
     finally:
         report["delegated_dimensions"] = sorted(snapshots)
+        report["sandbox_attempts"] = analysis_attempt_log
     return report
 
 
@@ -457,6 +524,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--report-out", type=Path, help="Optional private verified research text report")
     args = parser.parse_args(argv)
+    if os.getenv("ADMISSIONS_RESEARCH_ENABLED", "").lower() == "true":
+        parser.error("Managed research requires an approved journal run; use admissions_research_taskrun or dispatch")
     if args.report_out is not None and (args.report_out.exists() or args.report_out.resolve() == args.out.resolve()):
         parser.error("Report output must be a new, separate path")
     if not os.getenv("DATABASE_URL") or not os.getenv("OPENAI_API_KEY"):

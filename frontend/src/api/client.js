@@ -78,10 +78,14 @@ export const chatAPI = {
    * incrementally instead of waiting for `done`. Caller must read the final
    * `done.session_token` to auth profile/voice.
    */
-  async send(sessionId, message, slots = {}, scene = 'gaokao', token = null, { onEvent } = {}) {
+  async send(sessionId, message, slots = {}, scene = 'gaokao', token = null, { onEvent, memoryToken } = {}) {
     const response = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(memoryToken ? { 'X-User-Memory-Token': memoryToken } : {}),
+      },
       body: JSON.stringify({ session_id: sessionId, message, slots, scene }),
     })
     if (!response.ok || !response.body) {
@@ -355,4 +359,19 @@ export const healthAPI = {
   async check() {
     return _request('/health')
   },
+}
+
+
+// User-approved cross-task preferences. Never use the ordinary session token here.
+export const memoryAPI = {
+  create: () => _request('/memory/vault', { method: 'POST' }),
+  list: token => _request('/memory/entries', { headers: { 'X-User-Memory-Token': token } }),
+  put: (token, key, value, version) => _request('/memory/entries/' + encodeURIComponent(key), {
+    method: 'PUT', headers: { 'X-User-Memory-Token': token },
+    body: { value, expected_version: version },
+  }),
+  remove: (token, key, version) => _request('/memory/entries/' + encodeURIComponent(key) + '?expected_version=' + encodeURIComponent(version), {
+    method: 'DELETE', headers: { 'X-User-Memory-Token': token },
+  }),
+  erase: token => _request('/memory/vault', { method: 'DELETE', headers: { 'X-User-Memory-Token': token } }),
 }
