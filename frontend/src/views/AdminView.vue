@@ -55,6 +55,7 @@
       <AdminAgentResearchPanel v-if="admin.canWrite" v-show="activeTab === 'agent'" />
       <AdminDecisionCardPanel v-if="admin.canWrite" v-show="activeTab === 'agent'" />
       <AdminTaskRunPanel v-if="admin.canWrite" v-show="activeTab === 'agent'" />
+      <AdminAuthorizedResearchPanel v-if="admin.canWrite && activeTab === 'agent'" />
       <AdminAuditPanel v-if="admin.isAdmin" v-show="activeTab === 'audit'" />
     </main>
   </div>
@@ -65,6 +66,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AdminAuditPanel from '../components/admin/AdminAuditPanel.vue'
 import AdminAgentResearchPanel from '../components/admin/AdminAgentResearchPanel.vue'
 import AdminDecisionCardPanel from '../components/admin/AdminDecisionCardPanel.vue'
+import AdminAuthorizedResearchPanel from '../components/admin/AdminAuthorizedResearchPanel.vue'
 import AdminTaskRunPanel from '../components/admin/AdminTaskRunPanel.vue'
 import AdminDataPanel from '../components/admin/AdminDataPanel.vue'
 import AdminLoginPanel from '../components/admin/AdminLoginPanel.vue'
