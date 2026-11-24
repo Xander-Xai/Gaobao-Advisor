@@ -145,8 +145,7 @@ class SyntheticNegativeRuleMemory:
         with self._db() as conn:
             conn.execute("BEGIN IMMEDIATE")
             record = conn.execute(
-                "SELECT proposed_by, status, expires_at FROM synthetic_negative_rules "
-                "WHERE owner=? AND rule_key=?",
+                "SELECT proposed_by, status, expires_at FROM synthetic_negative_rules WHERE owner=? AND rule_key=?",
                 (owner, rule_key),
             ).fetchone()
             if record is None or record["status"] != "PENDING" or record["expires_at"] <= now:
@@ -172,9 +171,7 @@ class SyntheticNegativeRuleMemory:
             ).fetchall()
         return tuple(row["rule_key"] for row in rows if row["rule_key"] in ALLOWED_RULES)
 
-    def revoke(
-        self, *, owner: str, rule_key: str, actor: str, reviewer_authorized: bool = False
-    ) -> None:
+    def revoke(self, *, owner: str, rule_key: str, actor: str, reviewer_authorized: bool = False) -> None:
         owner, rule_key, actor = _id(owner), _rule(rule_key), _id(actor)
         if reviewer_authorized is not True:
             raise NegativeMemoryConflict("Trusted reviewer authorization is required")
