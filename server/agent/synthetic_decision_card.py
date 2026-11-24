@@ -186,6 +186,7 @@ def build_synthetic_decision_card(
     planner: Planner | None = None,
     *,
     require_provider_usage: bool = False,
+    lease_guard=None,
 ) -> dict[str, Any]:
     """Compose a bounded, source-linked research card from actual database rows."""
     if profile.school_a == profile.school_b or profile.subject_type not in {"物理类", "历史类"}:
@@ -217,6 +218,8 @@ def build_synthetic_decision_card(
 
         def make_handler(target: ReadOnlyTool, label: str):
             def handler(args: dict[str, Any]) -> dict[str, Any]:
+                if lease_guard is not None:
+                    lease_guard()
                 observed = target.handler(args)
                 captured.append((label, observed))
                 return observed

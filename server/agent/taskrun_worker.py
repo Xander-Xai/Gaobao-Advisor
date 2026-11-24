@@ -40,6 +40,16 @@ def _gate_execution(engine: str, *, permit_external_model: bool, model: str | No
     if engine == "deepagents":
         if not permit_external_model or not model or not model.startswith("openai:") or not os.getenv("OPENAI_API_KEY"):
             raise ValueError("Deep Agents requires explicit model authorization and provider key")
+    elif engine == "native_harness":
+        if (
+            not permit_external_model
+            or not model
+            or not model.startswith("openai:")
+            or not model.removeprefix("openai:").strip()
+            or not os.getenv("OPENAI_API_KEY")
+            or os.getenv("APP_ENV", "").lower() not in {"development", "local", "test", "testing"}
+        ):
+            raise ValueError("Native Harness requires explicit local model authorization and provider key")
     elif permit_external_model or model:
         raise ValueError("Deterministic mode must not request external model access")
 
@@ -91,7 +101,7 @@ def _execute_approved_run(
         # business TaskRun CAS journal even in that configuration.
         raise ValueError("Deep Agents graph checkpoint must not share the TaskRun journal")
     _gate_execution(engine, permit_external_model=permit_external_model, model=model)
-    claimed, token = store.claim(run_id, lease_seconds=600 if engine == "deepagents" else 120)
+    claimed, token = store.claim(run_id, lease_seconds=600 if engine in {"deepagents", "native_harness"} else 120)
     payload = claimed["payload"]
     if engine == "portfolio":
         from server.agent.synthetic_portfolio import PortfolioRequest
@@ -126,6 +136,14 @@ def _execute_approved_run(
                 )
             else:
                 card = agent_runner(profile, model, task_id=run_id)
+        elif engine == "native_harness":
+            from server.agent.native_taskrun_harness import run_native_harness
+
+            card = run_native_harness(
+                profile,
+                model,
+                lease_guard=lambda: store.assert_active_lease(run_id, token),
+            )
         else:
             card = build_synthetic_decision_card(profile)
         # A cancellation during a blocking model/tool call must suppress any
@@ -168,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--journal", required=True, type=Path)
     parser.add_argument("--run-id", required=True)
-    parser.add_argument("--model", help="Explicit openai:MODEL_NAME for optional Deep Agents")
+    parser.add_argument("--model", help="Explicit openai:MODEL_NAME for optional model engines")
     parser.add_argument("--permit-external-model", action="store_true")
     args = parser.parse_args(argv)
     store = SyntheticTaskRunStore(args.journal)
