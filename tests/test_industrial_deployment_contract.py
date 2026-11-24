@@ -23,3 +23,14 @@ def test_industrial_deployment_has_no_local_database_or_direct_api_ports():
     assert compose.count("entrypoint: []") == 2
     assert 'AUTO_SEED_DEMO: "false"' in compose
     assert 'ENABLE_RAG_KB: "false"' in compose
+
+
+def test_industrial_worker_and_api_share_admission_profile():
+    import yaml
+
+    services = yaml.safe_load((ROOT / "docker-compose.industrial.yml").read_text())["services"]
+    api = services["api"]["environment"]
+    worker = services["worker"]["environment"]
+    assert api["GAOBAO_RUNTIME_PROFILE"] == "industrial"
+    assert all(worker.get(key) == value for key, value in api.items())
+    assert "env_file" not in services["worker"]

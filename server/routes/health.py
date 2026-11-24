@@ -88,7 +88,9 @@ async def health_check():
     required_redis = industrial_enabled()
     redis_status = "connected" if required_redis and redis_ready() else "unavailable"
     return {
-        "status": "ok" if db_status == "connected" and (not required_redis or redis_status == "connected") else "degraded",
+        "status": "ok"
+        if db_status == "connected" and (not required_redis or redis_status == "connected")
+        else "degraded",
         **({"redis": redis_status} if required_redis else {}),
         "version": __version__,
         "database": db_status,

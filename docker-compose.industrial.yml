@@ -42,12 +42,23 @@ services:
     command: ["python", "-m", "server.admin.worker"]
     restart: unless-stopped
     environment:
+      GAOBAO_RUNTIME_PROFILE: industrial
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:?explicit managed MySQL required}
       REDIS_URL: ${REDIS_URL:?explicit managed Redis required}
-      QUALITY_TASK_MODE: async
+      GAOBAO_DATA_APPROVAL_REF: ${GAOBAO_DATA_APPROVAL_REF:?data authorization reference required}
       AUTO_MIGRATE: "false"
       AUTO_SEED_DEMO: "false"
+      DB_AUTO_CREATE: "false"
+      QUALITY_TASK_MODE: async
+      ADMIN_RATE_LIMIT_BACKEND: redis
+      ENABLE_RAG_KB: "false"
+      ENABLE_SYNTHETIC_AGENT_EXPERIMENT: "false"
+      ENABLE_OUTBOUND_FETCH: "false"
+      USER_MEMORY_ENABLED: "false"
+      GAOBAO_CHAT_COMPACTION_ENABLED: "false"
+      GAOBAO_CHAT_SNAPSHOT_ENABLED: "false"
+      ADMISSIONS_RESEARCH_ENABLED: "false"
       GAOBAO_CHAT_SNAPSHOT_MAINTENANCE_ENABLED: "true"
     depends_on:
       api:

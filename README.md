@@ -32,6 +32,8 @@
 
 ## 仓库状态怎么查
 
+**2026-11-25 架构候选边界**：#196 已合入，#198 将标准本地 Java/MySQL/Redis 拓扑、默认加密快照和独立工业 SQL 部署纳入同一变更；在 #198 合并前，不把这些新增默认值或工业启动门禁计为 master 现状。工业候选 API 与质量 Worker 各自验证配置、唯一迁移 head、非合成数据形态和 Redis；外部真实数据、模型费用、TLS 与隐私验收仍未完成。见 [工业架构与发布合同](docs/architecture/industrial-release-contract.md)。
+
 默认分支为 `master`。实时核对 [`master` 提交](https://github.com/Xander-Xai/Gaobao-Advisor/commits/master/) · [Pull Requests](https://github.com/Xander-Xai/Gaobao-Advisor/pulls) · [Issues](https://github.com/Xander-Xai/Gaobao-Advisor/issues) · [Actions](https://github.com/Xander-Xai/Gaobao-Advisor/actions?query=branch%3Amaster) · [Releases](https://github.com/Xander-Xai/Gaobao-Advisor/releases)。
 以同一提交核对代码、测试和 Actions。PR 正文中的历史决策与 CI 回执仅对应当时的提交。
 
@@ -43,7 +45,7 @@
 
 在线对话的同步、传统流式和公开 SSE 最终候选生成，使用统一的
 `server/agent/chat_context.py` 来限制历史上下文并保留本轮 SQL/RAG 来源。
-标准本地合成数据部署默认开启 `GAOBAO_CHAT_COMPACTION_ENABLED=true` 与 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，按需摘要旧历史，保留近期原文，并按会话、版本、历史前缀哈希与 TTL 复用 SQL 快照。摘要采用 AES-GCM 加密并绑定会话主键、历史前缀及策略；标准部署缺少密钥拒绝启动，Worker 有界清理过期快照。摘要不是招生证据，配置模型时可能增加调用费用。显式 false 可回滚；轻量 SQLite base 仍默认关闭，生产明文快照仍禁止启用。
+标准本地合成数据部署默认开启 `GAOBAO_CHAT_COMPACTION_ENABLED=true` 与 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，按需摘要旧历史，保留近期原文，并按会话、版本、历史前缀哈希与 TTL 复用 SQL 快照。摘要采用 AES-GCM 加密并绑定会话主键、历史前缀及策略；标准部署缺少密钥拒绝启动，Worker 有界清理过期快照。摘要不是招生证据，配置模型时可能增加调用费用。显式 false 可回滚；轻量 SQLite base 仍默认关闭，生产快照仍禁止启用（即使已配置加密密钥），直至隐私验收通过。
 操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
 跨任务用户偏好记忆与会话压缩是不同机制。本实验提供显式创建的独立凭证、SQL 持久化、TTL、版本控制、凭证轮换及删除；仅允许显式非生产环境且默认关闭。详见 [跨任务记忆的使用与生产门槛](docs/cross-task-user-memory.md)。真实身份绑定、偏好加密和生产隐私验收尚未完成。旧 #135 已关闭，由本实现承接。
 

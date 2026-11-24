@@ -62,3 +62,40 @@ async def test_industrial_readiness_requires_redis(monkeypatch):
     assert response.status_code == 503
     monkeypatch.setattr(health, "redis_ready", lambda: True)
     assert (await health.readiness()).status_code == 200
+
+
+def test_industrial_worker_rejects_invalid_config_before_consumption(monkeypatch):
+    from server.admin import worker
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setattr(worker, "run_once", lambda **kwargs: pytest.fail("unsafe consumption"))
+    monkeypatch.setattr(worker, "run_forever", lambda **kwargs: pytest.fail("unsafe consumption"))
+    assert worker.main(["--once"]) == 2
+    assert worker.main([]) == 2
+
+
+def test_industrial_worker_checks_dependencies_before_consumption(monkeypatch, config):
+    from server import industrial_runtime
+    from server.admin import worker
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    for name, value in config.items():
+        monkeypatch.setenv(name, value)
+
+    def unavailable():
+        raise RuntimeError("dependency unavailable")
+
+    monkeypatch.setattr(industrial_runtime, "validate_industrial_dependencies", unavailable)
+    monkeypatch.setattr(worker, "run_once", lambda **kwargs: pytest.fail("unsafe consumption"))
+    assert worker.main(["--once"]) == 2
+
+    calls = []
+    monkeypatch.setattr(industrial_runtime, "validate_industrial_dependencies", lambda: calls.append("validated"))
+
+    def consume(**kwargs):
+        assert calls == ["validated"]
+        return {"status": "idle"}
+
+    monkeypatch.setattr(worker, "run_once", consume)
+    assert worker.main(["--once"]) == 0

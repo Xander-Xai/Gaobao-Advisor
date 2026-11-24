@@ -359,6 +359,20 @@ def main(argv: list[str] | None = None) -> int:
         level=getattr(logging, args.log_level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    from server.industrial_runtime import (
+        industrial_enabled,
+        validate_industrial_config,
+        validate_industrial_dependencies,
+    )
+
+    if industrial_enabled():
+        try:
+            validate_industrial_config(os.environ)
+            validate_industrial_dependencies()
+        except Exception as exc:
+            logger.error("industrial worker admission failed: %s", type(exc).__name__)
+            return 2
+
     try:
         if args.once:
             print(json.dumps(run_once(timeout=args.timeout), ensure_ascii=False))

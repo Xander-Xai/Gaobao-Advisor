@@ -63,7 +63,7 @@ python scripts/compose_standard.py up --build -d
 
 单独的私有 `.env.industrial-api` 仅提供 SESSION_SECRET、管理员身份及 token secret、批准的 CORS 和模型配置；不要存放 Catalog root 或不相关服务凭据。镜像构建上下文排除 .env 和 .env.* 文件；应轮换可能曾进入旧镜像的任何凭据并审计旧镜像，而不是认为修改 ignore 即已删除旧层。
 
-先使用独立 DBA 账号运行 `python -m db.migrate upgrade`，检查唯一 head、备份和可恢复性；再以应用运行账号启动。数据库必须为 CUSTOM（非空、无合成学校标记），这只是数据形态门禁，不证明数据权利或质量。应用 API/worker 跳过旧 demo entrypoint，不自动建表、迁移或 seed。
+先使用独立 DBA 账号运行 `python -m db.migrate upgrade`，检查唯一 head、备份和可恢复性；再以应用运行账号启动。数据库必须为 CUSTOM（非空、无合成学校标记），这只是数据形态门禁，不证明数据权利或质量。应用 API/worker 跳过旧 demo entrypoint，不自动建表、迁移或 seed。两者独立执行同一工业配置、唯一 schema head、CUSTOM 数据及 Redis 启动门禁，不能仅依赖 Compose 的 API 启动顺序；失败时 worker 不消费队列（包括 --once）。此门禁是启动时检查，不证明运行中依赖始终健康。
 
 ```bash
 docker compose --env-file .env.industrial -f docker-compose.industrial.yml config --quiet
@@ -80,7 +80,7 @@ curl -f http://127.0.0.1:8088/api/v1/health/ready
 | G0 入口 | 一套标准 Java/MySQL/Redis/Python 拓扑，目录/聊天/运营质检 E2E，禁止 API 直通 | 新变更待 exact-head CI；历史 Java synthetic CI 不能替代 |
 | G1 数据/Schema | MySQL explicit、独立迁移、唯一 Alembic head、CUSTOM 数据、授权与版本审计 | 启动门禁已实现；真实数据权利/质量仍需审核 |
 | G2 隐私 | 摘要 AES-GCM、TTL 清理、无缓存研究 API、密钥隔离；原对话及备份删除、真实身份与同意 | 新加密实现待 CI；真实个人数据/长期偏好/生产摘要 NO-GO |
-| G3 可靠性 | Redis readiness、外部 MySQL/Redis 断连、跨副本限流、Outbox 恢复、备份恢复 | 实际候选集群故障注入、SLO 和恢复报告缺失 |
+| G3 可靠性 | API 与 worker 独立启动校验、Redis readiness、外部 MySQL/Redis 断连、Outbox 恢复、备份恢复 | Catalog 的 Redis 限流不等于全部公共 API 跨副本限流；FastAPI 公共限流仍为进程内。实际候选集群故障注入、SLO 和恢复报告缺失 |
 | G4 研究 | 授权数据、审批、身份/回执绑定、隔离、预算、正确拒答、独立 gold | #196 已合并；真实模型/真实数据/独立 gold/容器与 worker 部署验收未完成 |
 | G5 Eval/优化 | 同模型、同 gold、同预算、完整分母和 Holdout；真实 usage/账单 | 无真实结果，不宣传降本 |
 | G6 安全发布 | TLS、专用凭据、镜像/SBOM、轮换、监控告警、容量与回滚 | 无真实生产证据，NO-GO |

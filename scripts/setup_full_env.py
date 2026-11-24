@@ -86,9 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"wrote {out} (mode 0600)")
     print(f"admin username: {args.username}")
     print(f"admin password: {admin_password}")
-    print(
-        "start: python scripts/compose_standard.py up --build -d"
-    )
+    print("start: python scripts/compose_standard.py up --build -d")
     return 0
 
 

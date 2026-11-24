@@ -64,7 +64,7 @@ Acceptance: exact-head CI, API and SSE contracts, deterministic negative cases a
 
 5. **Java Gateway and Catalog** — standard ingress routing and read-only catalog queries.
 
-The standard local deployment (`python scripts/compose_standard.py up --build -d`) requires MySQL 8.4, Redis 7, Java Gateway/Catalog and the worker, with no LLM key required. The SQLite base remains a lightweight smoke/development compatibility path; private research journals remain isolated SQLite. Session compaction and AES-GCM SQL snapshots default on in the standard local synthetic stack; the API fails startup without a valid configured key, the worker prunes expired snapshots, and explicit false rolls back. Production snapshots remain blocked pending privacy approval.
+The #198 standard-local deployment candidate (`python scripts/compose_standard.py up --build -d`; verify merge before attributing to master) requires MySQL 8.4, Redis 7, Java Gateway/Catalog and the worker, with no LLM key required. The SQLite base remains a lightweight smoke/development compatibility path; private research journals remain isolated SQLite. Session compaction and AES-GCM SQL snapshots default on in the standard local synthetic stack; the API fails startup without a valid configured key, the worker prunes expired snapshots, and explicit false rolls back. Production snapshots remain blocked pending privacy approval.
 
 > **Standard Java gateway/catalog (original implementation merged in #89, squash `7c87686`):** PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89)
 > introduced Java 21 / Spring Boot 4.0.9 / Spring Cloud 2025.1.4 as a layer now required by the standard architecture: Nginx keeps `/ws/**` on Python, sends

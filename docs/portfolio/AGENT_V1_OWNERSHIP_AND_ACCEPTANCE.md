@@ -17,7 +17,7 @@
 | M07 | Context 预算、来源保护、Skills、可选持久证据记忆 | `server/agent/context_policy.py` `server/agent/governed_evidence_memory.py` `server/agent/skills/` | 部分实现；动态工具渐进披露、Prompt Caching、负向记忆与长期对照未完整验收 |
 | M13（主责） | 合成业务独立 SQL Oracle、模型运行对照、Bad Case、Holdout | `benchmarks/decision_card_business_eval.py` `benchmarks/model_run_comparison.py` | 8 个冻结合成任务；真实模型 Provider 执行、人工真值与统计稳健性未验证 |
 | M14/M16（实验） | TaskRun Trace、评测计费归因、部署与前后端回归 | `server/observability/` `benchmarks/provider_cost_reconciliation.py` `docker-compose.yml` | 成本估价不是付款凭证；未形成生产灰度/真实 Provider 性能 |
-| M11（沙箱实验） | Docker 无网络受限合成 Coding Agent 工作区 | `benchmarks/sandbox_workspace.py` | 合成任务 Docker 隔离不等于安全多租户 OS Sandbox |
+| M11（沙箱） | 受审批招生研究的受限分析容器；合成 Coding fixture 仅回归 | `server/agent/admissions_analysis_sandbox.py`、`server/agent/sandbox_runtime.py`、`benchmarks/sandbox_workspace.py` | 真实授权数据、容器部署和多租户安全未验收 |
 
 **明确不做**：把高考顾问重构为 9 Agent 客服系统；重复创建企业级退款 Ledger 或完整多模态 RAG 检索服务。真实业务事实优先 SQL，政策类文字走检索；模型只在明确许可的局部范围自主决策。
 
