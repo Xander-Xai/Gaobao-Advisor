@@ -96,3 +96,16 @@ nodes solely to present a fashionable architecture. First record paired
 serial/parallel synthetic-workload latency **and** verify identical results;
 then repeat under realistic concurrency with a quality/risk guard before
 considering a production change.
+
+
+## Follow-up: row-bound minimum-score claim gate (2026-11-24)
+
+The V2 synthetic gate rejects the previously accepted wrong-school score case.
+Recognized minimum-score assertions must use a narrow exact school/metric/value
+statement grammar and match an unambiguous `match_schools` SQL row. User slots
+and arbitrary RAG numbers are not school-score evidence. Unrecognized syntax
+within the detected claim class is routed to the existing repair/refusal/triage
+path. This is conservative and may reject legitimate prose. It is not complete
+semantic verification: year, province, major, rank, policy, source authorization,
+and unrecognized paraphrases still require structured evidence or expert review.
+Earlier V1 results remain historical; no real provider quality is measured.

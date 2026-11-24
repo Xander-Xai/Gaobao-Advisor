@@ -171,15 +171,17 @@ def test_mysql_rotation_rejects_stale_token_and_preserves_monotonic_revision(mys
     with pytest.raises(memory.MemoryUnauthorized):
         memory.put_memory(old_token, "preferred_regions", "华北", expected_version=initial["version"])
     with pytest.raises(memory.MemoryUnauthorized):
-        memory.delete_memory(old_token, "preferred_regions")
+        memory.delete_memory(old_token, "preferred_regions", expected_version=initial["version"])
     with pytest.raises(memory.MemoryUnauthorized):
         memory.erase_vault(old_token)
 
-    memory.delete_memory(token, "preferred_regions")
+    memory.delete_memory(token, "preferred_regions", expected_version=initial["version"])
     recreated = memory.put_memory(token, "preferred_regions", "西南", expected_version=0)
     assert recreated["version"] > initial["version"]
     with pytest.raises(memory.MemoryConflict):
         memory.put_memory(token, "preferred_regions", "过时", expected_version=initial["version"])
+    with pytest.raises(memory.MemoryConflict):
+        memory.delete_memory(token, "preferred_regions", expected_version=initial["version"])
     assert memory.list_memories(token) == [recreated]
 
 
