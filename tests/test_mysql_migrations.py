@@ -120,3 +120,93 @@ def test_adopt_existing_rejects_index_drift(mysql_engine):
     result = _run("-m", "db.migrate", "adopt-existing")
     assert result.returncode != 0
     assert "missing index ix_schools_province" in result.stderr
+
+
+@pytest.fixture
+def mysql_memory(mysql_engine, monkeypatch):
+    """Use only the guarded disposable MySQL schema and real transactions."""
+    result = _run("-m", "db.migrate", "upgrade")
+    assert result.returncode == 0, result.stderr
+    from server import user_memory as memory
+
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("USER_MEMORY_ENABLED", "true")
+    monkeypatch.setattr(memory, "get_session", sessionmaker(bind=mysql_engine))
+    return memory
+
+
+def test_mysql_concurrent_memory_cas_has_exactly_one_winner(mysql_memory):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    memory = mysql_memory
+    token = memory.create_vault()["memory_token"]
+    initial = memory.put_memory(token, "preferred_regions", "华南", expected_version=0)
+    barrier = Barrier(2, timeout=10)
+
+    def attempt(value):
+        barrier.wait()
+        try:
+            return memory.put_memory(token, "preferred_regions", value, expected_version=initial["version"])
+        except memory.MemoryConflict:
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(attempt, "华北")
+        second = pool.submit(attempt, "西南")
+        results = [first.result(timeout=20), second.result(timeout=20)]
+
+    winners = [result for result in results if result is not None]
+    assert len(winners) == 1
+    assert winners[0]["version"] == initial["version"] + 1
+    assert memory.list_memories(token) == winners
+
+
+def test_mysql_rotation_rejects_stale_token_and_preserves_monotonic_revision(mysql_memory):
+    memory = mysql_memory
+    old_token = memory.create_vault()["memory_token"]
+    initial = memory.put_memory(old_token, "preferred_regions", "华南", expected_version=0)
+    token = memory.rotate_token(old_token)["memory_token"]
+
+    with pytest.raises(memory.MemoryUnauthorized):
+        memory.put_memory(old_token, "preferred_regions", "华北", expected_version=initial["version"])
+    with pytest.raises(memory.MemoryUnauthorized):
+        memory.delete_memory(old_token, "preferred_regions")
+    with pytest.raises(memory.MemoryUnauthorized):
+        memory.erase_vault(old_token)
+
+    memory.delete_memory(token, "preferred_regions")
+    recreated = memory.put_memory(token, "preferred_regions", "西南", expected_version=0)
+    assert recreated["version"] > initial["version"]
+    with pytest.raises(memory.MemoryConflict):
+        memory.put_memory(token, "preferred_regions", "过时", expected_version=initial["version"])
+    assert memory.list_memories(token) == [recreated]
+
+
+def test_mysql_token_rotation_waits_for_credential_row_lock(mysql_memory, mysql_engine):
+    from sqlalchemy.exc import OperationalError
+
+    memory = mysql_memory
+    token = memory.create_vault()["memory_token"]
+    factory = sessionmaker(bind=mysql_engine)
+    with factory() as first, factory() as second:
+        owner = memory._owner(first, token, write=True)
+        try:
+            previous = second.execute(text("SELECT @@SESSION.innodb_lock_wait_timeout")).scalar_one()
+            second.execute(text("SET SESSION innodb_lock_wait_timeout=1"))
+            try:
+                with pytest.raises(OperationalError) as error:
+                    second.execute(
+                        text("UPDATE user_memory_vaults SET token_hash=token_hash WHERE id=:id"),
+                        {"id": owner.id},
+                    )
+                assert error.value.orig.args[0] == 1205
+                second.rollback()
+            finally:
+                second.execute(text(f"SET SESSION innodb_lock_wait_timeout={int(previous)}"))
+                second.commit()
+        finally:
+            first.rollback()
+
+    rotated = memory.rotate_token(token)["memory_token"]
+    assert memory.put_memory(rotated, "career_goal", "软件工程", expected_version=0)["version"] == 1
