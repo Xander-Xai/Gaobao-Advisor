@@ -206,3 +206,38 @@ def test_provider_usage_can_be_required_explicitly():
     assert result.reason == "provider_usage_missing"
     assert result.tool_calls == 0
     assert result.prompt_tokens is None
+
+
+def test_exact_reported_budget_stops_before_next_model_request():
+    planner = SequencePlanner(
+        [Decision("tool", "school_lookup", {"school_name": "A"}, prompt_tokens=80, completion_tokens=20)]
+    )
+    result = run_readonly_agent(
+        "虚构数据",
+        planner,
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
+        HarnessLimits(max_reported_tokens=100, require_provider_usage=True),
+    )
+    assert result.status == "blocked"
+    assert result.reason == "reported_token_budget_exhausted"
+    assert result.model_steps == len(planner.seen_histories) == 1
+    assert result.prompt_tokens == 80
+    assert result.completion_tokens == 20
+
+
+def test_valid_finish_at_exact_budget_is_accepted():
+    planner = SequencePlanner(
+        [
+            Decision("tool", "school_lookup", {"school_name": "A"}, prompt_tokens=20, completion_tokens=10),
+            Decision("finish", answer="合成", evidence_ids=[SOURCE], prompt_tokens=50, completion_tokens=20),
+        ]
+    )
+    result = run_readonly_agent(
+        "虚构数据",
+        planner,
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
+        HarnessLimits(max_reported_tokens=100, require_provider_usage=True),
+    )
+    assert result.status == "completed"
+    assert result.model_steps == 2
+    assert result.prompt_tokens + result.completion_tokens == 100

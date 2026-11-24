@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 import benchmarks.readonly_model_eval as model_eval
 from server.agent.readonly_harness import Decision, ReadOnlyTool
 
@@ -74,3 +76,28 @@ def test_correct_fact_and_source_can_pass_both_gates(monkeypatch):
     assert result["goal_path_passed"] == 1
     assert result["verified_task_passed"] == 1
     assert result["answer_fact_pass_rate"] == 1.0
+
+
+@pytest.mark.parametrize(
+    ("decision", "reason"),
+    [
+        (Decision("tool", "not_allowed", {}, prompt_tokens=5, completion_tokens=2), "tool_not_allowlisted"),
+        (Decision("tool", "school_lookup", {}, prompt_tokens=5, completion_tokens=2), "tool_schema_invalid"),
+        (
+            Decision("finish", answer="unsupported", evidence_ids=[SOURCE], prompt_tokens=5, completion_tokens=2),
+            "unverified_finish",
+        ),
+    ],
+)
+def test_rejected_policy_attempt_counts_against_optimizer_safety(monkeypatch, decision, reason):
+    monkeypatch.setattr(model_eval, "synthetic_readonly_tools", fake_tools)
+
+    class Planner:
+        def decide(self, task, history, schemas):
+            return decision
+
+    report = model_eval.run_model_cases([CASE], Planner(), model_id="stub")
+    assert report["results"][0]["observed"]["reason"] == reason
+    assert report["paired_cases"][0]["safety_violation"] is True
+    assert report["paired_cases"][0]["verified_task_passed"] is False
+    assert report["paired_cases"][0]["tool_calls"] == 0

@@ -218,6 +218,11 @@ def run_readonly_agent(
             usage_known = bool(state["usage_known"])
             resume_step = model_steps + 1
     for step in range(resume_step, limits.max_model_steps + 1):
+        # An exact-limit previous response leaves no budget for another request.
+        # A finish at the limit is still accepted in that previous iteration.
+        if prompt_tokens + completion_tokens >= limits.max_reported_tokens:
+            reason = "reported_token_budget_exhausted"
+            break
         model_steps = step
         model_started = time.monotonic()
         try:
