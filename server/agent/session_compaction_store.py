@@ -18,7 +18,7 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from db.models import Conversation, SessionCompactionSnapshot, _utcnow
+from db.models import Conversation, ConversationMessage, SessionCompactionSnapshot, _utcnow
 from server.agent.chat_context import ChatContextError, _validate_history
 
 _SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{4,64}$")
@@ -106,6 +106,19 @@ class SessionCompactionStore:
             ):
                 return None
             if history_digest(safe[: row.covered_count]) != row.covered_sha256:
+                return None
+            # The caller's history may have become stale after a concurrent
+            # edit, despite matching the snapshot. Re-check the committed
+            # conversation prefix during *every* cache read.
+            db_prefix = (
+                db.query(ConversationMessage)
+                .filter(ConversationMessage.conversation_id == row.conversation_id)
+                .order_by(ConversationMessage.id)
+                .limit(row.covered_count)
+                .all()
+            )
+            current = [{"role": msg.role, "content": msg.content} for msg in db_prefix]
+            if len(current) != row.covered_count or history_digest(current) != row.covered_sha256:
                 return None
             return CompactionSnapshot(row.summary, row.covered_count, row.version)
 
