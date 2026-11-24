@@ -53,6 +53,9 @@ class MemoryInvalid(Exception):
 
 def enabled() -> bool:
     """Opt-in for both API and chat context; default is off."""
+    environment = os.getenv("APP_ENV", "").strip().lower()
+    if environment not in {"development", "dev", "test", "testing", "local"}:
+        return False
     return os.getenv("USER_MEMORY_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -297,18 +300,24 @@ def prune_expired(*, limit: int = 100) -> dict[str, int]:
         raise MemoryInvalid("Cleanup limit must be 1..1000")
     db = get_session()
     try:
+        cutoff = _utcnow()
         rows = (
             db.query(UserMemoryEntry.id)
-            .filter(UserMemoryEntry.expires_at <= _utcnow())
+            .filter(UserMemoryEntry.expires_at <= cutoff)
             .order_by(UserMemoryEntry.expires_at)
             .limit(limit)
             .all()
         )
         ids = [row[0] for row in rows]
+        deleted = 0
         if ids:
-            db.query(UserMemoryEntry).filter(UserMemoryEntry.id.in_(ids)).delete(synchronize_session=False)
+            deleted = (
+                db.query(UserMemoryEntry)
+                .filter(UserMemoryEntry.id.in_(ids), UserMemoryEntry.expires_at <= cutoff)
+                .delete(synchronize_session=False)
+            )
         db.commit()
-        return {"expired_entries_deleted": len(ids)}
+        return {"expired_entries_deleted": deleted}
     except Exception:
         db.rollback()
         raise
