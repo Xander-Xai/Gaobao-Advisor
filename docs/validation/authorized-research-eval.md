@@ -1,0 +1,9 @@
+# Authorized real-data research evaluation
+
+The existing synthetic benchmark remains useful for regression, but cannot grade actual admissions research. The new offline evaluator consumes private receipts from the existing Deep Agents + Sandbox business entrypoint and a separately reviewed gold manifest. No model requests are made by this evaluator. Prepare the actual independent source labels first; do not generate the gold hashes from the candidate receipts. Use at least four unique cohorts, with complete and incomplete/negative cases in both development and holdout. Each case freezes scope, expected status, coverage, canonical evidence and analysis hashes (null for expected blocked cases), and an independent source reference. Manifest schema: authorized-admissions-research-gold/v1, dataset_ref, review_ref, cases; see validate_manifest. The private receipts file is an object mapping each case ID to its full admissions-research/v1 receipt. Keep both inputs outside Git, use authorized sources and a reviewer independent of candidate execution. Run:
+
+```bash
+python -m benchmarks.authorized_research_eval --gold /private/gold.json --receipts /private/receipts.json --out /private/eval-new.json --authorize-private-eval
+```
+
+The evaluator rejects missing cases, reused run IDs, duplicate cohorts (including reversed schools), scope drift, wrong coverage, self-consistent but wrong aggregate and unsupported admission prediction claims. The report contains only case IDs, outcomes, reasons, review/data digests and provider-declared usage (unknown remains null). Source licensing/provenance, billing, actual model transport and statistical validity remain independently unverified. REVIEW_REQUIRED is not approval. Tests use fixtures; real source review and authorized real provider runs are still required. No automatic optimizer or production release.
