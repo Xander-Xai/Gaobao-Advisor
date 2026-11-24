@@ -178,10 +178,11 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
     value = _validate_value(key, value, ttl_days)
     if type(expected_version) is not int or not 0 <= expected_version <= MAX_MEMORY_VERSION:
         raise MemoryInvalid("Invalid expected version")
-    now = _utcnow()
     db = get_session()
     try:
         owner = _owner(db, token, write=True)
+        # Take the TTL decision after waiting for the credential row lock.
+        now = _utcnow()
         row = (
             db.query(UserMemoryEntry)
             .filter(UserMemoryEntry.vault_id == owner.id, UserMemoryEntry.memory_key == key)
@@ -218,6 +219,9 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
             )
             db.add(row)
             db.flush()
+            # MySQL DATETIME can normalize fractional seconds on persistence.
+            # Return the actual stored value, not the pre-insert Python value.
+            db.refresh(row)
             result = _serialize(row)
             db.commit()
             return result
