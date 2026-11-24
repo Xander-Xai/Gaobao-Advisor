@@ -45,6 +45,9 @@ stored inside the same writable scratch directory as the model patch.
 own temporary directory, marks it read-only, and Docker bind-mounts it to
 `/trusted` with the **readonly** option. Only the fictional solution and
 scratch artifact live under the writable `/workspace` bind mount.
+`Dockerfile.sandbox` builds a **separate minimal Python image without
+COPY/ADD of the Gaobao repository**. The online API uses its own image;
+untrusted synthetic code does not get a read-only copy of application files.
 The process entrypoint is fixed as `python -I -B /trusted/runner.py`.
 The model cannot choose the entrypoint, mount paths, command, image tag,
 network policy, oracle source or Docker arguments.
@@ -60,7 +63,12 @@ expected scratch artifact exists. JSON receipts exclude raw stdout/stderr.
 
 ```bash
 pytest -q tests/test_sandbox_workspace.py tests/test_sandbox_workspace_governance.py \
-  tests/test_sandbox_coding_agent.py tests/test_sandbox_model_planner.py --no-cov -o addopts=''
+  tests/test_sandbox_coding_agent.py tests/test_sandbox_model_planner.py \
+  tests/test_sandbox_image_boundary.py --no-cov -o addopts=''
+docker build -f Dockerfile.sandbox -t gb-advisor:sandbox-ci .
+IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
+python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/workspace-eval.json
+python -m benchmarks.sandbox_coding_agent --image "$IMAGE_ID" --out /tmp/coding-eval.json
 # CI additionally builds the repository Docker image and executes two
 # scripted synthetic repairs against real Docker via the No-Key Container Smoke job.
 ```
