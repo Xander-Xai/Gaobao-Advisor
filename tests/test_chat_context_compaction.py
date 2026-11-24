@@ -51,14 +51,17 @@ def test_current_critical_query_is_not_truncated_to_fit_budget():
     with pytest.raises(ChatContextError, match="exceed input budget"):
         build_chat_context([], "SYSTEM", "SQL SOURCE=" + "x" * 10000, max_estimated_tokens=128)
 
-
 @pytest.mark.asyncio
 async def test_compaction_preserves_recent_and_marks_summary_untrusted():
     summarize = AsyncMock(return_value="用户希望广东；尚未核验任何招生事实")
     history = _history(5, size=60)
     out = await build_compacted_chat_context(
-        history, "POLICY", "CURRENT SQL evidence-id=case-abc",
-        summarizer=summarize, keep_recent_rounds=2, summary_trigger_tokens=1,
+        history,
+        "POLICY",
+        "CURRENT SQL evidence-id=case-abc",
+        summarizer=summarize,
+        keep_recent_rounds=2,
+        summary_trigger_tokens=1,
     )
     summarize.assert_awaited_once()
     assert len(summarize.await_args.args[0]) == 6
@@ -78,8 +81,12 @@ async def test_failed_compaction_makes_omitted_context_explicit(caplog):
     history = _history(5, size=60)
     summarize = AsyncMock(side_effect=RuntimeError("private-secret-must-not-log"))
     out = await build_compacted_chat_context(
-        history, "POLICY", "CURRENT", summarizer=summarize,
-        keep_recent_rounds=2, summary_trigger_tokens=1,
+        history,
+        "POLICY",
+        "CURRENT",
+        summarizer=summarize,
+        keep_recent_rounds=2,
+        summary_trigger_tokens=1,
     )
     assert out.status == "COMPACTION_UNAVAILABLE"
     assert out.messages[1]["role"] == "user"
@@ -93,8 +100,12 @@ async def test_small_history_does_not_call_summarizer():
     summarize = AsyncMock()
     history = _history(3)
     out = await build_compacted_chat_context(
-        history, "POLICY", "CURRENT", summarizer=summarize,
-        keep_recent_rounds=2, summary_trigger_tokens=2000,
+        history,
+        "POLICY",
+        "CURRENT",
+        summarizer=summarize,
+        keep_recent_rounds=2,
+        summary_trigger_tokens=2000,
     )
     assert out.status == "FULL_HISTORY"
     summarize.assert_not_awaited()
