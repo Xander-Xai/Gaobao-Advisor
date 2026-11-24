@@ -89,3 +89,53 @@ from an older run.
 ### Real-Docker negative acceptance
 
 The optional `--failure-probes` switch is required by the existing No-Key Container Smoke Test. It checks a nonzero exit despite a valid marker, a zero exit with only a substring marker, a bounded output flood, and an execution timeout. Each must fail with its specific expected result: a missing daemon/image cannot pass the negative suite. Only booleans are added to the sandbox receipt; no raw output. The trusted fixed oracles are not model-controlled. Each real probe also attempts exact-name removal and requires a successful empty daemon listing for that name; daemon failure or a remaining container cannot pass. This is a point-in-time cleanup check, not a guarantee against daemon races, host compromise or multi-tenant escape. Review the actual CI result before claiming execution.
+
+## Business extension: isolated admissions data analysis (2026-11-25)
+
+The earlier synthetic coding exercises remain security regressions, not the
+business use of the sandbox. The live data explorer and advisor graph use
+trusted SQL via `server/services/data_query.py` and `server/services/data_catalog.py`.
+Do not sandbox every ordinary lookup or let model code access that database.
+
+The new operator-local tool `server/agent/admissions_analysis_sandbox.py` can
+analyze an authorized private admissions database (SQLite/MySQL). The host
+selects only numeric AdmissionScore columns for a fixed province, subject,
+batch, year range, and school/major level, with an optional school ID.
+The agent-generated Python file receives only this bounded snapshot and
+grouping plan through a read-only mount. No database URL, user profile,
+chat history, secrets, network, Docker socket or host writable mount enters
+the container. The immutable image runs nonroot with CPU, memory, process,
+wall-clock and stdout limits; cleanup is checked before accepting results.
+
+Example: compare historical minimum-score medians and ranks for Guangdong
+physics, undergraduate batch, 2022–2025, grouped by year. Set DATABASE_URL
+to a locally authorized, preferably read-only database account. Generate
+an analysis program outside the sandbox; it reads /input/rows.json and
+prints one JSON object with groups sorted by key. Each group must contain
+key (array of grouping IDs), records, missing_min_scores, median_min_score,
+lowest_min_score, highest_min_score, best_min_rank, worst_min_rank (null when
+unavailable). The host independently recomputes these metrics; only an exact
+match returns VERIFIED_DESCRIPTIVE_ANALYSIS. This is not an admission
+probability, verified source provenance, or a recommendation.
+
+```bash
+docker build -f Dockerfile.sandbox -t gaobao-analysis-local .
+IMAGE=$(docker image inspect --format '{{.Id}}' gaobao-analysis-local)
+python -m server.agent.admissions_analysis_sandbox --authorized-data \
+  --approval-ref internal-data-approval-id --province 广东 --subject-type 物理 \
+  --batch 本科批 --year-from 2022 --year-to 2025 --group-by year \
+  --code /private/analysis.py --image "$IMAGE" --out /private/analysis-receipt.json
+```
+
+The operator approval flag is an explicit attestation, not automatic proof
+of licensing or lineage. Run only on authorized non-personal admissions
+records. Receipts contain scoped aggregate values and hashes, not raw
+records or stdout. Keep receipts private. No silent fallback or writes
+to the admissions tables. CI uses a fictional SQLite fixture through the
+same SQL and OCI path; real authorized dataset use is pending.
+
+This first business slice is callable from an operator-side Agent tool host
+or CLI, not registered in anonymous chat or the synthetic-only Harness.
+The next slice is authenticated task dispatch, owner-bound receipts, review
+and report attachment via a separate sandbox worker (no Docker socket in
+FastAPI); arbitrary user code and production multi-tenancy remain out of scope.
