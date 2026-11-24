@@ -36,13 +36,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{out} missing; generate it first", file=sys.stderr)
             return 2
         original = out.read_text(encoding="utf-8")
-        if any(line.startswith("CATALOG_READ_PASSWORD=") for line in original.splitlines()):
-            print(f"{out} already contains CATALOG_READ_PASSWORD")
-            return 0
-        with out.open("a", encoding="utf-8") as output:
-            output.write(f"CATALOG_READ_PASSWORD={secrets.token_hex(24)}\n")
+        additions = []
+        for name, size in (("CATALOG_READ_PASSWORD", 24), ("GAOBAO_CHAT_SNAPSHOT_KEY", 32)):
+            if not any(line.startswith(name + "=") for line in original.splitlines()):
+                additions.append(f"{name}={secrets.token_hex(size)}")
+        if additions:
+            with out.open("a", encoding="utf-8") as output:
+                if original and not original.endswith("\n"):
+                    output.write("\n")
+                output.write("\n".join(additions) + "\n")
         os.chmod(out, stat.S_IRUSR | stat.S_IWUSR)
-        print(f"extended {out} with a Java Catalog read-only secret (mode 0600)")
+        print(f"checked {out} for Catalog and snapshot encryption secrets (mode 0600)")
         return 0
 
     if out.exists() and not args.force:
@@ -65,6 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         f"MYSQL_PASSWORD={mysql_password}",
         f"MYSQL_ROOT_PASSWORD={mysql_root}",
         f"CATALOG_READ_PASSWORD={catalog_password}",
+        f"GAOBAO_CHAT_SNAPSHOT_KEY={secrets.token_hex(32)}",
         f"DATABASE_URL=mysql+pymysql://gaobao:{mysql_password}@mysql:3306/gaobao?charset=utf8mb4",
         "REDIS_URL=redis://redis:6379/0",
         "AUTO_MIGRATE=true",

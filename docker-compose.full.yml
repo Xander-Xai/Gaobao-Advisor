@@ -57,6 +57,7 @@ services:
       USER_MEMORY_ENABLED: ${USER_MEMORY_ENABLED:-false}
       GAOBAO_CHAT_COMPACTION_ENABLED: ${GAOBAO_CHAT_COMPACTION_ENABLED:-true}
       GAOBAO_CHAT_SNAPSHOT_ENABLED: ${GAOBAO_CHAT_SNAPSHOT_ENABLED:-true}
+      GAOBAO_CHAT_SNAPSHOT_REQUIRE_ENCRYPTION: "true"
     depends_on:
       mysql:
         condition: service_healthy

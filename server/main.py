@@ -43,6 +43,10 @@ async def lifespan(app: FastAPI):
     ensure_secret_ready()
     ensure_admin_ready()
 
+    from server.agent.session_compaction_store import validate_snapshot_startup
+
+    validate_snapshot_startup()
+
     init_sentry()
     initialize_agent_otel()
 
