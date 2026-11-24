@@ -199,6 +199,28 @@ def _run_arm(
     return report
 
 
+def _validate_paid_prefix(
+    report: dict[str, Any], prior: list[dict[str, Any]], model: str, arm: str
+) -> None:
+    """Reject incompatible completed arms before spending on any further trial."""
+    indexed = _validate(report)
+    if report["model_id"] != model or report.get("prompt_variant") != arm:
+        raise ValueError("Unexpected model or experimental prompt arm in report")
+    fields = ("dataset_sha256", "tool_contract_sha256", "temperature")
+    for previous in prior:
+        if report["run_id"] == previous["run_id"]:
+            raise ValueError("Repeated paid run identity")
+        if any(report[field] != previous[field] for field in fields):
+            raise ValueError("Frozen experiment contract drift")
+        previous_cases = {row["case_id"]: row["split"] for row in previous["results"]}
+        if {key: row["split"] for key, row in indexed.items()} != previous_cases:
+            raise ValueError("Frozen experiment case partition drift")
+        same_arm = previous["prompt_variant"] == arm
+        same_prompt = previous["model_prompt_sha256"] == report["model_prompt_sha256"]
+        if same_arm != same_prompt:
+            raise ValueError("Frozen experiment prompt drift")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, help="Explicit provider model ID; avoid drifting aliases")
@@ -232,6 +254,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Output directory must be empty to prevent report overwrite or accidental reuse")
     args.out_dir.mkdir(parents=True, exist_ok=True)
     pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    completed_reports: list[dict[str, Any]] = []
     for i in range(1, args.trials + 1):
         reports = {}
         # Alternate call order to reduce fixed API warmup/order bias.
@@ -243,6 +266,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             if _validate_budget(reports[arm]) != budget:
                 raise ValueError("Executed arm lacks the requested reconciled provider budget; stop experiment")
+            _validate_paid_prefix(reports[arm], completed_reports, args.model, arm)
+            completed_reports.append(reports[arm])
         pairs.append((reports[ARMS[0]], reports[ARMS[1]]))
     result = compare_repeated_trials(pairs)
     result["execution_plan"] = plan

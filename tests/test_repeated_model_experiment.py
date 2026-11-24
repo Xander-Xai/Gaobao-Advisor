@@ -246,3 +246,57 @@ def test_paid_run_stops_after_first_missing_budget_receipt(tmp_path, monkeypatch
         )
     assert calls == [("baseline", {"max_calls": 40, "stop_tokens": 10000})]
     assert not (tmp_path / "runs" / "repeated-experiment-summary.json").exists()
+
+
+@pytest.mark.parametrize("problem", ["dataset", "tool", "run_id", "prompt", "case"])
+def test_paid_experiment_stops_on_incompatible_second_arm(tmp_path, monkeypatch, problem):
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-test-key-not-used")
+    calls = []
+
+    def fake_arm(model, arm, output, timeout_seconds, **kwargs):
+        calls.append(arm)
+        report = fixture(str(len(calls)), arm)
+        report.update(
+            requested_cases=8,
+            unattempted_case_ids=[],
+            provider_usage_reconciled=True,
+            provider_budget={
+                "max_calls": kwargs["max_calls"],
+                "stop_after_reported_tokens": kwargs["stop_tokens"],
+                "attempts": 8,
+                "known_usage_responses": 8,
+                "known_prompt_tokens": report["provider_prompt_tokens"],
+                "known_completion_tokens": report["provider_completion_tokens"],
+                "usage_complete": True,
+                "stop_reason": None,
+                "hard_token_cap": False,
+            },
+        )
+        if len(calls) == 2:
+            if problem == "dataset":
+                report["dataset_sha256"] = "e" * 64
+            elif problem == "tool":
+                report["tool_contract_sha256"] = "e" * 64
+            elif problem == "run_id":
+                report["run_id"] = "synthetic_eval_1"
+            elif problem == "prompt":
+                report["model_prompt_sha256"] = "b" * 64
+            else:
+                report["results"][0]["case_id"] = "changed-case"
+        return report
+
+    monkeypatch.setattr("benchmarks.repeated_model_experiment._run_arm", fake_arm)
+    with pytest.raises(ValueError, match="experiment|run identity"):
+        main(
+            [
+                "--model",
+                "frozen-provider-model",
+                "--out-dir",
+                str(tmp_path / "runs"),
+                "--execute",
+                "--permit-external-model",
+                "--confirm-provider-charges",
+            ]
+        )
+    assert calls == ["baseline", "evidence_first"]
+    assert not (tmp_path / "runs" / "repeated-experiment-summary.json").exists()

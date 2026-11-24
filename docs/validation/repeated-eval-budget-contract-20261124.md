@@ -15,3 +15,5 @@ The example is a dry run. Add --execute --permit-external-model --confirm-provid
 ```bash
 pytest -q tests/test_repeated_model_experiment.py tests/test_model_run_comparison.py
 ```
+
+After each completed paid arm, the runner also checks the frozen dataset/tool/temperature contract, case partitions, unique run identity and stable, distinct prompt digests against all preceding arms. A mismatch stops further provider spending before the next trial; no incomplete summary is published. Negative controls use stub responses only.
