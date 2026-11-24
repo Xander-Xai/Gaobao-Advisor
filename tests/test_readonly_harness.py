@@ -267,3 +267,74 @@ def test_planner_receipt_rejects_missing_or_drifting_provider_model():
     missing = OpenAIJsonPlanner(SimpleNamespace(chat=SimpleNamespace(completions=chat)), "requested-model")
     missing.decide("synthetic", [], {})
     assert missing.model_identity_receipt()["provider_model_identity_consistent"] is False
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "private malformed response",
+        '["tool"]',
+        '{"kind":[]}',
+        '{"kind":"tool","tool":[],"arguments":{}}',
+        '{"kind":"tool","tool":"school_lookup","arguments":[]}',
+    ],
+)
+def test_invalid_provider_output_preserves_usage_and_never_calls_tool(content):
+    def forbidden(_args):
+        pytest.fail("Invalid response must not execute a tool")
+
+    response = SimpleNamespace(
+        model="resolved-model",
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))],
+        usage=SimpleNamespace(prompt_tokens=8, completion_tokens=4),
+    )
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: response)))
+    planner = OpenAIJsonPlanner(client, "test")
+    result = run_readonly_agent(
+        "synthetic",
+        planner,
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, forbidden)},
+        HarnessLimits(require_provider_usage=True),
+    )
+    assert result.status == "blocked"
+    assert result.reason == "planner_response_invalid"
+    assert result.tool_calls == 0
+    assert (result.prompt_tokens, result.completion_tokens) == (8, 4)
+    assert result.trace[0]["result"] == "planner_response_invalid"
+    assert "private malformed response" not in str(result.public_report())
+
+
+def test_transport_failure_keeps_usage_unknown():
+    def fail(**kwargs):
+        raise RuntimeError("private network exception")
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fail)))
+    planner = OpenAIJsonPlanner(client, "test")
+    result = run_readonly_agent(
+        "synthetic",
+        planner,
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
+        HarnessLimits(require_provider_usage=True),
+    )
+    assert result.reason == "planner_failed"
+    assert result.prompt_tokens is None
+    assert result.completion_tokens is None
+    assert result.tool_calls == 0
+    assert "private network exception" not in str(result.public_report())
+
+
+def test_invalid_provider_output_without_usage_remains_unknown():
+    response = SimpleNamespace(
+        model="resolved-model",
+        choices=[],
+    )
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: response)))
+    result = run_readonly_agent(
+        "synthetic",
+        OpenAIJsonPlanner(client, "test"),
+        {"school_lookup": ReadOnlyTool("school_lookup", {"school_name": str}, demo_tool)},
+        HarnessLimits(require_provider_usage=True),
+    )
+    assert result.reason == "provider_usage_missing"
+    assert result.prompt_tokens is None
+    assert result.tool_calls == 0

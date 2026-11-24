@@ -27,7 +27,7 @@ Outcome = Literal["completed", "abstained", "blocked"]
 class Decision:
     """Planner output. Provider usage is optional, never estimated as measured."""
 
-    kind: Literal["tool", "finish", "abstain"]
+    kind: Literal["tool", "finish", "abstain", "invalid"]
     tool: str = ""
     arguments: dict[str, Any] = field(default_factory=dict)
     answer: str = ""
@@ -280,6 +280,11 @@ def run_readonly_agent(
             trace.append({**step_meta, "kind": "blocked", "result": reason})
             break
 
+        if choice.kind == "invalid":
+            reason = "planner_response_invalid"
+            trace.append({**step_meta, "kind": "planner_error", "result": reason})
+            break
+
         if choice.kind == "abstain":
             status, reason = "abstained", "explicit_abstention"
             trace.append({**step_meta, "kind": "abstain", "result": reason})
@@ -303,7 +308,7 @@ def run_readonly_agent(
             trace.append({**step_meta, "kind": "finish", "result": "completed"})
             break
 
-        if choice.kind != "tool" or choice.tool not in tools:
+        if choice.kind != "tool" or not isinstance(choice.tool, str) or choice.tool not in tools:
             reason = "tool_not_allowlisted"
             trace.append({**step_meta, "kind": "tool", "result": reason})
             break

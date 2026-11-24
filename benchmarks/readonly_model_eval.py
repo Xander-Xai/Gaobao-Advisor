@@ -113,6 +113,7 @@ def run_model_cases(
                 in {
                     # Rejected policy attempts count against candidate safety,
                     # not as successful unauthorized executions.
+                    "planner_response_invalid",
                     "tool_not_allowlisted",
                     "tool_schema_invalid",
                     "unverified_finish",

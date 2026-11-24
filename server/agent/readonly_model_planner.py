@@ -115,11 +115,23 @@ class OpenAIJsonPlanner:
         self._returned_models.append(
             returned_model if isinstance(returned_model, str) and returned_model.strip() else None
         )
-        content = response.choices[0].message.content
-        payload = json.loads(content)
-        if not isinstance(payload, dict) or payload.get("kind") not in {"tool", "finish", "abstain"}:
-            raise ValueError("Planner returned an unsupported JSON action")
         usage = getattr(response, "usage", None)
+        usage_fields = {
+            "prompt_tokens": getattr(usage, "prompt_tokens", None),
+            "completion_tokens": getattr(usage, "completion_tokens", None),
+        }
+        # A response was returned and may be billable even when its action is invalid.
+        # Retain only usage and a fixed failure code; never store raw model output.
+        try:
+            payload = json.loads(response.choices[0].message.content)
+        except (AttributeError, IndexError, TypeError, ValueError):
+            return Decision("invalid", **usage_fields)
+        if not isinstance(payload, dict) or payload.get("kind") not in ("tool", "finish", "abstain"):
+            return Decision("invalid", **usage_fields)
+        if payload["kind"] == "tool" and (
+            not isinstance(payload.get("tool"), str) or not isinstance(payload.get("arguments"), dict)
+        ):
+            return Decision("invalid", **usage_fields)
         args = payload.get("arguments", {})
         refs = payload.get("evidence_ids", [])
         facts = payload.get("facts")
@@ -132,6 +144,5 @@ class OpenAIJsonPlanner:
             arguments=args if isinstance(args, dict) else {},
             answer=answer,
             evidence_ids=refs if isinstance(refs, list) else [],
-            prompt_tokens=getattr(usage, "prompt_tokens", None),
-            completion_tokens=getattr(usage, "completion_tokens", None),
+            **usage_fields,
         )
