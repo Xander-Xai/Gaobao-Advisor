@@ -38,3 +38,16 @@ profile data. Multi-worker deployments must set an explicit `SESSION_SECRET`.
 The default deployment handles synthetic data only. Anyone deploying this
 software with real users must replace this document with their own privacy
 notice and data-processing agreements before doing so.
+
+
+## 用户跨任务记忆（默认关闭）
+
+独立的用户偏好保险箱不会从对话或会话档案自动创建。只有用户显式创建独立凭证，
+并经由 `/api/v1/memory/entries/{key}` 写入的非敏感偏好会进入新的长期记忆表。
+存储时仅持有记忆 token 的 SHA-256 摘要；**偏好内容当前在数据库中不是加密字段**。
+在完成加密、账号绑定、隐私审批之前，不得将此功能用于真实用户数据生产环境。
+
+`DELETE /api/v1/memory/vault` 会撤销该 token 并删除实时数据库中的所有偏好；
+`DELETE /api/v1/profile/{session_id}/data` 仅删除单个会话的实时数据，
+不删除独立长期记忆。两种删除均不保证备份、在途模型上下文及外部处理者同步删除。
+详见 [长期记忆文档](docs/cross-task-user-memory.md)。

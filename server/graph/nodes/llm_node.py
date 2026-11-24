@@ -29,6 +29,7 @@ from server.agent.llm_reliability import (
     build_llm_context,
     estimate_messages_tokens,
 )
+from server.user_memory import prompt_context
 
 MODEL = "gpt-4o"  # Default model if config fails
 logger = logging.getLogger(__name__)
@@ -215,9 +216,15 @@ def _chat_context_options(*, compaction_enabled: bool = False) -> dict[str, int]
     }
 
 
+def _current_prompt_with_preferences(state: dict[str, Any]) -> str:
+    current = build_llm_context(state)
+    preferences = prompt_context(state.get("user_memory", []))
+    return preferences + "\n\n当前任务：\n" + current if preferences else current
+
+
 def _build_chat_context_sync(state: dict[str, Any], system_prompt: str):
     history = _load_memory_for_session(state.get("session_id", ""))
-    return build_chat_context(history, system_prompt, build_llm_context(state), **_chat_context_options())
+    return build_chat_context(history, system_prompt, _current_prompt_with_preferences(state), **_chat_context_options())
 
 
 async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
@@ -229,7 +236,7 @@ async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
         "on",
     }
     options = _chat_context_options(compaction_enabled=compaction_enabled)
-    current = build_llm_context(state)
+    current = _current_prompt_with_preferences(state)
     if compaction_enabled:
         # Explicit opt-in: this may call the configured LLM a second time.
         # Keep the original SQL history intact; do not persist model summaries
