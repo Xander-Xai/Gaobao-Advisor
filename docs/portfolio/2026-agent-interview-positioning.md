@@ -90,3 +90,16 @@ executed against only the previously captured history rows, grouped by school
 and year. Submission requires an independently verified sandbox receipt.
 A changed source blocks the entire final evidence bundle. This is still a
 local operator path, not a public route or a durable TaskRun.
+
+## Online Skills boundary (2026-11-25)
+
+Previously the quality node put methodology into the same knowledge_context
+channel that RAG retrieval replaced. Skill files therefore could be loaded
+without reaching generation. A distinct server-owned skill_context channel
+now survives retrieval, and both generation paths prepend it to the system
+prompt. Factual lookups receive mandatory safety only; gaokao advisory
+queries receive safety plus selected heuristics and anti-patterns under a
+5500-character disclosure cap. Retrieval remains separate evidence, not a
+source of instructions. The context budget cannot silently drop the system
+message. Tests exercise actual sync/async context construction with and
+without retrieved evidence. No measured Token or quality improvement claimed.
