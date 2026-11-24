@@ -1,7 +1,7 @@
 # Database Schema Matrix
 
 > Source of truth: `db/models.py`. Generated/verified by `db/schema_contract.py`.
-> Migration history: `20261030_0001` (admin tables) → `20261031_0002` (14 historical tables) → `20261031_0003` (admin token revocation) → `20261031_0004` (audit performance index) → `20261031_0005` (dataset snapshot provenance) → `20261120_0006` (cross-task user memory vault).
+> Migration history: `20261030_0001` (admin tables) → `20261031_0002` (14 historical tables) → `20261031_0003` (admin token revocation) → `20261031_0004` (audit performance index) → `20261031_0005` (dataset snapshot provenance) → `20261120_0006` (cross-task user memory vault) → `20261124_0007` (monotonic vault revision, draft chain).
 > Target: SQLite default + MySQL 8.4.
 
 ## 1. Table inventory
@@ -55,7 +55,8 @@ DATABASE_URL=mysql+pymysql://... python -m db.migrate upgrade
   benchmarked and not adopted because MySQL did not use it.
 - `20261031_0005` adds `dataset_snapshots` for public provenance metadata.
 - `20261120_0006` 新增默认禁用的用户长期记忆表（ORM schema 与迁移一致）。
-- `alembic_version` ends at `20261120_0006`.
+- `20261124_0007` adds the monotonic vault revision; refuses an unreviewed legacy vault migration.
+- Draft `alembic_version` ends at `20261124_0007`.
 
 ### Existing database at revision `20261030_0001`
 
@@ -77,7 +78,7 @@ DATABASE_URL=mysql+pymysql://... python -m db.migrate upgrade
   constraints, FKs) before `stamp 20261030_0001`.
 - It never creates/drops tables and refuses an unexpected Alembic revision.
 - Then `upgrade` verifies/skips existing historical tables and advances to
-  `20261120_0006`.
+  `20261124_0007`.
 
 ### Seed after migration
 
