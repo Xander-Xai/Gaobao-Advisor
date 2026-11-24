@@ -237,8 +237,15 @@ class SessionCompactionStore:
             )
             if not ids:
                 return 0
-            db.query(SessionCompactionSnapshot).filter(
-                SessionCompactionSnapshot.conversation_id.in_([row[0] for row in ids])
-            ).delete(synchronize_session=False)
+            # A concurrent writer may refresh a row after selecting IDs.
+            # Recheck expiry at DELETE time instead of erasing refreshed data.
+            deleted = (
+                db.query(SessionCompactionSnapshot)
+                .filter(
+                    SessionCompactionSnapshot.conversation_id.in_([row[0] for row in ids]),
+                    SessionCompactionSnapshot.expires_at <= _utcnow(),
+                )
+                .delete(synchronize_session=False)
+            )
             db.commit()
-            return len(ids)
+            return deleted
