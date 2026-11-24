@@ -210,4 +210,3 @@ def test_mysql_token_rotation_waits_for_credential_row_lock(mysql_memory, mysql_
 
     rotated = memory.rotate_token(token)["memory_token"]
     assert memory.put_memory(rotated, "career_goal", "软件工程", expected_version=0)["version"] == 1
-
