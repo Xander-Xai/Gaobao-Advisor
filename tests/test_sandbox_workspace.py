@@ -9,6 +9,7 @@ import pytest
 from benchmarks.sandbox_workspace import (
     SandboxOutputExceeded,
     _bounded_docker_run,
+    _remove_and_verify_container,
     run_sandbox_failure_probes,
     run_sandbox_probe,
     sandbox_command,
@@ -166,6 +167,8 @@ def test_failure_probe_receipt_requires_each_specific_failure(workspace, monkeyp
         {"passed": False, "error": "sandbox_output_limit"},
         {"passed": False, "error": "sandbox_timeout"},
     ]
+    for result in results:
+        result["cleanup_verified"] = True
     if wrong_case is not None:
         results[wrong_case] = {"passed": False, "error": "docker_unavailable"}
     calls = []
@@ -180,3 +183,55 @@ def test_failure_probe_receipt_requires_each_specific_failure(workspace, monkeyp
     assert receipt["passed"] is (wrong_case is None)
     assert len(calls) == 4
     assert sum(receipt["checks"].values()) == (4 if wrong_case is None else 3)
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "expected"),
+    [(0, "", True), (0, FAKE_NAME + "\\n", False), (1, "", False)],
+)
+def test_cleanup_verification_requires_successful_empty_daemon_listing(monkeypatch, returncode, stdout, expected):
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[1] == "rm":
+            return subprocess.CompletedProcess(args, 1, b"", b"")
+        return subprocess.CompletedProcess(args, returncode, stdout, "")
+
+    monkeypatch.setattr("benchmarks.sandbox_workspace.subprocess.run", fake_run)
+    assert _remove_and_verify_container(FAKE_NAME) is expected
+    assert calls[0] == ["docker", "rm", "-f", FAKE_NAME]
+    assert calls[1][4] == f"name=^/{FAKE_NAME}$"
+
+
+def test_cleanup_verification_fails_on_daemon_timeout(monkeypatch):
+    def timeout(args, **kwargs):
+        raise subprocess.TimeoutExpired(args, 5)
+
+    monkeypatch.setattr("benchmarks.sandbox_workspace.subprocess.run", timeout)
+    assert _remove_and_verify_container(FAKE_NAME) is False
+
+
+@pytest.mark.parametrize("timed_out", [False, True])
+def test_unverified_cleanup_cannot_be_accepted(workspace, monkeypatch, timed_out):
+    def runner(args, **kwargs):
+        if timed_out:
+            raise subprocess.TimeoutExpired(args, 25)
+        return subprocess.CompletedProcess(args, 0, "SYNTHETIC_WORKSPACE_PASS", "")
+
+    monkeypatch.setattr("benchmarks.sandbox_workspace._bounded_docker_run", runner)
+    monkeypatch.setattr("benchmarks.sandbox_workspace._remove_and_verify_container", lambda name: False)
+    result = run_sandbox_probe(FAKE_IMAGE, workspace, runner=runner)
+    assert result["cleanup_verified"] is False
+    assert result["passed"] is False
+    assert result["error"] == ("sandbox_timeout" if timed_out else "sandbox_cleanup_unverified")
+
+
+def test_negative_probe_rejects_unverified_cleanup(workspace, monkeypatch):
+    def probe(*args, **kwargs):
+        return {"passed": False, "exit_code": 7, "cleanup_verified": False}
+
+    monkeypatch.setattr("benchmarks.sandbox_workspace.run_sandbox_probe", probe)
+    receipt = run_sandbox_failure_probes(FAKE_IMAGE, workspace)
+    assert receipt["passed"] is False
+    assert receipt["checks"]["nonzero_exit"] is False

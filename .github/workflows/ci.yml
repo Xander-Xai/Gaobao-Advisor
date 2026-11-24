@@ -271,6 +271,7 @@ jobs:
           record = json.load(open("/tmp/gaobao-harness-sandbox.json"))
           assert record["sandbox"] == "DOCKER_RESTRICTED_SYNTHETIC", record
           assert record["passed"] and record["scratch_artifact_created"], record
+          assert record["cleanup_verified"] is True, record
           assert record["failure_probes"]["passed"], record
           assert set(record["failure_probes"]["checks"]) == {"nonzero_exit", "invalid_marker", "output_limit", "timeout"}
           assert all(record["failure_probes"]["checks"].values()), record
