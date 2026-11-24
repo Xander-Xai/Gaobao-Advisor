@@ -153,9 +153,7 @@ class ReportStorage:
             raise ValueError("Report storage entry is not a directory")
         entries = list(session_dir.iterdir())
         if len(entries) > 1000 or any(
-            not _safe_regular_file(item)
-            or item.suffix != ".json"
-            or not _SAFE_COMPONENT_RE.fullmatch(item.stem)
+            not _safe_regular_file(item) or item.suffix != ".json" or not _SAFE_COMPONENT_RE.fullmatch(item.stem)
             for item in entries
         ):
             raise ValueError("Report directory contains unrecognized files")
@@ -183,9 +181,7 @@ class ReportStorage:
         self._validate_stage(staged)
         entries = list(staged.iterdir())
         if len(entries) > 1000 or any(
-            not _safe_regular_file(item)
-            or item.suffix != ".json"
-            or not _SAFE_COMPONENT_RE.fullmatch(item.stem)
+            not _safe_regular_file(item) or item.suffix != ".json" or not _SAFE_COMPONENT_RE.fullmatch(item.stem)
             for item in entries
         ):
             raise ValueError("Staged report directory changed unexpectedly")
