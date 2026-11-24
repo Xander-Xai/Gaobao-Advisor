@@ -50,17 +50,14 @@ class OpenAIJsonPlanner:
                 "initial": ("mental_models",),
                 "observed": ("heuristics", "anti_patterns"),
             }.items():
-                self._skill_contexts[stage] = service.build_disclosed_context(
-                    Scene.GAOKAO, sections, max_chars=5500
-                )
+                self._skill_contexts[stage] = service.build_disclosed_context(Scene.GAOKAO, sections, max_chars=5500)
 
     def skill_policy_receipt(self) -> dict[str, Any]:
         """Report configuration, not measured token savings or model quality."""
         return {
             "policy": self._skill_policy,
             "context_sha256": {
-                stage: hashlib.sha256(text.encode("utf-8")).hexdigest()
-                for stage, text in self._skill_contexts.items()
+                stage: hashlib.sha256(text.encode("utf-8")).hexdigest() for stage, text in self._skill_contexts.items()
             },
             "context_chars": {stage: len(text) for stage, text in self._skill_contexts.items()},
         }
