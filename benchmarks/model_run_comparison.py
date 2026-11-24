@@ -17,6 +17,42 @@ from benchmarks.decision_card_trace_eval import TRACE_CONTRACT, check_trace_rece
 _CONTRACT = "SYNTHETIC_DECISION_CARD_V1"
 
 
+def _validate_budget(report: dict[str, Any]) -> tuple[int, int] | None:
+    """Reconcile a new-style budget receipt; legacy reports remain descriptive only."""
+    if "provider_budget" not in report and "provider_usage_reconciled" not in report:
+        return None
+    budget = report.get("provider_budget")
+    if not isinstance(budget, dict) or report.get("provider_usage_reconciled") is not True:
+        raise ValueError("Missing reconciled provider budget receipt")
+    fields = (
+        "max_calls",
+        "stop_after_reported_tokens",
+        "attempts",
+        "known_usage_responses",
+        "known_prompt_tokens",
+        "known_completion_tokens",
+    )
+    if any(type(budget.get(field)) is not int or budget[field] < 0 for field in fields):
+        raise ValueError("Invalid provider budget counters")
+    calls, threshold = budget["max_calls"], budget["stop_after_reported_tokens"]
+    if not 1 <= calls <= 128 or not 1 <= threshold <= 500_000:
+        raise ValueError("Invalid provider budget configuration")
+    if (
+        not 0 < budget["attempts"] < calls
+        or budget["attempts"] != budget["known_usage_responses"]
+        or budget["known_prompt_tokens"] != report.get("provider_prompt_tokens")
+        or budget["known_completion_tokens"] != report.get("provider_completion_tokens")
+        or budget["known_prompt_tokens"] + budget["known_completion_tokens"] >= threshold
+        or budget.get("usage_complete") is not True
+        or budget.get("stop_reason") is not None
+        or budget.get("hard_token_cap") is not False
+        or report.get("requested_cases") != 8
+        or report.get("unattempted_case_ids") != []
+    ):
+        raise ValueError("Provider budget receipt is incomplete or inconsistent")
+    return calls, threshold
+
+
 def _validate(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     if not isinstance(report, dict):
         raise ValueError("Invalid report")
@@ -83,6 +119,7 @@ def _validate(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
         raise ValueError("Inconsistent completion token total")
     if sum(row["passed"] for row in cases) != report.get("passed"):
         raise ValueError("Inconsistent passed-case count")
+    _validate_budget(report)
     return indexed
 
 
@@ -90,6 +127,9 @@ def compare_model_runs(baseline: dict[str, Any], candidate: dict[str, Any]) -> d
     """Paired descriptive quality/efficiency evidence, NOT a release decision."""
     old = _validate(baseline)
     new = _validate(candidate)
+    old_budget, new_budget = _validate_budget(baseline), _validate_budget(candidate)
+    if old_budget != new_budget:
+        raise ValueError("Provider budget contracts differ across comparison arms")
     if baseline["run_id"] == candidate["run_id"]:
         raise ValueError("A run cannot be paired with itself")
     for field in ("model_id", "dataset_sha256", "tool_contract_sha256", "temperature"):
@@ -136,6 +176,7 @@ def compare_model_runs(baseline: dict[str, Any], candidate: dict[str, Any]) -> d
         "candidate_run_id": candidate["run_id"],
         "model_id": baseline["model_id"],
         "same_prompt": baseline["model_prompt_sha256"] == candidate["model_prompt_sha256"],
+        "provider_budget_contract_checked": old_budget is not None,
         "dataset_sha256": baseline["dataset_sha256"],
         "groups": grouped,
         "holdout_quality_non_regression": non_regression,
@@ -163,7 +204,8 @@ def main(argv: list[str] | None = None) -> int:
         json.loads(args.candidate.read_text(encoding="utf-8")),
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    with args.out.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(result["descriptive_candidate"] + " (not deployment approval)")
     return 0
 
