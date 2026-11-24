@@ -5,7 +5,7 @@ services:
     command: uvicorn server.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - path: .env
         required: false
@@ -15,6 +15,11 @@ services:
       ENABLE_SYNTHETIC_AGENT_EXPERIMENT: ${ENABLE_SYNTHETIC_AGENT_EXPERIMENT:-true}
       ENABLE_OUTBOUND_FETCH: ${ENABLE_OUTBOUND_FETCH:-false}
       SYNTHETIC_TASKRUN_JOURNAL: ${SYNTHETIC_TASKRUN_JOURNAL:-/app/data/synthetic-taskruns.sqlite}
+      # Explicit preference writes only; production still rejects this experimental API.
+      USER_MEMORY_ENABLED: ${USER_MEMORY_ENABLED:-true}
+      # Summary may use a configured provider; plaintext snapshots remain explicit opt-in.
+      GAOBAO_CHAT_COMPACTION_ENABLED: ${GAOBAO_CHAT_COMPACTION_ENABLED:-true}
+      GAOBAO_CHAT_SNAPSHOT_ENABLED: ${GAOBAO_CHAT_SNAPSHOT_ENABLED:-false}
     volumes:
       # Named volume avoids host-UID/bind-mount permission failures while
       # keeping the synthetic database across container restarts.
@@ -32,7 +37,7 @@ services:
     container_name: gaokao-frontend
     restart: unless-stopped
     ports:
-      - "3080:80"
+      - "127.0.0.1:3080:80"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
       interval: 15s
@@ -45,7 +50,7 @@ services:
     container_name: gaokao-nginx
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"
     volumes:
       # HTTP-only demo config; production uses nginx.conf + TLS certs.
       - ./nginx.demo.conf:/etc/nginx/nginx.conf:ro
