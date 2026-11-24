@@ -537,10 +537,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--confirm-provider-charges", action="store_true")
     args = parser.parse_args(argv)
 
-    if (
-        not 1 <= args.max_provider_calls_per_arm <= 64
-        or not 1 <= args.stop_after_reported_tokens_per_arm <= 500_000
-    ):
+    if not 1 <= args.max_provider_calls_per_arm <= 64 or not 1 <= args.stop_after_reported_tokens_per_arm <= 500_000:
         parser.error("Invalid provider budget")
     if not 2 <= args.trials <= 5:
         parser.error("--trials must be between 2 and 5")
