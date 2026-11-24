@@ -173,7 +173,7 @@ def test_checkpoint_rejects_changed_tool_retry_policy(tmp_path: Path):
         _tool(_good_result),
         limits,
         checkpoint=journal,
-        run_id="synthetic-retry-policy",
+        run_id="synthetic-run-retry-policy",
     )
     assert result.status == "completed"
     with pytest.raises(ValueError, match="execution policy mismatch"):
@@ -183,5 +183,5 @@ def test_checkpoint_rejects_changed_tool_retry_policy(tmp_path: Path):
             _tool(_good_result, retry_safe=False),
             limits,
             checkpoint=journal,
-            run_id="synthetic-retry-policy",
+            run_id="synthetic-run-retry-policy",
         )
