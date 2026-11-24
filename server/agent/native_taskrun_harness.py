@@ -15,9 +15,7 @@ from server.agent.synthetic_decision_card import DecisionCardProfile, build_synt
 _MODEL_ID = re.compile(r"^[A-Za-z0-9_.:/-]{1,160}$")
 
 
-def run_native_harness(
-    profile: DecisionCardProfile, model: str, *, lease_guard: Callable[[], None]
-) -> dict[str, Any]:
+def run_native_harness(profile: DecisionCardProfile, model: str, *, lease_guard: Callable[[], None]) -> dict[str, Any]:
     """Run bounded model actions with no automatic fallback and no public HTTP spending."""
     if not model.startswith("openai:") or not _MODEL_ID.fullmatch(model.removeprefix("openai:")):
         raise ValueError("Invalid explicit provider model ID")
@@ -38,7 +36,11 @@ def run_native_harness(
             lease_guard()
             response = client.chat.completions.create(**kwargs)
             actual = getattr(response, "model", None)
-            if not isinstance(actual, str) or not _MODEL_ID.fullmatch(actual) or (identities and actual != identities[0]):
+            if (
+                not isinstance(actual, str)
+                or not _MODEL_ID.fullmatch(actual)
+                or (identities and actual != identities[0])
+            ):
                 raise ValueError("Provider model identity missing or changed")
             identities.append(actual)
             lease_guard()
