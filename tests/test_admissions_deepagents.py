@@ -224,7 +224,16 @@ def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatc
         assert {row["school_id"] for row in rows} == {1, 2}
         assert group_by == ("school_id", "year")
         assert kwargs["authorized"] is True
-        return {"status": "VERIFIED_DESCRIPTIVE_ANALYSIS", "result_sha256": "a" * 64}
+        result = admissions_analysis_sandbox._expected(rows, group_by)
+        encode = admissions_analysis_sandbox._json
+        digest = admissions_analysis_sandbox._digest
+        return {
+            "status": "VERIFIED_DESCRIPTIVE_ANALYSIS",
+            "cleanup_verified": True,
+            "result": result,
+            "result_sha256": digest(encode(result)),
+            "input_sha256": digest(encode({"rows": rows, "group_by": group_by})),
+        }
 
     monkeypatch.setattr(admissions_analysis_sandbox, "execute_admissions_analysis", sandbox)
 
@@ -253,3 +262,31 @@ def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatc
     )
     assert receipt["status"] == "VERIFIED_RESEARCH"
     assert receipt["sandbox_analysis"]["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS"
+    assert "独立核验的沙箱描述性统计" in research.render_verified_research(receipt)
+    receipt["sandbox_analysis"]["input_sha256"] = "b" * 64
+    with pytest.raises(ValueError, match="Sandbox evidence mismatch"):
+        research.render_verified_research(receipt)
+
+
+def test_private_report_requires_verified_evidence(sessions):
+    receipt = run(sessions, controller())
+    rendered = research.render_verified_research(receipt)
+    assert receipt["evidence_sha256"] in rendered
+    assert "12345" in rendered
+    assert "选科要求原文保留" in rendered
+    assert "录取概率" in rendered
+    receipt["evidence"]["admission-history"][0]["min_score"] = 999
+    with pytest.raises(ValueError, match="digest"):
+        research.render_verified_research(receipt)
+
+
+def test_private_report_preserves_partial_and_blocks_unsubmitted(sessions):
+    with sessions() as session:
+        session.query(EnrollmentPlan).filter_by(school_id=2).delete()
+        session.commit()
+    receipt = run(sessions, controller())
+    rendered = research.render_verified_research(receipt)
+    assert "VERIFIED_PARTIAL_RESEARCH" in rendered
+    assert '"missing":[[2,2024]]' in rendered
+    with pytest.raises(ValueError, match="verified"):
+        research.render_verified_research(run(sessions, controller(submit=False)))
