@@ -78,7 +78,7 @@ class _ObservedCompletions:
         self.requested_temperatures.append(kwargs["temperature"])
         response = self.delegate.create(**kwargs)
         model = getattr(response, "model", None)
-        self.returned_model_ids.append(model if isinstance(model, str) and model else None)
+        self.returned_model_ids.append(model if isinstance(model, str) and model.strip() else None)
         return response
 
 
@@ -126,8 +126,10 @@ def run_arm(arm: str, model_id: str, *, real_model: bool) -> dict[str, Any]:
     if business["trace_validated_cases"] != _CASES or any(value != 0 for value in observed.requested_temperatures):
         raise ValueError("Trace/temperature invariant failed")
     reported_models = sorted({model for model in observed.returned_model_ids if model is not None})
-    origin_consistent = len(reported_models) == 1 and len(observed.returned_model_ids) == sum(
-        row["model_steps"] for row in business["results"]
+    origin_consistent = (
+        len(reported_models) == 1
+        and all(model is not None for model in observed.returned_model_ids)
+        and len(observed.returned_model_ids) == sum(row["model_steps"] for row in business["results"])
     )
     rows = []
     for case, planner, row in zip(cases, instances, business["results"], strict=True):
@@ -268,6 +270,7 @@ def compare_pair(full: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
         and full.get("provider_model_identity_consistent") is True
         and compact.get("provider_model_identity_consistent") is True
         and isinstance(full.get("provider_reported_model"), str)
+        and bool(full["provider_reported_model"].strip())
         and full["provider_reported_model"] == compact.get("provider_reported_model")
     )
     if real and not reported_version_equal:
@@ -312,6 +315,7 @@ def compare_pair(full: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
         "full_run_id": full["run_id"],
         "compact_run_id": compact["run_id"],
         "provider_reported_model_equal": reported_version_equal if real else "NOT_MEASURED",
+        "provider_reported_model": full["provider_reported_model"] if real else None,
         "groups": groups,
         "holdout_no_regression": not holdout["regressed_case_ids"],
         "holdout_provider_token_reduction": holdout["provider_token_delta"] < 0 if real else "NOT_MEASURED",
@@ -339,6 +343,7 @@ def compare_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> dict[s
             full["dataset_sha256"],
             full["same_frozen_prompt_sha256"],
             full["tool_contract_sha256"],
+            result["provider_reported_model"],
         )
         if frozen_identity is None:
             frozen_identity = identity
@@ -361,6 +366,7 @@ def compare_trials(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> dict[s
         "controller": frozen_identity[0],
         "model_id": frozen_identity[1],
         "dataset_sha256": frozen_identity[2],
+        "provider_reported_model": frozen_identity[5],
         "trial_count": len(results),
         "holdout_observations_per_arm": len(results) * 4,
         "holdout_no_regression": no_regression,
