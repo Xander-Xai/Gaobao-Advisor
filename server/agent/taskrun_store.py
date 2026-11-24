@@ -67,9 +67,7 @@ class SyntheticTaskRunStore:
         with self._open() as conn:
             # Serialize the trust-boundary check and schema initialization.
             conn.execute("BEGIN IMMEDIATE")
-            if conn.execute(
-                "SELECT 1 FROM sqlite_master WHERE name = ?", ("authorized_research_runs",)
-            ).fetchone():
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", ("authorized_research_runs",)).fetchone():
                 raise ValueError("Synthetic journal must not contain private research schema")
             conn.execute(
                 """
