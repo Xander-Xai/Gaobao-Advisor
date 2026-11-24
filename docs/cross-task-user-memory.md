@@ -21,6 +21,7 @@
 
 ```bash
 # 默认关闭，先在隔离的开发环境验证
+export APP_ENV=development
 export USER_MEMORY_ENABLED=true
 
 # SQLite 演示环境启动时 create_all；MySQL 必须执行迁移
@@ -74,7 +75,7 @@ token 为 384 位随机数；数据库仅保存 SHA-256 摘要。
    `vault_id + memory_key` 唯一，更新走 SQL 版本比较（CAS）。
 2. 只有携带正确独立凭证的请求能读/写该用户的记忆。无凭证的新会话只能获得空记忆。
 3. 过期后不再被读取；更新过期值必须重新以版本 0 显式确认。
-   当前过期行采用**逻辑排除、按键写入时清理**，尚未提供定时全表清理作业。
+   当前过期行采用**逻辑排除、按键写入时清理**，并可通过受信任的 `scripts.prune_user_memory` 限量清理；删除时再次检查 TTL，避免删除已续期的条目。尚未提供定时清理作业。
 4. `DELETE /profile/{session_id}/data` 仅删除会话数据，不会删除独立用户记忆；
    `DELETE /memory/vault` 删除整个保险箱的实时 SQL 数据，不会删除会话报告。
 5. 删除/轮换不承诺清理备份、外部处理者、已经发送给模型提供商的上下文、
@@ -99,6 +100,8 @@ pytest -q -o addopts='' tests/test_cross_task_user_memory.py
 pytest -q -o addopts='' tests/test_migrations.py
 ruff check server/user_memory.py server/routes/user_memory.py tests/test_cross_task_user_memory.py
 ```
+
+只有明确的 development/dev/test/testing/local `APP_ENV` 才能启用此明文偏好实验；生产、staging、未知及未设置环境均拒绝启用。偏好内容只放在 user-role 上下文，不进入 system-role 指令。
 
 `USER_MEMORY_ENABLED=false` 是回滚开关：关闭后记忆 API 拒绝读写，
 聊天不自动读取记忆，不删除已存在的保险箱数据。
