@@ -190,3 +190,50 @@ def test_report_component_requires_full_match(isolated):
     for invalid in ("../outside", "nested/session", "nested\\\\session"):
         with pytest.raises(ValueError, match="unsafe session_id"):
             storage.save(Report(id="synthetic-report", session_id=invalid))
+
+
+def test_incomplete_report_cleanup_cannot_be_reported_as_success(isolated, monkeypatch):
+    session_factory, storage = isolated
+    original = seed(session_factory, storage)
+    original_finalize = storage.finalize_staged_session
+
+    def fail_finalize(_stage):
+        raise OSError("synthetic report cleanup failure")
+
+    monkeypatch.setattr(storage, "finalize_staged_session", fail_finalize)
+    with pytest.raises(OSError, match="synthetic"):
+        erase_live_session_data("synthetic-session-privacy", storage)
+    assert not original.exists()
+    stages = list((storage._base / ".purge-staging").iterdir())
+    assert len(stages) == 1
+    assert (stages[0] / "synthetic-report.json").is_file()
+    with session_factory() as db:
+        assert db.query(Conversation).count() == 0
+
+    monkeypatch.setattr(storage, "finalize_staged_session", original_finalize)
+    with pytest.raises(RuntimeError, match="operator reconciliation"):
+        erase_live_session_data("synthetic-session-privacy", storage)
+    assert (stages[0] / "synthetic-report.json").is_file()
+
+
+def test_stage_cannot_be_restored_into_another_session(isolated):
+    session_factory, storage = isolated
+    seed(session_factory, storage)
+    stage, _ = storage.stage_session_deletion("synthetic-session-privacy")
+    with pytest.raises(ValueError, match="does not match session"):
+        storage.restore_staged_session("other-session", stage)
+    assert stage.is_dir()
+    assert not (storage._base / "other-session").exists()
+    storage.restore_staged_session("synthetic-session-privacy", stage)
+
+
+def test_legacy_unattributed_stage_blocks_new_erasure(isolated):
+    session_factory, storage = isolated
+    directory = seed(session_factory, storage)
+    legacy = storage._base / ".purge-staging" / ("pending-" + "a" * 32)
+    legacy.mkdir(parents=True)
+    with pytest.raises(RuntimeError, match="Unattributed"):
+        erase_live_session_data("synthetic-session-privacy", storage)
+    assert directory.is_dir()
+    with session_factory() as db:
+        assert db.query(Conversation).count() == 1
