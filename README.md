@@ -48,7 +48,7 @@
 摘要目前不持久化，不具备 Pi/OpenCode 的完整会话分叉与增量恢复机制，
 也没有真实模型 A/B、Token 降本证明或生产个人信息许可。
 操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
-跨任务用户偏好记忆由独立 Draft PR #159 承接（旧 #135 仍为历史依赖栈），尚未合并，不应与会话压缩混同。
+跨任务用户偏好记忆与会话压缩是不同机制。本实验提供显式创建的独立凭证、SQL 持久化、TTL、版本控制、凭证轮换及删除；仅允许显式非生产环境且默认关闭。详见 [跨任务记忆的使用与生产门槛](docs/cross-task-user-memory.md)。真实身份绑定、偏好加密和生产隐私验收尚未完成。旧 #135 已关闭，由本实现承接。
 
 进一步的**可复用会话摘要快照**已合入 master（PR #149），默认关闭：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。仍需单独授权开关 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，且当前明确禁止生产环境启用；具体限制与 Alembic 迁移冲突见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
 
