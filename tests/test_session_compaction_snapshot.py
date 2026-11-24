@@ -294,9 +294,7 @@ def test_encrypted_snapshot_is_bound_to_session_and_key(db_factory):
     store = SessionCompactionStore(db_factory, encryption_key=key)
     history = _history(db_factory)
     for session_id in ("session-alpha", "session-beta"):
-        assert store.publish(
-            session_id, history, covered_count=6, summary="private summary", policy_sha256=POLICY
-        )
+        assert store.publish(session_id, history, covered_count=6, summary="private summary", policy_sha256=POLICY)
     assert store.load("session-alpha", history, policy_sha256=POLICY).summary == "private summary"
     wrong_key = SessionCompactionStore(db_factory, encryption_key=bytes.fromhex("cd" * 32))
     assert wrong_key.load("session-alpha", history, policy_sha256=POLICY) is None

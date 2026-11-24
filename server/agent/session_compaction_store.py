@@ -8,7 +8,6 @@ message prefix, a summary policy hash, a short TTL and CAS version.
 from __future__ import annotations
 
 import base64
-import binascii
 import hashlib
 import json
 import os
@@ -131,7 +130,7 @@ class SessionCompactionStore:
             raw = base64.b64decode(value[len(_ENCRYPTED_PREFIX) :], validate=True)
             aad = self._aad(row.conversation_id, row.covered_count, row.covered_sha256, row.policy_sha256)
             summary = self.cipher.decrypt(raw[:12], raw[12:], aad).decode("utf-8")
-        except (InvalidTag, ValueError, UnicodeError, binascii.Error):
+        except (InvalidTag, ValueError):
             return None
         return summary if 1 <= len(summary.strip()) <= 4000 else None
 

@@ -5,6 +5,17 @@ __pycache__
 *.pyc
 data/
 .env
+.env.*
+**/.env
+**/.env.*
+*.sqlite
+*.sqlite3
+*.db-*
+*.sqlite-*
+*.sqlite3-*
+backups/
+backup/
+logs/
 .streamlit/secrets.toml
 *.db
 node_modules
