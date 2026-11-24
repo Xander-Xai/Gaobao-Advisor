@@ -181,14 +181,15 @@ def score_case(case: dict, receipt: Any) -> dict:
             or analysis.get("result_sha256") != case["expected_analysis_sha256"]
         ):
             reasons.append("gold_sandbox_mismatch")
-    usage = receipt.get("provider_usage")
+    return {"passed": not reasons, "reasons": reasons, "usage": _declared_usage(receipt.get("provider_usage"))}
+
+
+def _declared_usage(usage):
     if not isinstance(usage, dict) or any(
         type(usage.get(key)) is not int or usage[key] < 0 for key in ("input_tokens", "output_tokens")
     ):
-        usage = None
-    else:
-        usage = {key: usage[key] for key in ("input_tokens", "output_tokens")}
-    return {"passed": not reasons, "reasons": reasons, "usage": usage}
+        return None
+    return {key: usage[key] for key in ("input_tokens", "output_tokens")}
 
 
 def evaluate(manifest: Any, receipts: Any) -> dict:
@@ -206,6 +207,10 @@ def evaluate(manifest: Any, receipts: Any) -> dict:
         {"case_id": case["case_id"], "split": case["split"], **score_case(case, receipts[case["case_id"]])}
         for case in cases
     ]
+    return _summarize(manifest, results)
+
+
+def _summarize(manifest, results):
     splits = {}
     for split in ("development", "holdout"):
         items = [item for item in results if item["split"] == split]
@@ -234,18 +239,121 @@ def evaluate(manifest: Any, receipts: Any) -> dict:
     }
 
 
+def evaluate_managed(manifest, run_map, journal_path, *, model_id, image_id):
+    """Grade the managed lifecycle's verified aggregate projection without raw SQL export.
+
+    An unclassified failed run is never credit for an expected safe rejection.
+    This lane cannot independently recompute raw evidence or attest provider transport.
+    """
+    from server.agent.admissions_research_taskrun import ID, IMAGE, MODEL_RE, read_managed_eval_views
+
+    cases = validate_manifest(manifest)
+    if (
+        not isinstance(run_map, dict)
+        or set(run_map) != {case["case_id"] for case in cases}
+        or any(not isinstance(value, str) or not ID.fullmatch(value) for value in run_map.values())
+        or len(set(run_map.values())) != len(cases)
+    ):
+        raise ValueError("Exactly one distinct managed run per gold case required")
+    if not isinstance(model_id, str) or not MODEL_RE.fullmatch(model_id):
+        raise ValueError("Explicit evaluation model required")
+    if not isinstance(image_id, str) or not IMAGE.fullmatch(image_id):
+        raise ValueError("Explicit evaluation image required")
+    views = read_managed_eval_views(journal_path, list(run_map.values()))
+    results = []
+    for case in cases:
+        item = views[run_map[case["case_id"]]]
+        spec, result = item["spec"], item["result"]
+        reasons = []
+        if canonical(spec["scope"]) != canonical(case["scope"]):
+            reasons.append("scope_mismatch")
+        if spec["dataset_ref"] != manifest["dataset_ref"] or spec["model_id"] != model_id:
+            reasons.append("dataset_or_model_mismatch")
+        if spec["image_id"] != image_id:
+            reasons.append("image_mismatch")
+        if not item["approved_by"] or item["approved_by"] == item["owner"]:
+            reasons.append("independent_approval_missing")
+        if case["expected_status"] == "BLOCKED":
+            # The current managed journal intentionally collapses failure causes.
+            # FAILED can be an outage, not proof of correct business rejection.
+            reasons.append("managed_block_reason_not_independently_classified")
+        else:
+            expected_state = "SUCCEEDED" if case["expected_status"] == "VERIFIED_RESEARCH" else "NEEDS_REVIEW"
+            if item["status"] != expected_state or not isinstance(result, dict):
+                reasons.append("unexpected_managed_state")
+            else:
+                if result.get("status") != case["expected_status"] or result.get("spec_sha256") != item["spec_sha256"]:
+                    reasons.append("result_binding_mismatch")
+                if result.get("admission_recommendation_verified") is not False:
+                    reasons.append("unsupported_prediction_claim")
+                if canonical(result.get("coverage")) != canonical(case["expected_coverage"]):
+                    reasons.append("gold_coverage_mismatch")
+                if result.get("evidence_sha256") != case["expected_evidence_sha256"]:
+                    reasons.append("gold_evidence_mismatch")
+                if (
+                    result.get("analysis_sha256") != digest(result.get("analysis"))
+                    or result.get("analysis_sha256") != case["expected_analysis_sha256"]
+                ):
+                    reasons.append("gold_sandbox_mismatch")
+                receipts = result.get("receipt_ids")
+                if not isinstance(receipts, dict) or set(receipts) != DIMS or not all(
+                    _hash(value) for value in receipts.values()
+                ):
+                    reasons.append("missing_verified_receipt_ids")
+        results.append(
+            {
+                "case_id": case["case_id"],
+                "split": case["split"],
+                "passed": not reasons,
+                "reasons": reasons,
+                "usage": _declared_usage(result.get("provider_usage")) if isinstance(result, dict) else None,
+            }
+        )
+    report = _summarize(manifest, results)
+    report.update(
+        {
+            "evidence_lane": "MANAGED_JOURNAL_AGGREGATE",
+            "run_map_sha256": digest(run_map),
+            "approved_model_id": model_id,
+            "approved_image_id": image_id,
+            "raw_evidence_independently_recomputed": False,
+            "provider_transport_verified": False,
+        }
+    )
+    return report
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gold", type=Path, required=True)
-    parser.add_argument("--receipts", type=Path, required=True, help="Private JSON object keyed by case ID")
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--receipts", type=Path, help="Private full receipt JSON object keyed by case ID")
+    inputs.add_argument("--managed-runs", type=Path, help="Private JSON object mapping case ID to managed run ID")
+    parser.add_argument("--journal", type=Path, help="Existing private managed journal (read-only)")
+    parser.add_argument("--expected-model")
+    parser.add_argument("--expected-image")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--authorize-private-eval", action="store_true", required=True)
     args = parser.parse_args(argv)
     if args.out.exists() or args.out.is_symlink():
         parser.error("Output must be a new private evidence file")
+    if args.managed_runs and not (args.journal and args.expected_model and args.expected_image):
+        parser.error("Managed evaluation requires journal, expected model and expected image")
+    if args.receipts and (args.journal or args.expected_model or args.expected_image):
+        parser.error("Managed options require --managed-runs")
     try:
-        result = evaluate(read_private_json(args.gold), read_private_json(args.receipts))
-    except (ValueError, TypeError, OSError):
+        manifest = read_private_json(args.gold)
+        if args.managed_runs:
+            result = evaluate_managed(
+                manifest,
+                read_private_json(args.managed_runs),
+                args.journal,
+                model_id=args.expected_model,
+                image_id=args.expected_image,
+            )
+        else:
+            result = evaluate(manifest, read_private_json(args.receipts))
+    except (ValueError, TypeError, OSError, LookupError):
         parser.error("Invalid or unavailable approved evaluation input")
     fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
