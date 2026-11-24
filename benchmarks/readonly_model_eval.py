@@ -189,9 +189,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.out.exists() or args.out.is_symlink():
         parser.error("Output must be a new evidence file")
     try:
-        reviewed = (
-            json.loads(args.reviewed_dataset.read_text(encoding="utf-8")) if args.reviewed_dataset else None
-        )
+        reviewed = json.loads(args.reviewed_dataset.read_text(encoding="utf-8")) if args.reviewed_dataset else None
         cases, plan = build_eval_plan(reviewed, args.max_cases)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
@@ -204,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.plan_only:
         with args.out.open("x", encoding="utf-8") as handle:
             json.dump({**plan, "controller": "NOT_EXECUTED", "provider_called": False}, handle, indent=2)
-            handle.write("\\n")
+            handle.write("\n")
         return 0
     if not os.environ.get("OPENAI_API_KEY"):
         parser.error("OPENAI_API_KEY required for explicit paid model probe")

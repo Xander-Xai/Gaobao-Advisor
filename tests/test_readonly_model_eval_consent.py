@@ -24,8 +24,14 @@ def test_model_probe_requires_explicit_external_call_consent(tmp_path):
 def test_plan_only_works_without_provider_permission(tmp_path):
     target = tmp_path / "plan.json"
     command = [
-        sys.executable, "-m", "benchmarks.readonly_model_eval",
-        "--out", str(target), "--model", "fictional-model", "--plan-only",
+        sys.executable,
+        "-m",
+        "benchmarks.readonly_model_eval",
+        "--out",
+        str(target),
+        "--model",
+        "fictional-model",
+        "--plan-only",
     ]
     result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=20)
     assert result.returncode == 0, result.stderr
@@ -43,10 +49,7 @@ def test_plan_only_works_without_provider_permission(tmp_path):
 def test_reviewed_suite_defaults_to_complete_population_and_is_order_invariant(monkeypatch):
     from benchmarks import readonly_model_eval as evaluation
 
-    rows = [
-        {"id": f"case-{i:02}", "split": "holdout" if i % 4 == 0 else "development"}
-        for i in range(20)
-    ]
+    rows = [{"id": f"case-{i:02}", "split": "holdout" if i % 4 == 0 else "development"} for i in range(20)]
     reviewed = {"cases": rows, "source_sha256": "a" * 64}
     monkeypatch.setattr(evaluation, "validate_reviewed_export", lambda value: None)
     cases, plan = evaluation.build_eval_plan(reviewed, None)
