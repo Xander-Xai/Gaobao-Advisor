@@ -11,8 +11,8 @@
 |---|---|---|---|
 | Working memory | current authenticated request, model state and SQL receipts | `server/graph/nodes/llm_node.py` | Keep latest SQL evidence, current task and source IDs verbatim |
 | Session / episodic | recent history plus lower-trust structured summary | `server/agent/chat_context.py`, `memory_manager.py` | PR #148 merged into master; semantic summary off by default |
-| Versioned session snapshot | history-prefix SHA, policy/model/provider fingerprint, TTL, CAS and DB primary key | `server/agent/session_compaction_store.py`, `durable_chat_context.py` | PR #149 pending independent CI; default disabled and plaintext blocked except explicit dev/test |
-| Cross-task preferences | explicitly opt-in, owner-scoped, permitted preference types, revocable | Draft PR #135 | NOT merged/released; real identity/consent/encryption/backup erasure still require work |
+| Versioned session snapshot | history-prefix SHA, policy/model/provider fingerprint, TTL, CAS and DB primary key | `server/agent/session_compaction_store.py`, `durable_chat_context.py` | PR #149 merged into master; default disabled and plaintext blocked except explicit dev/test |
+| Cross-task preferences | explicitly opt-in, owner-scoped, permitted preference types, revocable | Draft PR #159 (replacement candidate for #135) | NOT merged/released; real identity/consent/encryption/backup erasure still require work |
 | Business evidence | verified admissions SQL and provenance, source version | existing query, context policy and evidence layer | Never promote summaries/preferences to admissions evidence |
 | Procedural | `AGENTS.md`, repo docs, eval and test manifests | project version control | Keep cost, privacy, replays and test evidence auditable |
 
@@ -34,15 +34,15 @@
 1. **P0 already merged** (#148): unify sync, streaming and public SSE input
    budgeting, partial-history signaling and summary trust level. Do not change
    statement of CI/production until verified.
-2. **P0 PR pending** (#149): versioned persistent snapshot reuse, live DB
+2. **P0 merged** (#149): versioned persistent snapshot reuse, live DB
    prefix verification, CAS, expiry and stale-cleanup tests. Release gate:
    independent Python 3.10/3.11/SQLite/MySQL migration/Compose/Lint checks on
    the exact head. Explicit production-off environment gate.
-3. **P1 pending privacy/identity** (#135): opt-in cross-task preferences. The
+3. **P1 pending privacy/identity** (#159): opt-in cross-task preferences. The
    user preference vault must not share a table, privilege boundary, or
    implicit extraction path with session summaries. Require owner proof, UI
    consent, encryption and revocation/retention review first.
-4. **P1 evaluation** (#137): same-case provider A/B — no compaction vs
+4. **P1 evaluation** (#160 merged synthetic paired tool-context A/B; #162 follow-up): same-case provider A/B — no compaction vs
    per-request compaction vs snapshot reuse, measure current admissions
    evidence support, referent resolution, refusal precision, token accounting,
    latency and cost. Existing synthetic green tests are *not* real provider
@@ -53,11 +53,7 @@
 
 ## Migration warning
 
-Draft #135 and PR #149 independently introduce a `0006` Alembic child
-of `20261031_0005`. Both cannot land as uncoordinated heads. Merge one,
-rebase the other onto the resulting migration revision, then rerun
-SQLite/MySQL migration contract tests. Do not silently rewrite an already
-deployed migration.
+The original #135 and #149 introduced separate `0006` children. #149 is merged; #159 proposes the reconciliation migration `20261124_0008`. Require one migration head and exact-head SQLite/MySQL checks before merging. The old #135 stack is not an independent merge target.
 
 ## Source documentation
 

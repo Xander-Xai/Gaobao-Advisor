@@ -26,7 +26,7 @@ def fake_docker(monkeypatch):
         source = (workspace / "solution.py").read_text(encoding="utf-8")
         correct = "return a + b" in source or "return max(low, min(high, value))" in source
         if correct:
-            (workspace / "artifact.txt").write_text("PASS", encoding="utf-8")
+            (workspace / "artifact.txt").write_text("synthetic tests passed", encoding="utf-8")
         return {"passed": correct}
 
     monkeypatch.setattr(coding, "run_sandbox_probe", run)
@@ -41,6 +41,7 @@ def test_two_synthetic_bugs_are_repaired_in_isolated_workflow(fake_docker):
         assert result["tool_calls"] == 4
         assert result["test_runs"] == 2
         assert result["reason"] == "sandbox_tests_passed"
+        assert len(result["accepted_source_sha256"]) == 64
         assert result["persistent_memory"] is False
 
 
@@ -100,3 +101,56 @@ def test_step_budget_stops_unending_inspection(fake_docker):
     result = run_repair("addition", IMAGE, Actions([CodingAction("inspect")] * 12), max_steps=3)
     assert result["reason"] == "step_budget_exhausted"
     assert result["model_steps"] == 3
+
+
+@pytest.mark.parametrize("fault", ["changed_source", "missing_artifact", "wrong_artifact", "linked_artifact"])
+def test_success_marker_without_bound_artifact_is_not_accepted(monkeypatch, fault):
+    def run(_image, workspace, *, oracle_source):
+        artifact = workspace / "artifact.txt"
+        if fault == "changed_source":
+            (workspace / "solution.py").write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
+        if fault == "linked_artifact":
+            artifact.symlink_to(workspace / "solution.py")
+        elif fault != "missing_artifact":
+            artifact.write_text("wrong" if fault == "wrong_artifact" else "synthetic tests passed", encoding="utf-8")
+        return {"passed": True}
+
+    monkeypatch.setattr(coding, "run_sandbox_probe", run)
+    result = run_repair(
+        "addition",
+        IMAGE,
+        Actions(
+            [CodingAction("edit", coding._TASKS["addition"]["correct"]), CodingAction("test"), CodingAction("finish")]
+        ),
+    )
+    assert result["status"] == "blocked"
+    assert result["accepted_source_sha256"] is None
+
+
+def test_repeated_test_cannot_reuse_previous_artifact(monkeypatch):
+    calls = []
+
+    def run(_image, workspace, *, oracle_source):
+        artifact = workspace / "artifact.txt"
+        assert not artifact.exists()
+        calls.append(1)
+        if len(calls) == 1:
+            artifact.write_text("synthetic tests passed", encoding="utf-8")
+        return {"passed": True}
+
+    monkeypatch.setattr(coding, "run_sandbox_probe", run)
+    result = run_repair(
+        "addition",
+        IMAGE,
+        Actions(
+            [
+                CodingAction("edit", coding._TASKS["addition"]["correct"]),
+                CodingAction("test"),
+                CodingAction("test"),
+                CodingAction("finish"),
+            ]
+        ),
+    )
+    assert result["status"] == "blocked"
+    assert result["test_runs"] == 2
+    assert result["accepted_source_sha256"] is None
