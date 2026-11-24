@@ -22,3 +22,6 @@
 3. Check Actions for the exact SHA, and state what ran, passed, failed, was skipped or is pending. Report release/tag and deployment evidence separately. When a source is unavailable, say which claim could not be verified.
 4. State the environment and dataset behind each finding. Distinguish implemented code, test evidence, measured results and production validation. Keep public-repository evidence separate from personal or employment history.
 5. When changing a feature or interface, update its current documentation and existing generated contracts in the same PR. Keep dated audits labelled with the snapshot date.
+
+## Architecture change gate
+- Follow [architecture decision freeze](docs/architecture/README.md#architecture-decision-freeze--2026-11-25). Default chat remains deterministic and SQL-grounded. Native readonly Harness is a reference/eval baseline; Deep Agents is the selected complex-research candidate, not a second default chat engine. Keep synthetic sandbox fixtures out of public business routes. Do not expand frameworks or duplicate task lifecycles before architecture simplification is accepted.

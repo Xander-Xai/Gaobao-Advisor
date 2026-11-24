@@ -5,6 +5,25 @@ This document is the authoritative architecture reference for
 future design. The ADRs under [`docs/superpowers/adr/`](../superpowers/adr/)
 record why the larger decisions were made.
 
+## Architecture decision freeze — 2026-11-25
+
+**主架构：确定性在线咨询 + 独立受控复杂招生研究 Harness。** 这是较新、不同任职阶段的项目；当前公开增量与历史交付分开。本仓负责 Harness/Eval/Context、受限执行和全栈业务交付，不重复客服的企业写操作运行时、A2A/MCP 或 Beauty 的多模态知识底座。
+
+| 设计 | 裁决 | 边界 / 验收 |
+|---|---|---|
+| Online chat | 保留 LangGraph 确定性图 | 单次事实查询不经自主 Loop；SQL/来源和选科、年份、省份、位次硬约束优先；模型解释不替代事实 |
+| 图节点 | 按责任裁剪 | 节点数不是自主调用次数；相邻纯规则节点只有在独立路由、观察或恢复有价值时保留；改动须保持 API/SSE、拒答和状态契约 |
+| Native readonly Harness | 保留为最小参考和可控评测基线 | 不成为第二套默认聊天引擎；不重复扩展通用生产运行时 |
+| Deep Agents | 唯一复杂研究候选执行引擎 | 已有 operator research runner；独立的确定性 SQL subgraph 不是自主模型专家；批准范围、工具预算、SQL 回执和结果验证优先；未合并持久研究 API 不算现有业务 |
+| Sandbox | 仅招生分析有业务主责 | 算术代码修复是隔离回归 fixture，不是用户功能；只准批准数据快照、受限容器、独立 Oracle 校验；无 Docker socket/任意 host shell 暴露给模型 |
+| Memory / Context | 保留分层 | SQL 事实/当前任务不截断；摘要是非可信上下文；长期偏好独立且可撤回，不能替代录取依据 |
+| SQLite / MySQL / Redis / Java | 单体默认，外部组件可选 | Java 仅目录读服务 overlay；不建立另一套 chat/Agent 入口；扩容需求或隔离收益不足不扩展 |
+| Eval | 独立业务真值优先 | 合成 Oracle 与真实模型、真实招生效果分开；A/B 只允许一个明确变量，不自动发布模型修改 |
+
+**目标边界（非已上线）**：简单咨询 → 确定性业务图；复杂研究 → 经批准的 Deep Agents 执行 → 只读 SQL/分析沙箱 → 独立证据核验 → 报告。现有 operator runner 的 InMemorySaver 不等于持久任务恢复；待合并研究 TaskRun 必须复用单一权威生命周期、身份/审批和执行回执，不能又建平行生产队列。原生 Harness、合成实验、旧 benchmark 保留用于对照或回归，不为每条路径重复增设功能。
+
+**架构裁剪门禁**：先确认默认路由、operator 入口、实验入口的调用关系和兼容合同；再做等价状态/失败回归和简单基线对比。没有证据不删除安全检查，不自动开启模型、沙箱、真实数据或付费调用。未完成架构裁剪前暂停新增技术栈和能力缺口扩展。
+
 ## 1. System overview
 
 `gaobao-advisor` is a read/write web application with four runtime roles:
@@ -97,7 +116,9 @@ sequenceDiagram
     API->>API: First anonymous turn: issue server-owned session_id
     API->>DB: Load persisted slots and query state
     API->>G: invoke(initial_state) in a worker thread
-    G->>G: security_scan -> intent_detect -> scene_route -> slot_extract
+    G->>G: security_scan
+    Note over G,API: Blocked input ends immediately with a deterministic refusal; no model or memory write
+    G->>G: allowed: intent_detect (includes scene trace) -> slot_extract
     G->>G: profile_check
     alt Profile incomplete
         G-->>API: question_generate -> render_reply
@@ -145,12 +166,15 @@ The compiled graph is defined in `server/graph/graph.py`; the state contract is
 
 ```mermaid
 flowchart TD
-    S["security_scan"] --> I["intent_detect"] --> R["scene_route"] --> E["slot_extract"] --> P{"profile_check"}
+    S["security_scan"] -->|blocked| End(["END"])
+    S -->|allowed| I["intent_detect + scene trace"] --> E["slot_extract"] --> P{"profile_check"}
     P -->|missing fields| Q["question_generate"] --> Render["render_reply"]
     P -->|"existing reply"| Render
     P -->|complete / knowledge query| O["quality_orchestrate"] --> D["data_query"] --> V["validate_data"] --> K["rag_retrieve"] --> Reason["reason"] --> St["structure_output"] --> Render
-    Render --> SA["source_attribution"] --> PC["quality_post_check"] --> J["quality_judge"] --> F["feedback"] --> M["memory_update"] --> End(["END"])
+    Render --> SA["source_attribution"] --> PC["quality_post_check"] --> J["quality_judge"] --> F["feedback"] --> M["memory_update"] --> End
 ```
+
+The full offline graph registers 17 application nodes; the public preparation graph registers 12. The scene_route function is a trace-only helper inside intent_detect, not a separate graph step; its trace event is retained. A security refusal ends both graphs at security_scan and the SSE handler emits only refusal text and done, without model calls or conversation/slot persistence. Other finalization behavior is unchanged.
 
 The diagram above represents the full offline graph. The public chat route uses
 the preparation-only variant ending at `render_reply`, then runs the same
