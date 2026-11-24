@@ -7,7 +7,6 @@ import selectors
 import subprocess
 import time
 
-
 _MAX_OUTPUT_BYTES = 64 * 1024
 
 
