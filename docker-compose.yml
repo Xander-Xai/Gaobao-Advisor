@@ -9,6 +9,12 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      # Local synthetic demo only; existing operator/admin auth still applies.
+      APP_ENV: ${APP_ENV:-development}
+      ENABLE_SYNTHETIC_AGENT_EXPERIMENT: ${ENABLE_SYNTHETIC_AGENT_EXPERIMENT:-true}
+      ENABLE_OUTBOUND_FETCH: ${ENABLE_OUTBOUND_FETCH:-false}
+      SYNTHETIC_TASKRUN_JOURNAL: ${SYNTHETIC_TASKRUN_JOURNAL:-/app/data/synthetic-taskruns.sqlite}
     volumes:
       # Named volume avoids host-UID/bind-mount permission failures while
       # keeping the synthetic database across container restarts.
