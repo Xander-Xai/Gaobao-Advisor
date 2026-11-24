@@ -318,24 +318,35 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-cases", type=int, default=8)
     parser.add_argument("--synthetic-canary-journal", type=Path)
     parser.add_argument("--canary-run-key", help="Opaque synthetic experiment allocation key")
-    parser.add_argument("--canary-percentage", type=int, default=10)
+    parser.add_argument("--canary-percentage", type=int)
     args = parser.parse_args(argv)
     if not 1 <= args.max_cases <= 8:
         parser.error("--max-cases must be 1..8")
     canary_assignment = None
-    if args.synthetic_canary_journal is not None or args.canary_run_key is not None:
+    if any(value is not None for value in (args.synthetic_canary_journal, args.canary_run_key, args.canary_percentage)):
         if args.mode != "model" or args.synthetic_canary_journal is None or args.canary_run_key is None:
             parser.error("Synthetic canary requires explicit model mode, journal and run key")
         if args.prompt_variant != "baseline":
             parser.error("Canary selects a frozen prompt; do not override the arm")
-        if not args.permit_external_model:
-            parser.error("Canary execution needs explicit paid model authorization")
+        if not args.permit_external_model or not args.model or not os.environ.get("OPENAI_API_KEY"):
+            parser.error("Canary execution needs explicit model, key and paid model authorization")
+        if os.getenv("APP_ENV", "").strip().lower() not in {"development", "test", "local"}:
+            parser.error("Synthetic canary requires explicit non-production APP_ENV")
+        if os.getenv("ENABLE_OUTBOUND_FETCH", "false").strip().lower() != "false":
+            parser.error("Disable arbitrary outbound fetching in synthetic canary mode")
+        if args.canary_percentage is not None and not 0 <= args.canary_percentage <= 100:
+            parser.error("Canary allocation percentage must be 0..100")
+        if not args.synthetic_canary_journal.is_file():
+            parser.error("Canary journal must already exist")
+        if args.out.resolve() == args.synthetic_canary_journal.resolve():
+            parser.error("Canary output must not replace its journal")
         from server.agent.synthetic_canary import choose_synthetic_variant
         from server.agent.synthetic_optimization_registry import SyntheticOptimizationReviewStore
         from server.agent.taskrun_store import SyntheticTaskRunStore
 
         registry = SyntheticOptimizationReviewStore(SyntheticTaskRunStore(args.synthetic_canary_journal))
-        canary_assignment = choose_synthetic_variant(registry, args.canary_run_key, args.canary_percentage)
+        percentage = 10 if args.canary_percentage is None else args.canary_percentage
+        canary_assignment = choose_synthetic_variant(registry, args.canary_run_key, percentage)
         args.prompt_variant = canary_assignment["prompt_variant"]
     if args.mode == "model":
         if not args.permit_external_model or not args.model:

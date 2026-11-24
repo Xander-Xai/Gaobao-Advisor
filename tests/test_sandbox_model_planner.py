@@ -56,7 +56,7 @@ def test_model_planner_consumes_observations_and_reports_provider_tokens(monkeyp
         assert "SYNTHETIC_WORKSPACE_PASS" in oracle_source
         good = "return a + b" in (work / "solution.py").read_text(encoding="utf-8")
         if good:
-            (work / "artifact.txt").write_text("PASS", encoding="utf-8")
+            (work / "artifact.txt").write_text("synthetic tests passed", encoding="utf-8")
         return {"passed": good}
 
     monkeypatch.setattr("benchmarks.sandbox_coding_agent.run_sandbox_probe", fake_sandbox)

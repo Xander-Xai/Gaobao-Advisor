@@ -181,6 +181,8 @@ def init_db():
         School,
         SessionCompactionSnapshot,
         SubjectRanking,
+        UserMemoryEntry,
+        UserMemoryVault,
         YiFenYiDuan,
     )
 

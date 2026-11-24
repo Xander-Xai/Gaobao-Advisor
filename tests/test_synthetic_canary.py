@@ -33,6 +33,8 @@ class Registry:
 def test_canary_disabled_and_rollback_are_real_routing_controls(monkeypatch):
     registry = Registry()
     monkeypatch.delenv("ENABLE_SYNTHETIC_AGENT_CANARY", raising=False)
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("ENABLE_OUTBOUND_FETCH", "false")
     assert choose_synthetic_variant(registry, IDENTIFIER, 100)["prompt_variant"] == "baseline"
     monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_CANARY", "true")
     monkeypatch.setenv("ENABLE_OUTBOUND_FETCH", "false")
@@ -83,3 +85,36 @@ def test_cli_cannot_start_canary_through_deterministic_mode(tmp_path):
             ]
         )
     assert not (tmp_path / "result.json").exists()
+
+
+@pytest.mark.parametrize("env", ["", "production", "staging", "prod"])
+def test_canary_rejects_unknown_environment(monkeypatch, env):
+    monkeypatch.setenv("APP_ENV", env)
+    monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_CANARY", "true")
+    with pytest.raises(ValueError, match="non-production"):
+        choose_synthetic_variant(Registry(), IDENTIFIER)
+
+
+def test_percentage_alone_cannot_be_silently_ignored(tmp_path):
+    from benchmarks.decision_card_business_eval import main
+
+    with pytest.raises(SystemExit):
+        main(["--out", str(tmp_path / "result.json"), "--canary-percentage", "0"])
+    assert not (tmp_path / "result.json").exists()
+
+
+def test_duplicate_reviewer_rejected(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("ENABLE_OUTBOUND_FETCH", "false")
+    monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_CANARY", "true")
+    registry = Registry()
+    get = registry.get
+
+    def duplicate(proposal):
+        result = get(proposal)
+        result["signoffs"][1]["reviewer"] = result["signoffs"][0]["reviewer"]
+        return result
+
+    monkeypatch.setattr(registry, "get", duplicate)
+    with pytest.raises(ValueError, match="eligible"):
+        choose_synthetic_variant(registry, IDENTIFIER)
