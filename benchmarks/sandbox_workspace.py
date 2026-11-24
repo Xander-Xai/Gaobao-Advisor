@@ -312,9 +312,7 @@ def run_sandbox_failure_probes(image_id: str, workspace: Path) -> dict[str, Any]
     )
     checks = {}
     for name, source, timeout in cases:
-        result = run_sandbox_probe(
-            image_id, workspace, oracle_source=source, timeout_seconds=timeout
-        )
+        result = run_sandbox_probe(image_id, workspace, oracle_source=source, timeout_seconds=timeout)
         if name == "nonzero_exit":
             correct = result.get("exit_code") == 7
         elif name == "invalid_marker":
