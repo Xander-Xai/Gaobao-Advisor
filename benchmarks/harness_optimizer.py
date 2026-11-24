@@ -45,12 +45,26 @@ def propose_bounded_changes(failure_codes: list[str]) -> list[dict[str, Any]]:
 
 
 def _indexed(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    if result.get("suite_complete") is not True or result.get("unexecuted_case_ids") != []:
+        raise ValueError("Incomplete model evaluation suite is not eligible for optimization")
     if result.get("controller") != "REAL_MODEL_NOT_SCRIPTED":
         raise ValueError("Paired optimization requires explicitly declared real-model runs")
     if result.get("groundtruth_review") != "REVIEW_DECLARED":
         raise ValueError("Optimization requires an explicit reviewed dataset declaration")
-    if result.get("suite_complete") is not True or result.get("unexecuted_case_ids") != []:
-        raise ValueError("Incomplete model evaluation suite is not eligible for optimization")
+    identity = result.get("model_identity")
+    if (
+        not isinstance(identity, dict)
+        or identity.get("provider_model_identity_consistent") is not True
+        or identity.get("requested_model") != result.get("model_id")
+        or not isinstance(identity.get("provider_reported_model"), str)
+        or not identity["provider_reported_model"].strip()
+        or type(identity.get("attempted_requests")) is not int
+        or identity["attempted_requests"] <= 0
+        or identity["attempted_requests"] != identity.get("returned_responses")
+    ):
+        raise ValueError("Missing or inconsistent provider model identity")
+    if not isinstance(result.get("run_id"), str) or not result["run_id"].strip():
+        raise ValueError("Missing independent run identifier")
     cases = result.get("paired_cases")
     if not isinstance(cases, list) or not cases:
         raise ValueError("Missing paired result cases")
@@ -75,6 +89,23 @@ def _indexed(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if type(case.get("safety_violation")) is not bool:
             raise ValueError("Missing safety flag")
         indexed[case["case_id"]] = case
+    plan = result.get("evaluation_plan")
+    if (
+        not isinstance(plan, dict)
+        or plan.get("optimizer_input_eligible_if_complete") is not True
+        or plan.get("dataset_sha256") != result.get("dataset_sha256")
+        or plan.get("model_id") != result.get("model_id")
+        or plan.get("planned_cases") != len(indexed)
+        or plan.get("planned_case_ids") != list(indexed)
+        or plan.get("holdout_cases") != sum(row["split"] == "holdout" for row in indexed.values())
+        or not isinstance(plan.get("selection_sha256"), str)
+        or len(plan["selection_sha256"]) != 64
+        or plan.get("max_total_reported_tokens") != result.get("max_total_reported_tokens")
+        or type(result.get("max_total_reported_tokens")) is not int
+        or not 1 <= result["max_total_reported_tokens"] <= 180000
+        or sum(row["total_tokens"] for row in indexed.values()) > result["max_total_reported_tokens"]
+    ):
+        raise ValueError("Frozen evaluation plan does not match completed case evidence")
     return indexed
 
 
@@ -92,6 +123,11 @@ def compare_holdout(baseline: dict[str, Any], candidate: dict[str, Any], min_hol
         or len(baseline["dataset_sha256"]) != 64
         or baseline.get("model_id") != candidate.get("model_id")
         or not baseline.get("model_id")
+        or baseline["run_id"] == candidate["run_id"]
+        or baseline["model_identity"]["provider_reported_model"]
+        != candidate["model_identity"]["provider_reported_model"]
+        or baseline["evaluation_plan"]["selection_sha256"] != candidate["evaluation_plan"]["selection_sha256"]
+        or baseline["max_total_reported_tokens"] != candidate["max_total_reported_tokens"]
         or set(b) != set(c)
     ):
         raise ValueError("Paired data/model/case mismatch")
@@ -129,6 +165,7 @@ def compare_holdout(baseline: dict[str, Any], candidate: dict[str, Any], min_hol
         "absolute_gate_passed": absolute_gate_passed,
         "candidate_unsafe_case_ids": candidate_unsafe_cases,
         "production_deployment_authorized": False,
+        "provider_reported_model": baseline["model_identity"]["provider_reported_model"],
         "evidence_kind": "DECLARED_REAL_MODEL_RUNS_NOT_INDEPENDENTLY_VERIFIED",
         "holdout_cases": len(holdout),
         "baseline_fact_passed": b_success,
@@ -161,7 +198,8 @@ def main(argv: list[str] | None = None) -> int:
     c = json.loads(args.candidate.read_text(encoding="utf-8"))
     report = compare_holdout(b, c)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    with args.out.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     print(report["decision"])
     return 0 if report["decision"] == "REVIEW_REQUIRED" else 1
 

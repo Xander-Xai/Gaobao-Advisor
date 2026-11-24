@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -85,7 +86,7 @@ def run_model_cases(
     scored = [r for r in reports if r["answer_facts"]["status"] == "SCORED"]
     return {
         "suite": "synthetic_model_driven_tool_trajectory",
-        "controller": "REAL_MODEL_NOT_SCRIPTED",
+        "controller": "INJECTED_PLANNER_NOT_ATTESTED",
         "model_id": model_id,
         "dataset_sha256": dataset_sha256,
         "groundtruth_review": groundtruth_review,
@@ -242,6 +243,9 @@ def main(argv: list[str] | None = None) -> int:
         from db.database import engine
 
         engine.dispose()
+    report["controller"] = "REAL_MODEL_NOT_SCRIPTED"
+    report["run_id"] = "readonly_model_" + secrets.token_hex(12)
+    report["model_identity"] = planner.model_identity_receipt()
     report["skill_policy"] = planner.skill_policy_receipt()
     report["evaluation_plan"] = plan
     with args.out.open("x", encoding="utf-8") as handle:
