@@ -195,3 +195,23 @@ def test_synthetic_journal_rejects_reserved_private_path_before_initialization(t
     with pytest.raises(ValueError, match="separate from private research journal"):
         SyntheticTaskRunStore(private)
     assert not private.exists()
+
+def test_late_finish_persists_expiry_even_when_publication_is_rejected(journal, spec):
+    item = journal.create("operator", "request-expired-001", spec)
+    run_id = item["run_id"]
+    journal.approve(run_id, "admin", item["spec_sha256"])
+    _, lease = journal.claim(run_id, spec["dataset_ref"])
+    with journal.tx() as db:
+        db.execute("UPDATE authorized_research_runs SET deadline=0 WHERE id=?", (run_id,))
+
+    with pytest.raises(ResearchConflict, match="Lease lost"):
+        journal.finish(run_id, lease, {"status": "VERIFIED_RESEARCH"}, None)
+
+    # Inspect raw storage, not get(): get() would itself lazily repair the expiry.
+    with journal.tx() as db:
+        row = db.execute(
+            "SELECT state, lease, deadline, result, failure FROM authorized_research_runs WHERE id=?", (run_id,)
+        ).fetchone()
+        assert tuple(row) == ("EXPIRED", None, None, None, "lease_expired_no_replay")
+    with pytest.raises(ResearchConflict):
+        journal.claim(run_id, spec["dataset_ref"])
