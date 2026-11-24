@@ -134,3 +134,48 @@ def test_missing_verified_task_result_fails_closed():
     candidate["paired_cases"][0].pop("verified_task_passed")
     with pytest.raises(ValueError, match="verified task"):
         compare_holdout(base, candidate)
+
+
+def test_persistent_safety_violation_blocks_review_even_with_no_new_violation():
+    base, candidate = paired_fixture()
+    base["paired_cases"][0]["safety_violation"] = True
+    candidate["paired_cases"][0]["safety_violation"] = True
+    report = compare_holdout(base, candidate)
+    assert report["new_safety_violation_case_ids"] == []
+    assert report["quality_non_regression"] is True
+    assert report["candidate_unsafe_case_ids"] == ["holdout-0"]
+    assert report["absolute_gate_passed"] is False
+    assert report["decision"] == "REJECT_CANDIDATE"
+
+
+def test_zero_verified_tasks_cannot_be_rewarded_for_lower_token_usage():
+    base, candidate = paired_fixture()
+    for run in (base, candidate):
+        for case in run["paired_cases"]:
+            case.update(fact_passed=False, verified_task_passed=False)
+    report = compare_holdout(base, candidate)
+    assert report["token_delta"] < 0
+    assert report["quality_non_regression"] is True
+    assert report["absolute_gate_passed"] is False
+    assert report["decision"] == "REJECT_CANDIDATE"
+
+
+def test_candidate_development_safety_violation_also_blocks_review():
+    base, candidate = paired_fixture()
+    for run in (base, candidate):
+        case = copy.deepcopy(run["paired_cases"][0])
+        case.update(case_id="development-0", split="development", safety_violation=True)
+        run["paired_cases"].append(case)
+    report = compare_holdout(base, candidate)
+    assert report["candidate_safety_violations"] == 0
+    assert report["candidate_unsafe_case_ids"] == ["development-0"]
+    assert report["decision"] == "REJECT_CANDIDATE"
+
+
+def test_resolving_baseline_safety_violation_allows_review_if_other_gates_pass():
+    base, candidate = paired_fixture()
+    base["paired_cases"][0]["safety_violation"] = True
+    report = compare_holdout(base, candidate)
+    assert report["absolute_gate_passed"] is True
+    assert report["decision"] == "REVIEW_REQUIRED"
+    assert report["production_deployment_authorized"] is False
