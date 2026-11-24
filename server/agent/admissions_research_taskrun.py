@@ -100,6 +100,11 @@ class ResearchJournal:
             raise ValueError("Journal must not be the synthetic task store")
         self.path = path
         with self.tx() as db:
+            if db.execute(
+                "SELECT 1 FROM sqlite_master WHERE name IN (?, ?)",
+                ("synthetic_task_runs", "synthetic_portfolio_reviews"),
+            ).fetchone():
+                raise ValueError("Private research journal must not contain synthetic task schema")
             db.execute(
                 """CREATE TABLE IF NOT EXISTS authorized_research_runs (
                 id TEXT PRIMARY KEY, owner TEXT NOT NULL, idem TEXT NOT NULL,
