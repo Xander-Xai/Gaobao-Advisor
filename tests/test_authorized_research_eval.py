@@ -242,6 +242,29 @@ def test_managed_eval_does_not_credit_unclassified_failure_as_safe_refusal(tmp_p
     assert "managed_block_reason_not_independently_classified" in result["cases"][1]["reasons"]
 
 
+@pytest.mark.parametrize("failure,passed", [("no_admission_history", True), ("research_execution_failed", False)])
+def test_managed_eval_credits_only_independently_labelled_empty_history(tmp_path, failure, passed):
+    from benchmarks.authorized_research_eval import evaluate_managed
+
+    manifest, run_map, journal, model, image = managed_fixture(tmp_path)
+    case = manifest["cases"][1]
+    case.update(
+        expected_status="BLOCKED",
+        expected_block_reason="no_admission_history",
+        expected_coverage=None,
+        expected_analysis_sha256=None,
+        expected_evidence_sha256=None,
+    )
+    with journal.tx() as db:
+        db.execute(
+            "UPDATE authorized_research_runs SET state='FAILED',result=NULL,failure=? WHERE id=?",
+            (failure, run_map[case["case_id"]]),
+        )
+    result = evaluate_managed(manifest, run_map, journal.path, model_id=model, image_id=image)
+    assert result["cases"][1]["passed"] is passed
+    assert result["status"] == ("REVIEW_REQUIRED" if passed else "FAILED")
+
+
 def test_managed_eval_detects_wrong_independent_gold(tmp_path):
     from benchmarks.authorized_research_eval import evaluate_managed
 

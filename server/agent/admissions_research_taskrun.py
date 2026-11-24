@@ -20,7 +20,14 @@ from dataclasses import asdict
 from pathlib import Path
 
 from server.agent.admissions_analysis_sandbox import _expected
-from server.agent.admissions_deepagents import MODEL_RE, ResearchScope, _coverage, run_admissions_research
+from server.agent.admissions_deepagents import (
+    MODEL_RE,
+    NO_HISTORY_REASON,
+    ResearchScope,
+    _coverage,
+    read_research_rows,
+    run_admissions_research,
+)
 
 ID = re.compile(r"research_[0-9a-f]{32}")
 KEY = re.compile(r"[A-Za-z0-9_.:-]{8,96}")
@@ -416,6 +423,27 @@ def _execute_approved_under_lock(journal, run_id, dataset_ref, session_factory, 
         analysis = report.get("sandbox_analysis")
         task_id = report.get("task_id")
         receipts = report.get("receipt_ids")
+        if (
+            report.get("schema") == "admissions-research/v1"
+            and report.get("engine") == "deterministic_preflight"
+            and report.get("status") == "BLOCKED"
+            and report.get("error") == NO_HISTORY_REASON
+            and canonical(report.get("scope")) == canonical(asdict(scope))
+            and report.get("approval_ref_sha256") == digest(spec["approval_ref"])
+            and report.get("admission_recommendation_verified") is False
+            and report.get("observed_model_messages") == 0
+            and report.get("provider_usage") is None
+            and evidence is None
+            and analysis is None
+            and receipts is None
+        ):
+            # Only a fresh successful scoped SQL read can confirm the reason.
+            with session_factory() as session:
+                history = read_research_rows(session, scope, "admission-history")
+            guard()
+            if not history:
+                return journal.finish(run_id, lease, None, NO_HISTORY_REASON)
+            return journal.finish(run_id, lease, None, "unverified_research")
         if (
             report.get("schema") != "admissions-research/v1"
             or report.get("engine") != "deepagents"

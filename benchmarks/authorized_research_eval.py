@@ -16,7 +16,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from server.agent.admissions_deepagents import ResearchScope
+from server.agent.admissions_deepagents import NO_HISTORY_REASON, ResearchScope
 
 SCHEMA = "authorized-admissions-research-gold/v1"
 SHA = re.compile(r"[0-9a-f]{64}")
@@ -87,7 +87,7 @@ def validate_manifest(manifest: Any) -> list[dict]:
     ids = set()
     scopes = set()
     for case in cases:
-        if not isinstance(case, dict) or set(case) != {
+        if not isinstance(case, dict) or set(case) - {"expected_block_reason"} != {
             "case_id",
             "split",
             "scope",
@@ -113,6 +113,10 @@ def validate_manifest(manifest: Any) -> list[dict]:
             raise ValueError("Invalid split or expected status")
         if not isinstance(case["source_ref"], str) or not 1 <= len(case["source_ref"].strip()) <= 200:
             raise ValueError("Independent source reference required")
+        if "expected_block_reason" in case and (
+            case["expected_status"] != "BLOCKED" or case["expected_block_reason"] != NO_HISTORY_REASON
+        ):
+            raise ValueError("Unsupported independent block reason")
         if case["expected_status"] == "BLOCKED":
             if any(
                 case[field] is not None
@@ -296,9 +300,15 @@ def evaluate_managed(manifest, run_map, journal_path, *, model_id, image_id):
         if not item["approved_by"] or item["approved_by"] == item["owner"]:
             reasons.append("independent_approval_missing")
         if case["expected_status"] == "BLOCKED":
-            # The current managed journal intentionally collapses failure causes.
-            # FAILED can be an outage, not proof of correct business rejection.
-            reasons.append("managed_block_reason_not_independently_classified")
+            # Only the worker-confirmed SQL empty-cohort reason is supported.
+            # Generic failures, cancellation and old labels never earn credit.
+            if (
+                case.get("expected_block_reason") != NO_HISTORY_REASON
+                or item["status"] != "FAILED"
+                or item["failure_code"] != NO_HISTORY_REASON
+                or result is not None
+            ):
+                reasons.append("managed_block_reason_not_independently_classified")
         else:
             expected_state = "SUCCEEDED" if case["expected_status"] == "VERIFIED_RESEARCH" else "NEEDS_REVIEW"
             if item["status"] != expected_state or not isinstance(result, dict):

@@ -161,6 +161,33 @@ def test_blocked_result_is_not_published(journal, spec):
         render_aggregate_report(result)
 
 
+@pytest.mark.parametrize("history,expected", [([], "no_admission_history"), ([{"id": 1}], "unverified_research")])
+def test_no_history_rejection_requires_fresh_worker_read(journal, spec, monkeypatch, history, expected):
+    from contextlib import nullcontext
+
+    item = journal.create("operator", "request-0004", spec)
+    journal.approve(item["run_id"], "admin", item["spec_sha256"])
+    monkeypatch.setattr("server.agent.admissions_research_taskrun.read_research_rows", lambda *args: history)
+
+    def runner(scope, session_factory, model_id, **kwargs):
+        return {
+            "schema": "admissions-research/v1",
+            "engine": "deterministic_preflight",
+            "status": "BLOCKED",
+            "error": "no_admission_history",
+            "scope": spec["scope"],
+            "approval_ref_sha256": digest(spec["approval_ref"]),
+            "admission_recommendation_verified": False,
+            "observed_model_messages": 0,
+            "provider_usage": None,
+        }
+
+    result = execute_approved(journal, item["run_id"], spec["dataset_ref"], nullcontext, runner=runner)
+    assert result["status"] == "FAILED"
+    assert result["failure_code"] == expected
+    assert result["result"] is None
+
+
 def test_research_report_http_requires_authorized_owner_and_terminal_result(admin_client, monkeypatch, tmp_path, spec):
     from tests.conftest import auth_header, login
 
