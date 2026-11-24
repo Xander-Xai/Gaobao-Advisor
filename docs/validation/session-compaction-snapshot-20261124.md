@@ -88,3 +88,7 @@ refresh, stale write CAS, cross-session isolation, prefix edits, policy changes,
 TTL, cleanup and ORM deletion. The results do **not** prove savings on any
 actual provider, multi-worker locks, encryption, real student advice,
 MySQL transaction isolation under load or legal erasure of backups.
+
+The CI run for this Draft feature branch is deliberately separate from a
+real-provider evaluation. Tests and migration checks must be interpreted against
+the exact feature-branch commit, not inherited from #148 or historical green CI.
