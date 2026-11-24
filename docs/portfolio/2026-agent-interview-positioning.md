@@ -45,7 +45,7 @@
 
 Default `docker compose up` enables the existing synthetic operator experiments and a separate persistent TaskRun journal. Configure admin credentials as documented in `.env.example` before login; anonymous users do not gain operator access. The raw no-env FastAPI runtime remains opt-in. Production is blocked by the existing environment gate. This is not the default public chat model Harness (approved synthetic Native Harness TaskRun was merged in PR #172).
 
-Local Compose binds all published ports to loopback and keeps `USER_MEMORY_ENABLED` and `GAOBAO_CHAT_COMPACTION_ENABLED` off by default; explicitly set either to `true` only for an authorized fictional demo. Preference storage still requires an explicit vault/write and bearer token; there is no automatic capture. If a model is configured, long-history compaction may perform an additional provider call; enable only after accepting that additional cost. `GAOBAO_CHAT_SNAPSHOT_ENABLED` remains false until a private fictional-only run explicitly opts in, because it persists plaintext dialogue. Never use this profile with real personal data. Use the separate production Compose for deployment; existing production memory guards remain unchanged. Sandbox remains a CLI-only isolated experiment, not an arbitrary execution API.
+Local Compose binds all published ports to loopback and keeps `USER_MEMORY_ENABLED` and `GAOBAO_CHAT_COMPACTION_ENABLED` off by default; explicitly set either to `true` only for an authorized fictional demo. Preference storage still requires an explicit vault/write and bearer token; there is no automatic capture. If a model is configured, long-history compaction may perform an additional provider call; enable only after accepting that additional cost. `GAOBAO_CHAT_SNAPSHOT_ENABLED` remains false until a private fictional-only run explicitly opts in, because it persists plaintext dialogue. Never use this profile with real personal data. Use the separate production Compose for deployment; existing production memory guards remain unchanged. Sandbox now also has an operator-local admissions SQL analysis tool for explicitly authorized private data; anonymous chat still cannot execute code. See the business extension in [sandbox contract](../security/gaobao-agent-sandbox-contract-20261124.md).
 
 Acceptance: start local Compose after configuring operator/admin authentication; verify unauthenticated requests fail and operator example endpoint succeeds; create a synthetic task and approve with a different authorized admin; verify production rejects experiments and explicit false disables them. Run existing API/TaskRun/memory tests and exact-head CI. No new runtime results are claimed.
 
@@ -83,3 +83,10 @@ routing, durable owner-bound TaskRun, report integration and linkage to the
 business sandbox are not validated. CI exercises real SQL and compiled
 specialists with an injected controller and constructs the actual SDK graph;
 neither constitutes a real-model run. Ordinary SQL/RAG chat remains intact.
+
+Optional `--sandbox-image sha256:...` joins the approved history specialist
+and the business sandbox: the main agent may generate one Python program,
+executed against only the previously captured history rows, grouped by school
+and year. Submission requires an independently verified sandbox receipt.
+A changed source blocks the entire final evidence bundle. This is still a
+local operator path, not a public route or a durable TaskRun.

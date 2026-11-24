@@ -87,7 +87,7 @@ def read_research_rows(session: Any, scope: ResearchScope, kind: str) -> list[di
 
     if kind == "admission-history":
         table = AdmissionScore
-        fields = ("id", "school_id", "major_id", "year", "min_score", "min_rank")
+        fields = ("id", "school_id", "major_id", "year", "min_score", "max_score", "min_rank")
     elif kind == "enrollment-plans":
         table = EnrollmentPlan
         fields = ("id", "school_id", "major_id", "year", "plan_count", "subject_requirement", "tuition", "duration")
@@ -203,6 +203,7 @@ def run_admissions_research(
     authorized: bool = False,
     model_authorized: bool = False,
     agent_factory: Callable = build_deep_agent,
+    analysis_image_id: str | None = None,
 ) -> dict[str, Any]:
     """Private operator entrypoint. Only validated SQL evidence may be returned."""
     if authorized is not True or model_authorized is not True:
@@ -215,6 +216,10 @@ def run_admissions_research(
     receipts: dict[str, str] = {}
     attempted: set[str] = set()
     submitted = False
+    analysis_receipt: dict[str, Any] | None = None
+    analysis_attempted = False
+    if analysis_image_id is not None and not re.fullmatch(r"sha256:[0-9a-f]{64}", analysis_image_id):
+        raise ValueError("Invalid immutable sandbox image")
     kinds = ("admission-history", "enrollment-plans")
 
     def collect(kind: str) -> str:
@@ -241,6 +246,36 @@ def run_admissions_research(
             }
         )
 
+    def analyze_history(code: str) -> str:
+        """Run generated Python in the sandbox against ONLY the delegated history snapshot.
+
+        Read /input/rows.json; group by school_id and year, emit the exact
+        descriptive statistics schema specified in the system instructions.
+        """
+        nonlocal analysis_attempted, analysis_receipt
+        from server.agent.admissions_analysis_sandbox import Scope, execute_admissions_analysis
+
+        with lock:
+            if analysis_image_id is None or analysis_attempted or submitted or kinds[0] not in snapshots:
+                raise ValueError("Sandbox requires approved history and one execution budget")
+            analysis_attempted = True
+            rows = [dict(row) for row in snapshots[kinds[0]]]
+        sandbox_scope = Scope(
+            scope.province, scope.subject_type, scope.batch, scope.year_from, scope.year_to, "major"
+        )
+        result = execute_admissions_analysis(
+            rows,
+            sandbox_scope,
+            ("school_id", "year"),
+            code.encode(),
+            image_id=analysis_image_id,
+            approval_ref=approval_ref,
+            authorized=True,
+        )
+        with lock:
+            analysis_receipt = result
+        return _canonical({"status": result["status"], "result_sha256": result.get("result_sha256")})
+
     def submit_research(history_receipt: str, plans_receipt: str) -> str:
         """Submit exactly the two returned opaque receipt IDs after delegation."""
         nonlocal submitted
@@ -251,6 +286,10 @@ def run_admissions_research(
                 or (history_receipt != receipts[kinds[0]] or plans_receipt != receipts[kinds[1]])
             ):
                 raise ValueError("Research evidence incomplete or invalid")
+            if analysis_image_id is not None and (
+                analysis_receipt is None or analysis_receipt.get("status") != "VERIFIED_DESCRIPTIVE_ANALYSIS"
+            ):
+                raise ValueError("Verified sandbox analysis required")
             submitted = True
         return "RESEARCH_RECEIPTS_ACCEPTED"
 
@@ -273,7 +312,8 @@ def run_admissions_research(
         "provider_billing_verified": False,
     }
     try:
-        agent = agent_factory(model_id, [submit_research], subagents)
+        tools = [submit_research] if analysis_image_id is None else [submit_research, analyze_history]
+        agent = agent_factory(model_id, tools, subagents)
         if agent_factory is build_deep_agent:
             from deepagents.backends.utils import create_file_data
 
@@ -282,7 +322,21 @@ def run_admissions_research(
             file_data = {"content": [_SKILL]}
         outcome = agent.invoke(
             {
-                "messages": [{"role": "user", "content": "Complete both approved research dimensions."}],
+                "messages": [{"role": "user", "content": (
+                        "Complete both approved research dimensions. "
+                        + (
+                            "After the history delegation call analyze_history with Python code. "
+                            "Read /input/rows.json (rows and group_by); group by school_id and year; "
+                            "sort groups by key. Print one JSON object with groups, each containing key, "
+                            "records, missing_min_scores, median_min_score, lowest_min_score, "
+                            "highest_min_score, best_min_rank, worst_min_rank. "
+                            "Score metrics use non-null min_score, rank metrics non-null min_rank. "
+                            "Use statistics.median; unavailable metrics are null. "
+                            "Only submit research after sandbox verification."
+                            if analysis_image_id is not None
+                            else ""
+                        )
+                    )}],
                 "files": {"/skills/admissions-research/SKILL.md": file_data},
             },
             config={"configurable": {"thread_id": task_id}, "recursion_limit": 24},
@@ -317,10 +371,12 @@ def run_admissions_research(
                 "evidence": fresh,
                 "receipt_ids": receipts,
                 "evidence_sha256": _digest(fresh),
+                "sandbox_analysis": analysis_receipt,
             }
         )
-    except Exception:
+    except Exception as exc:
         report["error"] = "research_failed"
+        report["error_type"] = type(exc).__name__
     finally:
         report["delegated_dimensions"] = sorted(snapshots)
     return report
@@ -339,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--year-from", type=int, required=True)
     parser.add_argument("--year-to", type=int, required=True)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--sandbox-image", help="Opt-in immutable local image for verified analysis")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     if not os.getenv("DATABASE_URL") or not os.getenv("OPENAI_API_KEY"):
@@ -363,6 +420,7 @@ def main(argv: list[str] | None = None) -> int:
             approval_ref=args.approval_ref,
             authorized=args.authorized_data,
             model_authorized=args.authorize_model_call,
+            analysis_image_id=args.sandbox_image,
         )
         handle.write(_canonical(report) + "\n")
     return 0 if report["status"].startswith("VERIFIED_") else 1

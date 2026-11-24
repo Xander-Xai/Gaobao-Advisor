@@ -289,6 +289,55 @@ jobs:
           assert all(r["test_runs"] == 2 for r in report["results"]), report
           print("coding sandbox smoke passed (scripted controller; real Docker)")
           PY
+
+      - name: Verify admissions SQL analysis through the real Docker boundary
+        run: |
+          python -m pip install sqlalchemy
+          export DATABASE_URL="sqlite:////tmp/gaobao-sandbox-admissions-ci.db"
+          python - <<'PY'
+          from db.database import Base, engine, get_session
+          from db.models import AdmissionScore, School
+          Base.metadata.create_all(engine)
+          with get_session() as session:
+              session.add(School(id=1, name="CI fixture school", province="CI province"))
+              session.add(AdmissionScore(id=1, school_id=1, province="CI province", year=2024,
+                                         batch="CI batch", subject_type="physics", min_score=600, min_rank=1000))
+              session.commit()
+          PY
+          cat >/tmp/gaobao-analysis-ci.py <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          assert os.getuid() == 65534
+          assert not Path("/var/run/docker.sock").exists()
+          assert "DATABASE_URL" not in os.environ
+          try:
+              Path("/input/rows.json").write_text("tampered")
+          except OSError:
+              pass
+          else:
+              raise AssertionError("input was writable")
+          payload = json.loads(Path("/input/rows.json").read_text())
+          rows = payload["rows"]
+          assert len(rows) == 1
+          scores = [r["min_score"] for r in rows]
+          ranks = [r["min_rank"] for r in rows]
+          print(json.dumps({"groups": [{"key": [rows[0]["year"]], "records": len(rows),
+              "missing_min_scores": 0, "median_min_score": scores[0], "lowest_min_score": min(scores),
+              "highest_min_score": max(scores), "best_min_rank": min(ranks), "worst_min_rank": max(ranks)}]}))
+          PY
+          image=$(docker image inspect --format='{{.Id}}' gb-advisor:sandbox-ci)
+          python -m server.agent.admissions_analysis_sandbox --authorized-data --approval-ref CI-fixture \
+            --province "CI province" --subject-type physics --batch "CI batch" --year-from 2024 --year-to 2024 \
+            --group-by year --code /tmp/gaobao-analysis-ci.py --image "$image" --out /tmp/gaobao-analysis-ci.json
+          python - <<'PY'
+          import json
+          receipt = json.load(open("/tmp/gaobao-analysis-ci.json"))
+          assert receipt["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS", receipt
+          assert receipt["cleanup_verified"] is True and receipt["row_count"] == 1, receipt
+          assert receipt["admissions_recommendation_verified"] is False, receipt
+          PY
+
       - name: Upload restricted Docker sandbox evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -297,6 +346,7 @@ jobs:
           path: |
             /tmp/gaobao-harness-sandbox.json
             /tmp/gaobao-coding-agent.json
+            /tmp/gaobao-analysis-ci.json
           if-no-files-found: ignore
           retention-days: 7
       - name: Start without any API key

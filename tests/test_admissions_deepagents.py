@@ -211,7 +211,46 @@ def test_actual_sdk_task_and_todos_with_scripted_model(sessions, monkeypatch):
         authorized=True,
         model_authorized=True,
     )
-    assert receipt["status"] == "VERIFIED_RESEARCH", receipt
+    assert receipt["status"] == "VERIFIED_RESEARCH", repr(receipt) + f" requests={requested}"
     assert receipt["delegated_dimensions"] == ["admission-history", "enrollment-plans"]
     assert len(requested) == 5
     assert receipt["provider_billing_verified"] is False
+
+
+
+def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatch):
+    from server.agent import admissions_analysis_sandbox
+
+    def sandbox(rows, scope, group_by, program, **kwargs):
+        assert {row["school_id"] for row in rows} == {1, 2}
+        assert group_by == ("school_id", "year")
+        assert kwargs["authorized"] is True
+        return {"status": "VERIFIED_DESCRIPTIVE_ANALYSIS", "result_sha256": "a" * 64}
+
+    monkeypatch.setattr(admissions_analysis_sandbox, "execute_admissions_analysis", sandbox)
+
+    def factory(model_id, tools, subagents):
+        class Agent:
+            def invoke(self, state, **kwargs):
+                refs = {}
+                for spec in subagents:
+                    result = spec["runnable"].invoke({"messages": [{"role": "user", "content": "research"}]})
+                    refs[spec["name"]] = json.loads(result["messages"][-1].content)["receipt"]
+                tools[1]("print('bounded analysis')")
+                tools[0](refs["admission-history"], refs["enrollment-plans"])
+                return {"messages": []}
+
+        return Agent()
+
+    receipt = research.run_admissions_research(
+        SCOPE,
+        sessions,
+        "openai:test-model",
+        approval_ref="local-approval",
+        authorized=True,
+        model_authorized=True,
+        agent_factory=factory,
+        analysis_image_id="sha256:" + "a" * 64,
+    )
+    assert receipt["status"] == "VERIFIED_RESEARCH"
+    assert receipt["sandbox_analysis"]["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS"
