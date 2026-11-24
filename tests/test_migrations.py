@@ -103,7 +103,7 @@ def test_adopt_existing_schema_preserves_data(tmp_path):
     try:
         with engine.connect() as connection:
             assert connection.execute(text("SELECT COUNT(*) FROM schools WHERE name='adopt-marker'")).scalar_one() == 1
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261120_0006"
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261124_0007"
         assert verify_tables(engine, ALL_TABLES) == []
     finally:
         engine.dispose()
