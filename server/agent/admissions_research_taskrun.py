@@ -90,12 +90,7 @@ class ResearchJournal:
             except FileExistsError:
                 pass
         info = path.lstat()
-        if (
-            not stat.S_ISREG(info.st_mode)
-            or info.st_mode & 0o077
-            or info.st_uid != os.getuid()
-            or info.st_nlink != 1
-        ):
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_uid != os.getuid() or info.st_nlink != 1:
             raise ValueError("Private regular journal file with one link required")
         url = os.getenv("DATABASE_URL", "")
         if url.startswith("sqlite:///") and Path(url.removeprefix("sqlite:///")).resolve() == path.resolve():
@@ -122,12 +117,7 @@ class ResearchJournal:
     def _check_private_file(self):
         # A hard-linked alias would otherwise use a different worker-lock pathname.
         info = self.path.lstat()
-        if (
-            not stat.S_ISREG(info.st_mode)
-            or info.st_mode & 0o077
-            or info.st_uid != os.getuid()
-            or info.st_nlink != 1
-        ):
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_uid != os.getuid() or info.st_nlink != 1:
             raise ValueError("Private regular journal file with one link required")
 
     @contextmanager
