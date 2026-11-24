@@ -4,8 +4,8 @@ This is a static, no-Docker/no-network gate. Actual OCI isolation is checked
 in CI's No-Key Container Smoke Test with the image produced by Dockerfile.sandbox.
 """
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
