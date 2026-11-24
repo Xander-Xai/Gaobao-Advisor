@@ -8,10 +8,7 @@ from benchmarks import readonly_model_eval as evaluation
 
 
 def cases():
-    return [
-        {"id": str(i), "task": "synthetic", "expect": {"tool_sequence": [], "min_evidence": 0}}
-        for i in range(3)
-    ]
+    return [{"id": str(i), "task": "synthetic", "expect": {"tool_sequence": [], "min_evidence": 0}} for i in range(3)]
 
 
 def install_runner(monkeypatch, prompt, completion):
