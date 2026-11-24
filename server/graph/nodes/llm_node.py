@@ -244,8 +244,8 @@ async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
             "on",
         }
         if use_snapshot:
-            if os.getenv("APP_ENV", "development").strip().lower() == "production":
-                raise RuntimeError("Experimental plaintext compaction snapshots are disabled in production")
+            if os.getenv("APP_ENV", "").strip().lower() not in {"development", "test", "testing", "local"}:
+                raise RuntimeError("Explicit non-production APP_ENV is required for plaintext snapshots")
             from db.database import get_session
             from server.agent.durable_chat_context import build_durable_chat_context
             from server.agent.session_compaction_store import SessionCompactionStore, policy_digest
