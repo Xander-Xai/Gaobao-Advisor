@@ -40,3 +40,13 @@
 - [Customer Service Agent](https://github.com/Xander-Xai/Customer-Service-AI-Agent) 负责较早任职阶段的多 Agent Runtime/HITL/外部业务工具可靠性。
 - [Beauty RAG](https://github.com/Xander-Xai/Beauty-Industry-RAG-QA-System) 负责较早任职阶段的真实多模态知识检索与证据链。
 - 本项目重点回答 2026 年岗位对 **Planner/Harness、Agent Eval、Context、全栈交付** 的要求，避免三个仓库内容膨胀重叠。
+
+## Local Agent portfolio profile (2026-11-24)
+
+Default `docker compose up` enables the existing synthetic operator experiments and a separate persistent TaskRun journal. Configure admin credentials as documented in `.env.example` before login; anonymous users do not gain operator access. The raw no-env FastAPI runtime remains opt-in. Production is blocked by the existing environment gate. This is not the default public chat model Harness (approved synthetic Native Harness TaskRun was merged in PR #172).
+
+Local Compose binds all published ports to loopback and keeps `USER_MEMORY_ENABLED` and `GAOBAO_CHAT_COMPACTION_ENABLED` off by default; explicitly set either to `true` only for an authorized fictional demo. Preference storage still requires an explicit vault/write and bearer token; there is no automatic capture. If a model is configured, long-history compaction may perform an additional provider call; enable only after accepting that additional cost. `GAOBAO_CHAT_SNAPSHOT_ENABLED` remains false until a private fictional-only run explicitly opts in, because it persists plaintext dialogue. Never use this profile with real personal data. Use the separate production Compose for deployment; existing production memory guards remain unchanged. Sandbox remains a CLI-only isolated experiment, not an arbitrary execution API.
+
+Acceptance: start local Compose after configuring operator/admin authentication; verify unauthenticated requests fail and operator example endpoint succeeds; create a synthetic task and approve with a different authorized admin; verify production rejects experiments and explicit false disables them. Run existing API/TaskRun/memory tests and exact-head CI. No new runtime results are claimed.
+
+The optional MySQL/Redis full Compose overlay keeps synthetic experiments, cross-task memory and compaction **off** unless explicitly enabled via shell or `--env-file .env.full`. Run the full overlay with `docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml --profile full up --build`. Compose interpolation and service env_file are distinct. The existing full Compose CI script now renders both profiles, checks loopback bindings, local defaults, explicit false rollback, full default-off and explicit opt-in without logging resolved credentials. This is configuration evidence only, not a model or privacy production acceptance.
