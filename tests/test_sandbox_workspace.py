@@ -90,8 +90,10 @@ def test_oracle_must_be_readonly_and_outside_writable_workspace(workspace, oracl
     with pytest.raises(ValueError, match="immutable"):
         sandbox_command(FAKE_IMAGE, workspace, FAKE_NAME, oracle_dir=oracle)
     (oracle / "runner.py").chmod(0o444)
+    oracle.chmod(0o755)
     (oracle / "runner.py").unlink()
     (oracle / "runner.py").symlink_to(workspace / "probe.py")
+    oracle.chmod(0o555)
     with pytest.raises(ValueError, match="immutable"):
         sandbox_command(FAKE_IMAGE, workspace, FAKE_NAME, oracle_dir=oracle)
 
