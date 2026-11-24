@@ -75,3 +75,16 @@ def test_feature_disabled_cannot_create_even_authenticated(admin_client, monkeyp
     operator = auth_header(login(admin_client, "operator"))
     assert admin_client.post(f"{PATH}/runs", json=body(), headers=operator).status_code == 404
     assert not (tmp_path / "tasks.db").exists()
+
+
+def test_native_harness_cannot_be_executed_by_browser(admin_client, monkeypatch, tmp_path):
+    monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "true")
+    monkeypatch.setenv("SYNTHETIC_TASKRUN_JOURNAL", str(tmp_path / "tasks.db"))
+    operator = auth_header(login(admin_client, "operator"))
+    administrator = auth_header(login(admin_client, "admin"))
+    result = admin_client.post(f"{PATH}/runs", json=body("native_harness"), headers=operator)
+    assert result.status_code == 201
+    run_id = result.json()["run_id"]
+    assert admin_client.post(f"{PATH}/runs/{run_id}/approve", headers=administrator).status_code == 200
+    assert admin_client.post(f"{PATH}/runs/{run_id}/execute", headers=operator).status_code == 409
+    assert admin_client.get(f"{PATH}/runs/{run_id}", headers=operator).json()["status"] == "APPROVED"

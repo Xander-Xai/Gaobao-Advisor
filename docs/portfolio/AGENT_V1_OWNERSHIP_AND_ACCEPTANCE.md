@@ -78,3 +78,22 @@ Provider 返回的有效 usage。该样本仍为失败；评测可在剩余预�
 
 复核：`pytest -q tests/test_readonly_harness.py tests/test_readonly_eval_suite_budget.py`。
 关联 #104、#147。
+
+
+### 原生 Harness × 审批 TaskRun（实验增量）
+
+管理端可创建 `native_harness` 合成决策卡任务，仍须不同管理员审批。HTTP execute 拒绝模型引擎；
+授权操作员可显式运行：
+
+```bash
+python -m server.agent.taskrun_worker --journal /absolute/path/tasks.sqlite --run-id syn_... \
+  --model openai:MODEL_ID --permit-external-model
+```
+
+需要显式非生产 APP_ENV、合成 SQLite、禁用 outbound fetch、实验开关及 Provider Key。
+原生模型 Planner 仅在 Worker 中选择固定画像下的五个只读查询；执行前检查任务租约，
+每次模型调用及 SQL 工具前再次检查；拒绝模型版本漂移、缺失身份和无法计量的结果。
+独立 SQL 回执复核后才持久化，管理端可刷新查看。Provider 用量为响应后计量，非硬账单上限；
+取消不能撤销在途请求，丢失租约后禁止新模型调用/新 SQL 操作及发布。
+此为管理端合成任务路径，不改变公开聊天，不声称真实模型/真实招生效果。
+关联 #104、#147；回归 `tests/test_native_taskrun_harness.py` 和 `tests/test_agent_taskrun_api.py`。
