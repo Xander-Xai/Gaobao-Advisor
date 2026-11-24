@@ -231,3 +231,26 @@ async def test_snapshot_integration_refuses_unknown_or_production_env(monkeypatc
     monkeypatch.setattr(llm_node, "_get_config", lambda: {"model": "fake-model"})
     with pytest.raises(RuntimeError, match="Explicit non-production APP_ENV"):
         await llm_node._build_chat_context_async({"session_id": "test-session"}, "POLICY")
+
+
+@pytest.mark.asyncio
+async def test_public_async_context_uses_snapshot_only_with_both_explicit_flags(monkeypatch):
+    from server.agent import durable_chat_context
+    from server.agent.chat_context import ChatContext
+    from server.graph.nodes import llm_node
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("GAOBAO_CHAT_COMPACTION_ENABLED", "true")
+    monkeypatch.setenv("GAOBAO_CHAT_SNAPSHOT_ENABLED", "true")
+    monkeypatch.setattr(llm_node, "_load_memory_for_session", lambda sid: [])
+    monkeypatch.setattr(llm_node, "_get_config", lambda: {"model": "fake-model"})
+    expected = ChatContext([{"role": "system", "content": "POLICY"}], "SNAPSHOT_REUSED", 10, 10)
+    builder = AsyncMock(return_value=expected)
+    monkeypatch.setattr(durable_chat_context, "build_durable_chat_context", builder)
+
+    result = await llm_node._build_chat_context_async({"session_id": "test-session"}, "POLICY")
+    assert result is expected
+    builder.assert_awaited_once()
+    assert builder.await_args.kwargs["session_id"] == "test-session"
+    assert len(builder.await_args.kwargs["policy_sha256"]) == 64
+
