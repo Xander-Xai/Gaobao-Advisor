@@ -42,9 +42,10 @@ class Scope:
     school_id: int | None = None
 
     def __post_init__(self):
-        if any(not isinstance(x, str) or not 1 <= len(x.strip()) <= limit for x, limit in (
-            (self.province, 20), (self.subject_type, 10), (self.batch, 20)
-        )):
+        if any(
+            not isinstance(x, str) or not 1 <= len(x.strip()) <= limit
+            for x, limit in ((self.province, 20), (self.subject_type, 10), (self.batch, 20))
+        ):
             raise ValueError("Invalid admissions cohort")
         if type(self.year_from) is not int or type(self.year_to) is not int:
             raise ValueError("Invalid year range")
@@ -72,10 +73,7 @@ def collect_admissions_rows(session: Any, scope: Scope) -> list[dict[str, Any]]:
     )
     if scope.school_id is not None:
         query = query.where(model.school_id == scope.school_id)
-    rows = [
-        dict(row)
-        for row in session.execute(query.order_by(model.id).limit(MAX_ROWS + 1)).mappings()
-    ]
+    rows = [dict(row) for row in session.execute(query.order_by(model.id).limit(MAX_ROWS + 1)).mappings()]
     if not rows or len(rows) > MAX_ROWS:
         raise ValueError("Empty or oversized cohort: narrow the query, never silently truncate")
     return rows
@@ -97,9 +95,7 @@ def _expected(rows: list[dict[str, Any]], group_by: tuple[str, ...]) -> dict[str
         raise ValueError("Invalid cohort size")
     groups: dict[tuple[int, ...], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        if set(row) != set(FIELDS) or any(
-            value is not None and type(value) is not int for value in row.values()
-        ):
+        if set(row) != set(FIELDS) or any(value is not None and type(value) is not int for value in row.values()):
             raise ValueError("Only the numeric admissions projection is allowed")
         if any(type(row[key]) is not int or row[key] < 1 for key in ("id", "school_id", "year")):
             raise ValueError("Invalid admission record identity")
@@ -133,15 +129,49 @@ def _command(image_id: str, root: Path, name: str) -> list[str]:
     if any(char in str(root) for char in (",", "\n", "\r", '"')):
         raise ValueError("Invalid temporary mount path")
     return [
-        "docker", "run", "--rm", "--pull=never", "--name", name,
-        "--network", "none", "--read-only", "--cap-drop", "ALL",
-        "--security-opt", "no-new-privileges", "--pids-limit", "48",
-        "--ulimit", "nofile=64:64", "--memory", "256m", "--memory-swap", "256m",
-        "--ipc", "none", "--cpus", "1", "--user", "65534:65534",
-        "--log-driver", "none", "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=16m",
-        "--mount", f"type=bind,src={root},dst=/input,readonly",
-        "--workdir", "/tmp", "--env", "HOME=/tmp", "--entrypoint", "python",
-        image_id, "-I", "-B", "/input/analysis.py",
+        "docker",
+        "run",
+        "--rm",
+        "--pull=never",
+        "--name",
+        name,
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--pids-limit",
+        "48",
+        "--ulimit",
+        "nofile=64:64",
+        "--memory",
+        "256m",
+        "--memory-swap",
+        "256m",
+        "--ipc",
+        "none",
+        "--cpus",
+        "1",
+        "--user",
+        "65534:65534",
+        "--log-driver",
+        "none",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,nodev,size=16m",
+        "--mount",
+        f"type=bind,src={root},dst=/input,readonly",
+        "--workdir",
+        "/tmp",
+        "--env",
+        "HOME=/tmp",
+        "--entrypoint",
+        "python",
+        image_id,
+        "-I",
+        "-B",
+        "/input/analysis.py",
     ]
 
 
@@ -270,11 +300,13 @@ def run_analysis_agent(
                     {"role": "system", "content": system},
                     {
                         "role": "user",
-                        "content": json.dumps({
-                            "numeric_fields": FIELDS,
-                            "group_by": group_by,
-                            "previous_failure": last.get("error") if len(attempts) > 1 else None,
-                        }),
+                        "content": json.dumps(
+                            {
+                                "numeric_fields": FIELDS,
+                                "group_by": group_by,
+                                "previous_failure": last.get("error") if len(attempts) > 1 else None,
+                            }
+                        ),
                     },
                 ],
             )
@@ -352,16 +384,27 @@ def main(argv: list[str] | None = None) -> int:
                 client = OpenAI(timeout=30.0, max_retries=0)
                 try:
                     receipt = run_analysis_agent(
-                        rows, scope, tuple(args.group_by), client=client, model=args.model,
-                        image_id=args.image, approval_ref=args.approval_ref,
-                        authorized=args.authorized_data, model_authorized=args.authorize_model_call,
+                        rows,
+                        scope,
+                        tuple(args.group_by),
+                        client=client,
+                        model=args.model,
+                        image_id=args.image,
+                        approval_ref=args.approval_ref,
+                        authorized=args.authorized_data,
+                        model_authorized=args.authorize_model_call,
                     )
                 finally:
                     client.close()
             else:
                 receipt = execute_admissions_analysis(
-                    rows, scope, tuple(args.group_by), program,
-                    image_id=args.image, approval_ref=args.approval_ref, authorized=args.authorized_data,
+                    rows,
+                    scope,
+                    tuple(args.group_by),
+                    program,
+                    image_id=args.image,
+                    approval_ref=args.approval_ref,
+                    authorized=args.authorized_data,
                 )
         except Exception:
             # No DB URL, SQL exception, generated program or raw records in receipt.
