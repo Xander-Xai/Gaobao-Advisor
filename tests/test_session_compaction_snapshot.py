@@ -22,6 +22,18 @@ from server.agent.session_compaction_store import (
 POLICY = policy_digest(model_id="test-model", keep_recent_rounds=2, summary_trigger_tokens=1)
 
 
+def test_summary_policy_digest_changes_with_provider_identity():
+    defaults = {
+        "model_id": "same-model-name",
+        "keep_recent_rounds": 2,
+        "summary_trigger_tokens": 1,
+    }
+    first = policy_digest(**defaults, provider_identity="https://provider-a.example/v1")
+    second = policy_digest(**defaults, provider_identity="https://provider-b.example/v1")
+    assert first != second
+    assert len(first) == len(second) == 64
+
+
 @pytest.fixture
 def db_factory():
     engine = create_engine(
