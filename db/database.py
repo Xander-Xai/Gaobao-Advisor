@@ -179,6 +179,7 @@ def init_db():
         QualityScore,
         QualityTaskOutbox,
         School,
+        SessionCompactionSnapshot,
         SubjectRanking,
         UserMemoryEntry,
         UserMemoryVault,

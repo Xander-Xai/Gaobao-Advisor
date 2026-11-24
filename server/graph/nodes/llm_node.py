@@ -13,6 +13,7 @@ Migration notes:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import threading
@@ -20,9 +21,10 @@ import time
 from collections.abc import Generator
 from typing import Any
 
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from config.loader import load_llm_config
+from server.agent.chat_context import build_chat_context, build_compacted_chat_context
 from server.agent.llm_reliability import (
     build_llm_context,
     estimate_messages_tokens,
@@ -128,29 +130,19 @@ def llm_node(state: dict[str, Any]) -> dict[str, Any]:
         client = _get_llm_client()
         system_prompt = _load_system_prompt()
 
-        # Load conversation memory from DB
-        memory_messages = _load_memory_for_session(session_id)
-        if memory_messages:
-            trace.append(
-                {
-                    "node": "llm_reason",
-                    "event": "memory_loaded",
-                    "memory_messages": len(memory_messages),
-                }
-            )
-
-        user_message = build_llm_context(state)
-
-        # Build message list
-        messages: list[dict] = [{"role": "system", "content": system_prompt}]
-        saved_preferences = prompt_context(state.get("user_memory", []))
-        messages.extend(memory_messages)
-        if saved_preferences:
-            user_message = saved_preferences + "\n\n当前任务：\n" + user_message
-        messages.append({"role": "user", "content": user_message})
-
-        # Trim if needed
-        messages = _maybe_trim(messages)
+        # The legacy synchronous graph path uses the same bounded policy,
+        # without implicitly paying for an additional summary-model call.
+        context = _build_chat_context_sync(state, system_prompt)
+        messages = context.messages
+        trace.append(
+            {
+                "node": "llm_reason",
+                "event": "memory_loaded",
+                "session_id_present": bool(session_id),
+                "context_status": context.status,
+                "history_messages_omitted": context.omitted_messages,
+            }
+        )
 
         token_count = estimate_messages_tokens(messages)
         trace.append(
@@ -207,9 +199,89 @@ def _load_memory_for_session(session_id: str) -> list[dict]:
     try:
         return load_conversation_history(db, session_id)
     except Exception:
-        return []
+        # Never silently turn a failed history read into a seemingly complete
+        # new conversation; the caller must use the grounded fallback.
+        raise RuntimeError("Conversation history unavailable") from None
     finally:
         db.close()
+
+
+def _chat_context_options(*, compaction_enabled: bool = False) -> dict[str, int]:
+    # Preserve the legacy 20-round window unless semantic compaction is
+    # explicitly enabled. In compact mode keep a tighter 10-round tail.
+    default_rounds = "10" if compaction_enabled else str(MAX_HISTORY_ROUNDS)
+    return {
+        "keep_recent_rounds": int(os.getenv("GAOBAO_CHAT_KEEP_RECENT_ROUNDS", default_rounds)),
+        "max_estimated_tokens": int(os.getenv("GAOBAO_CHAT_INPUT_EST_TOKENS", "8000")),
+    }
+
+
+def _current_prompt_with_preferences(state: dict[str, Any]) -> str:
+    current = build_llm_context(state)
+    preferences = prompt_context(state.get("user_memory", []))
+    return preferences + "\n\n当前任务：\n" + current if preferences else current
+
+
+def _build_chat_context_sync(state: dict[str, Any], system_prompt: str):
+    history = _load_memory_for_session(state.get("session_id", ""))
+    return build_chat_context(history, system_prompt, _current_prompt_with_preferences(state), **_chat_context_options())
+
+
+async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
+    history = await asyncio.to_thread(_load_memory_for_session, state.get("session_id", ""))
+    compaction_enabled = os.getenv("GAOBAO_CHAT_COMPACTION_ENABLED", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    options = _chat_context_options(compaction_enabled=compaction_enabled)
+    current = _current_prompt_with_preferences(state)
+    if compaction_enabled:
+        # Explicit opt-in: this may call the configured LLM a second time.
+        # Keep the original SQL history intact; do not persist model summaries
+        # as authoritative admissions facts or long-term user preferences.
+        from server.agent.memory_manager import DefaultMemoryManager
+
+        manager = DefaultMemoryManager()
+        use_snapshot = os.getenv("GAOBAO_CHAT_SNAPSHOT_ENABLED", "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if use_snapshot:
+            if os.getenv("APP_ENV", "").strip().lower() not in {"development", "test", "testing", "local"}:
+                raise RuntimeError("Explicit non-production APP_ENV is required for plaintext snapshots")
+            from db.database import get_session
+            from server.agent.durable_chat_context import build_durable_chat_context
+            from server.agent.session_compaction_store import SessionCompactionStore, policy_digest
+
+            policy = policy_digest(
+                model_id=str(_get_config().get("model") or ""),
+                provider_identity=str(_get_config().get("base_url") or ""),
+                keep_recent_rounds=options["keep_recent_rounds"],
+                summary_trigger_tokens=manager.max_token_limit,
+            )
+            return await build_durable_chat_context(
+                session_id=state.get("session_id", ""),
+                history=history,
+                system_prompt=system_prompt,
+                current_prompt=current,
+                store=SessionCompactionStore(get_session),
+                policy_sha256=policy,
+                summarizer=manager._summarize_history,
+                summary_trigger_tokens=manager.max_token_limit,
+                **options,
+            )
+        return await build_compacted_chat_context(
+            history,
+            system_prompt,
+            current,
+            summarizer=manager._summarize_history,
+            **options,
+        )
+    return build_chat_context(history, system_prompt, current, **options)
 
 
 def _maybe_trim(messages: list[dict]) -> list[dict]:
@@ -250,19 +322,9 @@ def llm_node_stream(state: dict[str, Any]) -> Generator[tuple[str, bool], None, 
     try:
         client = _get_llm_client()
         system_prompt = _load_system_prompt()
-        user_message = build_llm_context(state)
 
-        # Load memory
-        session_id = state.get("session_id", "")
-        memory_messages = _load_memory_for_session(session_id)
-
-        messages: list[dict] = [{"role": "system", "content": system_prompt}]
-        saved_preferences = prompt_context(state.get("user_memory", []))
-        messages.extend(memory_messages)
-        if saved_preferences:
-            user_message = saved_preferences + "\n\n当前任务：\n" + user_message
-        messages.append({"role": "user", "content": user_message})
-        messages = _maybe_trim(messages)
+        context = _build_chat_context_sync(state, system_prompt)
+        messages = context.messages
 
         stream = _sync_retry(
             lambda: client.chat.completions.create(
@@ -283,3 +345,79 @@ def llm_node_stream(state: dict[str, Any]) -> Generator[tuple[str, bool], None, 
         fallback = state.get("template_reply") or _FALLBACK_REPLY
         for char in fallback:
             yield (char, True)  # Degraded: stream fallback reply with degraded flag
+
+
+# ── Final-answer candidate for the public SSE route ──────────────────
+
+
+async def generate_chat_candidate(state: dict[str, Any]) -> tuple[str, bool]:
+    """Build a complete, *unpublished* LLM draft.
+
+    Buffering is intentional: unverified model tokens must not reach the
+    client before source/quality validation and database persistence. Unlike
+    the legacy synchronous generator this uses async network I/O and can be
+    cancelled on client disconnect. Any partial output is discarded on error.
+    """
+    cfg = _get_config()
+    key = str(cfg.get("api_key") or "").strip()
+    fallback = state.get("template_reply") or _FALLBACK_REPLY
+    if not key:
+        return fallback, True
+
+    try:
+        context = await _build_chat_context_async(state, _load_system_prompt())
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("Chat context unavailable (type=%s)", type(exc).__name__)
+        return fallback, True
+    messages = context.messages
+    logger.info(
+        "Chat context prepared (status=%s, omitted=%d, estimate=%d)",
+        context.status,
+        context.omitted_messages,
+        context.estimated_tokens,
+    )
+
+    async with AsyncOpenAI(
+        api_key=key,
+        base_url=cfg.get("base_url"),
+        timeout=cfg.get("timeout", 120.0),
+        max_retries=0,
+    ) as client:
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                stream = await client.chat.completions.create(
+                    model=cfg["model"],
+                    messages=messages,
+                    temperature=cfg.get("temperature", 0.7),
+                    max_tokens=cfg.get("max_tokens") or 2000,
+                    stream=True,
+                )
+                chunks: list[str] = []
+                total_chars = 0
+                async for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        piece = chunk.choices[0].delta.content
+                        total_chars += len(piece)
+                        if total_chars > 16000:
+                            raise ValueError("LLM draft exceeds final-answer budget")
+                        chunks.append(piece)
+                reply = "".join(chunks).strip()
+                if not reply:
+                    raise ValueError("LLM draft is empty")
+                return reply, False
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                status = getattr(exc, "status_code", None)
+                retry = status in RETRYABLE_STATUS_CODES and attempt < MAX_RETRIES
+                logger.warning(
+                    "Chat LLM candidate failed (type=%s, retry=%s)",
+                    type(exc).__name__,
+                    retry,
+                )
+                if not retry:
+                    break
+                await asyncio.sleep(BASE_DELAY * (2**attempt))
+    return fallback, True

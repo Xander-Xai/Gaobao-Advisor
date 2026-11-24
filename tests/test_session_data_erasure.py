@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -9,8 +11,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from db.database import Base
-from db.models import Conversation, ConversationMessage, Feedback, Highlight, QualityScore
+from db.models import Conversation, ConversationMessage, Feedback, Highlight, QualityScore, SessionCompactionSnapshot
 from server.auth import create_session_token
+from server.report.models import Report
 from server.report.storage import ReportStorage
 from server.routes import profile as profile_routes
 from server.user_data_erasure import erase_live_session_data
@@ -33,6 +36,17 @@ def seed(session_factory, storage, session_id="synthetic-session-privacy"):
         db.add(conversation)
         db.flush()
         db.add(ConversationMessage(conversation_id=conversation.id, role="user", content="private message"))
+        db.add(
+            SessionCompactionSnapshot(
+                conversation_id=conversation.id,
+                covered_count=1,
+                covered_sha256="a" * 64,
+                policy_sha256="b" * 64,
+                summary="private compacted history",
+                version=1,
+                expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1),
+            )
+        )
         db.add(Feedback(session_id=session_id, message_index=1, rating="helpful"))
         db.add(Highlight(session_id=session_id, content="private highlight"))
         db.add(
@@ -59,6 +73,7 @@ def test_erasure_covers_sql_and_report_file(isolated):
         "quality_scores": 1,
         "feedback": 1,
         "highlights": 1,
+        "compaction_snapshots": 1,
         "messages": 1,
         "conversations": 1,
         "reports": 1,
@@ -68,6 +83,7 @@ def test_erasure_covers_sql_and_report_file(isolated):
     with session_factory() as db:
         assert db.query(Conversation).count() == 0
         assert db.query(ConversationMessage).count() == 0
+        assert db.query(SessionCompactionSnapshot).count() == 0
         assert db.query(Feedback).count() == 0
         assert db.query(QualityScore).count() == 0
         assert db.query(Highlight).count() == 0
@@ -124,3 +140,53 @@ def test_sql_rollback_restores_report_visibility(isolated, monkeypatch):
     assert (directory / "synthetic-report.json").is_file()
     with session_factory() as db:
         assert db.query(Conversation).count() == 1
+
+
+def test_report_storage_rejects_symlink_escape(isolated, tmp_path):
+    """Synthetic report IDs must not read, write or erase outside storage root."""
+    _, storage = isolated
+    storage._base.mkdir(parents=True, exist_ok=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    session_link = storage._base / "synthetic-linked"
+    try:
+        session_link.symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("Symlink creation is unavailable")
+
+    report = Report(id="synthetic-report", session_id="synthetic-linked")
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.save(report)
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.load_by_session(report.id, report.session_id)
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.list_by_session(report.session_id)
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.stage_session_deletion(report.session_id)
+    assert storage.load(report.id) is None
+
+    local = storage._base / "synthetic-local"
+    local.mkdir()
+    external_file = outside / "synthetic-report.json"
+    external_file.write_text("{}", encoding="utf-8")
+    (local / "synthetic-report.json").symlink_to(external_file)
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.save(Report(id="synthetic-report", session_id="synthetic-local"))
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.load_by_session("synthetic-report", "synthetic-local")
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.list_by_session("synthetic-local")
+    with pytest.raises(ValueError, match="Unsafe"):
+        storage.load("synthetic-report")
+
+
+def test_report_component_requires_full_match(isolated):
+    _, storage = isolated
+    with pytest.raises(ValueError, match="unsafe report_id"):
+        storage.save(Report(id="synthetic-report\n", session_id="synthetic-session"))
+    for invalid in ("../outside", "nested/report", "nested\\\\report"):
+        with pytest.raises(ValueError, match="unsafe report_id"):
+            storage.save(Report(id=invalid, session_id="synthetic-session"))
+    for invalid in ("../outside", "nested/session", "nested\\\\session"):
+        with pytest.raises(ValueError, match="unsafe session_id"):
+            storage.save(Report(id="synthetic-report", session_id=invalid))

@@ -65,6 +65,7 @@ jobs:
           python -m benchmarks.readonly_harness_eval --out /tmp/gaobao-agent-evidence/readonly-policy-30cases.json
           python -m benchmarks.groundtruth_pipeline --out /tmp/gaobao-agent-evidence/groundtruth-pending-review.json
           python -m benchmarks.decision_card_business_eval --out /tmp/gaobao-agent-evidence/business-8case-deterministic-baseline.json
+          python -m benchmarks.sql_rag_pair_eval --repeat 12 --warmup 2 --out /tmp/gaobao-agent-evidence/sql-rag-paired-synthetic.json
           python -m benchmarks.taskrun_lifecycle_eval --max-cases 8 --out /tmp/gaobao-agent-evidence/taskrun-lifecycle-8case-baseline.json
           python -m benchmarks.synthetic_portfolio_eval --out /tmp/gaobao-agent-evidence/multicandidate-synthetic-evidence.json
           python -m benchmarks.taskrun_crash_recovery_eval --out /tmp/gaobao-agent-evidence/taskrun-crash-recovery.json

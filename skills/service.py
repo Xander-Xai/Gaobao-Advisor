@@ -74,6 +74,10 @@ _GAOKAO_ANSWER_RULES = [
 ]
 
 
+class SkillContextBudgetExceeded(ValueError):
+    """Mandatory safety content cannot fit within the requested context budget."""
+
+
 class SkillAssetUnavailableError(RuntimeError):
     """Raised when a mandatory safety asset is absent.
 
@@ -211,3 +215,38 @@ class SkillService:
             f"关键条件还差{missing_text}，这些没锁准我不会给你拍脑袋的答案。"
             f"你先把{labels[0]}告诉我，我再往下走。"
         )
+
+    def build_disclosed_context(
+        self,
+        scene: str,
+        sections: tuple[str, ...] | list[str] = (),
+        *,
+        max_chars: int = 4000,
+    ) -> str:
+        """Disclose only requested domain sections while always including safety.
+
+        This bounds prompt disclosure, NOT disk I/O or the online tool registry.
+        Opt-in only; it does not change the existing build_context() behavior.
+        """
+        self.load_assets()
+        if type(max_chars) is not int or max_chars <= 0:
+            raise ValueError("max_chars must be a positive integer")
+        if not isinstance(sections, (tuple, list)):
+            raise ValueError("sections must be a list or tuple")
+        allowed = {
+            "mental_models": self._mental_models,
+            "heuristics": self._heuristics_text,
+            "anti_patterns": self._anti_patterns,
+        }
+        if scene != Scene.GAOKAO and sections:
+            raise ValueError("Domain skills cannot be disclosed to unrelated scenes")
+        if any(not isinstance(name, str) or name not in allowed for name in sections):
+            raise ValueError("Unknown skill section")
+        if len(set(sections)) != len(sections):
+            raise ValueError("Duplicate skill section")
+        parts = [self._safety_rules]
+        parts.extend(allowed[name] for name in sections if allowed[name].strip())
+        content = "\n\n---\n\n".join(parts)
+        if len(content) > max_chars:
+            raise SkillContextBudgetExceeded("Safety-preserving context exceeds budget")
+        return content
