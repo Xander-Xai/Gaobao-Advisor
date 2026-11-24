@@ -11,6 +11,7 @@ class AdvisorState(TypedDict, total=False):
     user_id: str
     user_memory: list[dict]  # explicit, authenticated cross-task preferences only
     input_text: str
+    security_blocked: bool  # terminal refusal; no slot updates, model or memory
     scene: Literal["gaokao", "kaoyan", "career", "general"]
 
     # ── Conversation history ───────────────────────────────────

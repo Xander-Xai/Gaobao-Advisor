@@ -12,7 +12,7 @@ record why the larger decisions were made.
 | 设计 | 裁决 | 边界 / 验收 |
 |---|---|---|
 | Online chat | 保留 LangGraph 确定性图 | 单次事实查询不经自主 Loop；SQL/来源和选科、年份、省份、位次硬约束优先；模型解释不替代事实 |
-| 17 节点 | 现有结构保留，按责任裁剪 | 节点数不是自主调用次数；相邻纯规则节点只有在独立路由、观察或恢复有价值时保留；改动须保持 API/SSE、拒答和状态契约 |
+| 图节点 | 按责任裁剪 | 节点数不是自主调用次数；相邻纯规则节点只有在独立路由、观察或恢复有价值时保留；改动须保持 API/SSE、拒答和状态契约 |
 | Native readonly Harness | 保留为最小参考和可控评测基线 | 不成为第二套默认聊天引擎；不重复扩展通用生产运行时 |
 | Deep Agents | 唯一复杂研究候选执行引擎 | 已有 operator research runner；独立的确定性 SQL subgraph 不是自主模型专家；批准范围、工具预算、SQL 回执和结果验证优先；未合并持久研究 API 不算现有业务 |
 | Sandbox | 仅招生分析有业务主责 | 算术代码修复是隔离回归 fixture，不是用户功能；只准批准数据快照、受限容器、独立 Oracle 校验；无 Docker socket/任意 host shell 暴露给模型 |
@@ -116,7 +116,9 @@ sequenceDiagram
     API->>API: First anonymous turn: issue server-owned session_id
     API->>DB: Load persisted slots and query state
     API->>G: invoke(initial_state) in a worker thread
-    G->>G: security_scan -> intent_detect -> scene_route -> slot_extract
+    G->>G: security_scan
+    Note over G,API: Blocked input ends immediately with a deterministic refusal; no model or memory write
+    G->>G: allowed: intent_detect (includes scene trace) -> slot_extract
     G->>G: profile_check
     alt Profile incomplete
         G-->>API: question_generate -> render_reply
@@ -164,12 +166,15 @@ The compiled graph is defined in `server/graph/graph.py`; the state contract is
 
 ```mermaid
 flowchart TD
-    S["security_scan"] --> I["intent_detect"] --> R["scene_route"] --> E["slot_extract"] --> P{"profile_check"}
+    S["security_scan"] -->|blocked| End(["END"])
+    S -->|allowed| I["intent_detect + scene trace"] --> E["slot_extract"] --> P{"profile_check"}
     P -->|missing fields| Q["question_generate"] --> Render["render_reply"]
     P -->|"existing reply"| Render
     P -->|complete / knowledge query| O["quality_orchestrate"] --> D["data_query"] --> V["validate_data"] --> K["rag_retrieve"] --> Reason["reason"] --> St["structure_output"] --> Render
-    Render --> SA["source_attribution"] --> PC["quality_post_check"] --> J["quality_judge"] --> F["feedback"] --> M["memory_update"] --> End(["END"])
+    Render --> SA["source_attribution"] --> PC["quality_post_check"] --> J["quality_judge"] --> F["feedback"] --> M["memory_update"] --> End
 ```
+
+The full offline graph registers 17 application nodes; the public preparation graph registers 12. The scene_route function is a trace-only helper inside intent_detect, not a separate graph step; its trace event is retained. A security refusal ends both graphs at security_scan and the SSE handler emits only refusal text and done, without model calls or conversation/slot persistence. Other finalization behavior is unchanged.
 
 The diagram above represents the full offline graph. The public chat route uses
 the preparation-only variant ending at `render_reply`, then runs the same

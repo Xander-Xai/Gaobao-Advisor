@@ -228,6 +228,15 @@ async def _sse_generator(
         yield f"data: {json.dumps({'type': 'error', 'code': 'GRAPH_FAILED', 'message': '服务暂时不可用，请稍后重试'})}\n\n"
         return
 
+    # A rejected turn is not a business answer. Do not send the rejected
+    # input to a model/judge or persist it as conversation/profile memory.
+    if result.get("security_blocked"):
+        refusal = result["reply"]
+        for i in range(0, len(refusal), 20):
+            yield f"data: {json.dumps({'type': 'token', 'content': refusal[i : i + 20]})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': f'{session_id}-response', 'session_token': create_session_token(session_id)})}\n\n"
+        return
+
     reply = result.get("reply") or ""
     is_template = result.get("reply_source") == "template"
     llm_configured = bool(str(load_llm_config().get("api_key", "")).strip())
