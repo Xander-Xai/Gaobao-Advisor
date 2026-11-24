@@ -196,6 +196,7 @@ def test_synthetic_journal_rejects_reserved_private_path_before_initialization(t
         SyntheticTaskRunStore(private)
     assert not private.exists()
 
+
 def test_late_finish_persists_expiry_even_when_publication_is_rejected(journal, spec):
     item = journal.create("operator", "request-expired-001", spec)
     run_id = item["run_id"]
@@ -217,7 +218,6 @@ def test_late_finish_persists_expiry_even_when_publication_is_rejected(journal, 
         journal.claim(run_id, spec["dataset_ref"])
 
 
-
 def test_worker_slot_remains_held_after_cancel_until_runner_returns(journal, spec):
     first = journal.create("operator", "request-concurrent-001", spec)
     second = journal.create("operator", "request-concurrent-002", spec)
@@ -231,9 +231,7 @@ def test_worker_slot_remains_held_after_cancel_until_runner_returns(journal, spe
     def first_runner(*args, **kwargs):
         journal.cancel(first["run_id"], "operator")
         with pytest.raises(ResearchConflict, match="worker already active"):
-            execute_approved(
-                competing_worker, second["run_id"], spec["dataset_ref"], None, runner=must_not_run
-            )
+            execute_approved(competing_worker, second["run_id"], spec["dataset_ref"], None, runner=must_not_run)
         assert competing_worker.get(second["run_id"], "operator")["status"] == "APPROVED"
         kwargs["lease_guard"]()
 

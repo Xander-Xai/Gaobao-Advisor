@@ -319,6 +319,7 @@ def test_private_report_preserves_partial_and_blocks_unsubmitted(sessions):
     with pytest.raises(ValueError, match="verified"):
         research.render_verified_research(run(sessions, controller(submit=False)))
 
+
 def test_managed_research_rejects_direct_cli_before_io(monkeypatch, tmp_path):
     from server.agent.admissions_deepagents import main
 
