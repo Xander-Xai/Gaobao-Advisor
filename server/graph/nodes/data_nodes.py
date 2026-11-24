@@ -48,7 +48,7 @@ def data_query_node(state: dict[str, Any]) -> dict[str, Any]:
     slots = state.get("slots", {})
     if industrial_enabled():
         from db.database import get_session
-        from server.services.industrial_admissions import approved_year, query_history
+        from server.services.industrial_admissions import approved_year, exact_score, query_history
 
         year = approved_year()
         history = {}
@@ -56,7 +56,7 @@ def data_query_node(state: dict[str, Any]) -> dict[str, Any]:
         if requested - {str(year)}:
             history = {"status": "YEAR_MISMATCH"}
         elif scene == "gaokao" and not state.get("knowledge_query"):
-            score = numeric_score(slots)
+            score = exact_score(slots)
             province, subject = slots.get("province"), slots.get("subject")
             if score is not None and isinstance(province, str) and isinstance(subject, str):
                 db = get_session()
