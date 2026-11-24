@@ -297,8 +297,10 @@ def evaluate_managed(manifest, run_map, journal_path, *, model_id, image_id):
                 ):
                     reasons.append("gold_sandbox_mismatch")
                 receipts = result.get("receipt_ids")
-                if not isinstance(receipts, dict) or set(receipts) != DIMS or not all(
-                    _hash(value) for value in receipts.values()
+                if (
+                    not isinstance(receipts, dict)
+                    or set(receipts) != DIMS
+                    or not all(_hash(value) for value in receipts.values())
                 ):
                     reasons.append("missing_verified_receipt_ids")
         results.append(
