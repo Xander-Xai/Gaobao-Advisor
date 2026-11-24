@@ -74,8 +74,20 @@ def _token_digest(token: str | None) -> str:
     return hashlib.sha256(token.encode("ascii")).hexdigest()
 
 
-def _owner(db, token: str) -> UserMemoryVault:
+def _owner(db, token: str, *, write: bool = False) -> UserMemoryVault:
     digest = _token_digest(token)
+    if write:
+        # Acquire a database write lock on the credential row before reading or
+        # modifying entries. The conditional UPDATE also serializes SQLite
+        # writers, where SELECT FOR UPDATE is ignored. No credential is changed.
+        claimed = db.execute(
+            update(UserMemoryVault)
+            .where(UserMemoryVault.token_hash == digest)
+            .values(token_hash=digest)
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.rowcount != 1:
+            raise MemoryUnauthorized("Invalid memory credential")
     vault = db.query(UserMemoryVault).filter(UserMemoryVault.token_hash == digest).one_or_none()
     if vault is None:
         raise MemoryUnauthorized("Invalid memory credential")
@@ -159,15 +171,28 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
     now = _utcnow()
     db = get_session()
     try:
-        owner = _owner(db, token)
+        owner = _owner(db, token, write=True)
         row = (
             db.query(UserMemoryEntry)
             .filter(UserMemoryEntry.vault_id == owner.id, UserMemoryEntry.memory_key == key)
             .one_or_none()
         )
         if row is not None and row.expires_at <= now:
-            db.delete(row)
-            db.flush()
+            if expected_version != 0:
+                raise MemoryConflict("Memory version conflict")
+            # The expiry cleanup itself is conditional, not an ORM blind delete.
+            removed = (
+                db.query(UserMemoryEntry)
+                .filter(
+                    UserMemoryEntry.id == row.id,
+                    UserMemoryEntry.vault_id == owner.id,
+                    UserMemoryEntry.version == row.version,
+                    UserMemoryEntry.expires_at <= now,
+                )
+                .delete(synchronize_session=False)
+            )
+            if removed != 1:
+                raise MemoryConflict("Memory version conflict")
             row = None
         if row is None:
             if expected_version != 0:
@@ -224,7 +249,7 @@ def delete_memory(token: str, key: str) -> None:
         raise MemoryInvalid("Unsupported memory category")
     db = get_session()
     try:
-        owner = _owner(db, token)
+        owner = _owner(db, token, write=True)
         changed = (
             db.query(UserMemoryEntry)
             .filter(UserMemoryEntry.vault_id == owner.id, UserMemoryEntry.memory_key == key)
@@ -245,7 +270,7 @@ def rotate_token(token: str) -> dict[str, str]:
     _require_enabled()
     db = get_session()
     try:
-        owner = _owner(db, token)
+        owner = _owner(db, token, write=True)
         new_token = _new_token()
         changed = (
             db.query(UserMemoryVault)
@@ -271,7 +296,7 @@ def erase_vault(token: str) -> dict[str, Any]:
     _require_enabled()
     db = get_session()
     try:
-        owner = _owner(db, token)
+        owner = _owner(db, token, write=True)
         removed = (
             db.query(UserMemoryEntry).filter(UserMemoryEntry.vault_id == owner.id).delete(synchronize_session=False)
         )
