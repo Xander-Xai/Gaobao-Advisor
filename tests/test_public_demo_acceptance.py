@@ -436,10 +436,27 @@ class TestExcludedAssetsAbsent:
         assert gaokao_data.query_match_schools_v2(600, "示例省·甲", "物理", "稳")
 
     def test_tracked_file_count_is_bounded(self) -> None:
-        """A clean public repo should be a few hundred files, not thousands."""
-        # Added review/eval code is intentionally tracked. Retain a finite
-        # size guard while checking forbidden assets separately above.
-        assert 50 < len(_tracked_files()) < 750
+        """Bound the public demo by both committed file count and blob bytes."""
+        import subprocess
+
+        # Reviewed baseline: 749 tracked blobs, 8,941,225 bytes.
+        # Allow limited growth for source and tests, not a bulk corpus import.
+        # The path, corpus, attribution and binary-data gates above remain intact.
+        result = subprocess.run(
+            ["git", "ls-tree", "-r", "-l", "-z", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=True,
+        )
+        entries = [entry for entry in result.stdout.split(b"\x00") if entry]
+        assert 50 < len(entries) <= 800
+        sizes = []
+        for entry in entries:
+            metadata, _ = entry.split(b"\t", 1)
+            mode, kind, _, size = metadata.split()
+            assert kind == b"blob" and mode in {b"100644", b"100755"}
+            sizes.append(int(size))
+        assert sum(sizes) <= 10 * 1024 * 1024
 
 
 # ── 5. Session auth round-trip through the real FastAPI app ──────────────
