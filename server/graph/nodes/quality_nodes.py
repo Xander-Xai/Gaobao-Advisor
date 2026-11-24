@@ -37,7 +37,7 @@ def quality_orchestrate_node(state: dict[str, Any]) -> dict[str, Any]:
 
     Detects emotion, selects cognitive models, recommends heuristics,
     loads contextual knowledge, builds skill context for the scene,
-    cross-validates scores data, and checks AI-era major risks.
+    and checks AI-era major risks. Post-SQL validation runs in validate_data.
     """
     orch = _get_orchestrator()
     skill_svc = _get_skill_service()
@@ -62,41 +62,11 @@ def quality_orchestrate_node(state: dict[str, Any]) -> dict[str, Any]:
     # Skill context for the scene
     skill_context = skill_svc.build_context(scene)
 
-    # Cross-validation: validate scores data if present
-    validation: dict[str, Any] | None = None
-    try:
-        data_query_results = state.get("data_query_results")
-        if data_query_results:
-            # Build source dicts that cross_validate_admission expects:
-            # each source must have "source" (str), "min_score" (int|None), "min_rank" (int|None)
-            sources: list[dict[str, Any]] = []
-            items = data_query_results if isinstance(data_query_results, list) else [data_query_results]
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                # Only include items that have at least min_score or min_rank
-                if item.get("min_score") is not None or item.get("min_rank") is not None:
-                    sources.append(
-                        {
-                            "source": item.get("source", "unknown"),
-                            "min_score": item.get("min_score"),
-                            "min_rank": item.get("min_rank"),
-                        }
-                    )
-            if sources:
-                cv_result = orch.cross_validate(sources)
-                if cv_result is not None:
-                    validation = cv_result
-    except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).warning("Cross-validation failed: %s", e)
-
     # AI-era risk: check target/interested major when scene is gaokao
     major_risk: dict[str, Any] | None = None
     try:
         if scene == "gaokao":
-            major = slots.get("target_major") or slots.get("interested_major")
+            major = slots.get("target_major") or slots.get("interested_major") or slots.get("interest")
             if major:
                 risk_result = orch.get_major_risk(major)
                 if risk_result is not None:
@@ -138,8 +108,6 @@ def quality_orchestrate_node(state: dict[str, Any]) -> dict[str, Any]:
         "knowledge_context": skill_context,
         "trace": trace,
     }
-    if validation is not None:
-        result["validation"] = validation
     if major_risk is not None:
         result["major_risk"] = major_risk
     return result

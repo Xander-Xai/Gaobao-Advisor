@@ -195,8 +195,25 @@ def grade_business_case(case: dict[str, Any], card: dict[str, Any]) -> dict[str,
         if not isinstance(schools, list) or len(schools) != 2 or not isinstance(refs, list) or len(refs) != 5:
             errors.append("incomplete_evidence")
         else:
+            # Independent business identity check: two returned rows must cover
+            # two distinct requested schools.  A duplicated school row could
+            # otherwise pass every per-row field check while the top-level
+            # source list still contains evidence for both schools.
+            actual_names = [item.get("school_name") if isinstance(item, dict) else None for item in schools]
+            if not all(isinstance(name, str) for name in actual_names) or set(actual_names) != {
+                profile.school_a,
+                profile.school_b,
+            }:
+                errors.append("school_identity_mismatch")
             for item in schools:
-                true_row = rows.get(item.get("school_name"))
+                if not isinstance(item, dict):
+                    errors.append("invalid_school_record")
+                    continue
+                school_name = item.get("school_name")
+                if not isinstance(school_name, str):
+                    errors.append("invalid_school_identity")
+                    continue
+                true_row = rows.get(school_name)
                 if true_row is None or any(item.get(field) != value for field, value in true_row.items()):
                     errors.append("factual_mismatch")
                     break
@@ -299,27 +316,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--permit-external-model", action="store_true")
     parser.add_argument("--max-cases", type=int, default=8)
-    parser.add_argument("--synthetic-canary-journal", type=Path)
-    parser.add_argument("--canary-run-key", help="Opaque synthetic experiment allocation key")
-    parser.add_argument("--canary-percentage", type=int, default=10)
     args = parser.parse_args(argv)
     if not 1 <= args.max_cases <= 8:
         parser.error("--max-cases must be 1..8")
-    canary_assignment = None
-    if args.synthetic_canary_journal is not None or args.canary_run_key is not None:
-        if args.mode != "model" or args.synthetic_canary_journal is None or args.canary_run_key is None:
-            parser.error("Synthetic canary requires explicit model mode, journal and run key")
-        if args.prompt_variant != "baseline":
-            parser.error("Canary selects a frozen prompt; do not override the arm")
-        if not args.permit_external_model:
-            parser.error("Canary execution needs explicit paid model authorization")
-        from server.agent.synthetic_canary import choose_synthetic_variant
-        from server.agent.synthetic_optimization_registry import SyntheticOptimizationReviewStore
-        from server.agent.taskrun_store import SyntheticTaskRunStore
-
-        registry = SyntheticOptimizationReviewStore(SyntheticTaskRunStore(args.synthetic_canary_journal))
-        canary_assignment = choose_synthetic_variant(registry, args.canary_run_key, args.canary_percentage)
-        args.prompt_variant = canary_assignment["prompt_variant"]
     if args.mode == "model":
         if not args.permit_external_model or not args.model:
             parser.error("Model evaluation requires --model and --permit-external-model")
@@ -381,10 +380,8 @@ def main(argv: list[str] | None = None) -> int:
         "OPENAI_COMPATIBLE_REPORTED_USAGE" if controller == "REAL_MODEL_NOT_SCRIPTED" else "NOT_MEASURED"
     )
     report["provider_cost_usd"] = None
-    report["synthetic_canary_assignment"] = canary_assignment
     report["comparison_eligible"] = (
-        canary_assignment is None
-        and controller == "REAL_MODEL_NOT_SCRIPTED"
+        controller == "REAL_MODEL_NOT_SCRIPTED"
         and report["cases"] == 8
         and report["holdout_cases"] == 4
         and report["trace_validated_cases"] == 8

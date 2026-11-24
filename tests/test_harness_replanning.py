@@ -162,3 +162,26 @@ def test_recovery_budget_rejects_invalid_configuration():
         HarnessLimits(max_recoverable_tool_failures=6, max_tool_calls=5)
     with pytest.raises(ValueError):
         HarnessLimits(max_recoverable_tool_failures=True)
+
+
+def test_checkpoint_rejects_changed_tool_retry_policy(tmp_path: Path):
+    journal = SQLiteSyntheticCheckpointStore(tmp_path / "synthetic-retry-policy.sqlite")
+    limits = HarnessLimits(max_recoverable_tool_failures=1)
+    result = run_readonly_agent(
+        TASK,
+        SequencePlanner([_tool_choice(), _finish()]),
+        _tool(_good_result),
+        limits,
+        checkpoint=journal,
+        run_id="synthetic-retry-policy",
+    )
+    assert result.status == "completed"
+    with pytest.raises(ValueError, match="execution policy mismatch"):
+        run_readonly_agent(
+            TASK,
+            SequencePlanner([]),
+            _tool(_good_result, retry_safe=False),
+            limits,
+            checkpoint=journal,
+            run_id="synthetic-retry-policy",
+        )

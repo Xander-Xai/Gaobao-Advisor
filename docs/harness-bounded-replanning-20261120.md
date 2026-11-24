@@ -32,3 +32,5 @@
 5. **Trace / Eval**：已有脱敏事件、CI 合成 Oracle；没有真实模型多次运行及专家 Ground Truth，不能宣传模型成功率或 Token 降本。
 
 **Claim Gate**：只可表述“实现并测试可选择开启的合成只读工具故障恢复及 CAS 断点续跑”。不允许声称生产自动重规划、真实模型可靠性提升或业务交付完成。
+
+2026-11-24 independent integration: checkpoint policy schema v2 binds per-tool retry safety and all limits. Old v1 experimental run IDs fail closed; use a fresh synthetic run ID, never delete live data. The retry policy allows only explicitly approved synthetic read-only tools and a bounded new planner decision; it is not a classifier of transient versus permanent provider errors. Existing scorecard changes are already present on master. No real model execution is claimed.

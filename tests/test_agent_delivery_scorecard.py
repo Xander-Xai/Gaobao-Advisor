@@ -55,17 +55,6 @@ def test_invalid_claims_fail_closed(tamper):
         summarize_synthetic_delivery(report)
 
 
-def test_zero_success_does_not_forge_per_success_metric():
-    report = complete_run()
-    no_success = copy.deepcopy(report)
-    for case in no_success["results"]:
-        case["passed"] = False
-    no_success["passed"] = 0
-    result = summarize_synthetic_delivery(no_success)
-    assert result["average_tool_calls_per_passing_case"] is None
-    assert result["provider_declared_tokens_per_passing_case"] is None
-
-
 def test_success_only_tool_and_planner_means_exclude_failed_cases():
     report = complete_run()
     report["results"][0]["passed"] = False
@@ -81,3 +70,14 @@ def test_success_only_tool_and_planner_means_exclude_failed_cases():
     # Tokens per successful delivery intentionally include failed attempts.
     assert result["provider_declared_tokens_per_passing_case"] == round(960 / 7, 2)
     assert result["real_user_effective_delivery_rate"] == "NOT_MEASURED"
+
+
+def test_zero_success_does_not_forge_per_success_metric():
+    report = complete_run()
+    no_success = copy.deepcopy(report)
+    for case in no_success["results"]:
+        case["passed"] = False
+    no_success["passed"] = 0
+    result = summarize_synthetic_delivery(no_success)
+    assert result["average_tool_calls_per_passing_case"] is None
+    assert result["provider_declared_tokens_per_passing_case"] is None

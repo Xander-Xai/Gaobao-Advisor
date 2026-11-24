@@ -13,11 +13,14 @@ def paired_fixture():
         "dataset_sha256": "a" * 64,
         "model_id": "explicit-demo-model",
         "groundtruth_review": "REVIEW_DECLARED",
+        "suite_complete": True,
+        "unexecuted_case_ids": [],
         "paired_cases": [
             {
                 "case_id": f"holdout-{i}",
                 "split": "holdout",
                 "fact_passed": True,
+                "verified_task_passed": True,
                 "tool_calls": 4,
                 "total_tokens": 100,
                 "safety_violation": False,
@@ -45,6 +48,7 @@ def test_candidate_is_proposed_for_review_not_deployed():
 def test_quality_regression_blocks_promotion_despite_token_savings():
     base, candidate = paired_fixture()
     candidate["paired_cases"][0]["fact_passed"] = False
+    candidate["paired_cases"][0]["verified_task_passed"] = False
     report = compare_holdout(base, candidate)
     assert report["decision"] == "REJECT_CANDIDATE"
 
@@ -85,3 +89,48 @@ def test_bounded_suggestions_are_explicitly_untested():
     assert len(proposals) == 3
     assert all(p["state"] == "UNTESTED" for p in proposals)
     assert all(isinstance(p["configuration"], dict) for p in proposals)
+
+
+def test_swapped_task_success_cannot_hide_case_regression():
+    base, candidate = paired_fixture()
+    base["paired_cases"][1]["verified_task_passed"] = False
+    candidate["paired_cases"][0]["verified_task_passed"] = False
+    report = compare_holdout(base, candidate)
+    assert report["baseline_verified_task_passed"] == report["candidate_verified_task_passed"]
+    assert report["task_regression_case_ids"] == ["holdout-0"]
+    assert report["decision"] == "REJECT_CANDIDATE"
+
+
+def test_swapped_safety_violation_cannot_hide_new_unsafe_case():
+    base, candidate = paired_fixture()
+    base["paired_cases"][1]["safety_violation"] = True
+    candidate["paired_cases"][0]["safety_violation"] = True
+    report = compare_holdout(base, candidate)
+    assert report["baseline_safety_violations"] == report["candidate_safety_violations"]
+    assert report["new_safety_violation_case_ids"] == ["holdout-0"]
+    assert report["decision"] == "REJECT_CANDIDATE"
+
+
+def test_swapped_fact_success_cannot_hide_case_regression():
+    base, candidate = paired_fixture()
+    base["paired_cases"][1].update(fact_passed=False, verified_task_passed=False)
+    candidate["paired_cases"][0].update(fact_passed=False, verified_task_passed=False)
+    report = compare_holdout(base, candidate)
+    assert report["baseline_fact_passed"] == report["candidate_fact_passed"]
+    assert report["fact_regression_case_ids"] == ["holdout-0"]
+    assert report["decision"] == "REJECT_CANDIDATE"
+
+
+@pytest.mark.parametrize("field", ["suite_complete", "unexecuted_case_ids"])
+def test_legacy_report_without_completeness_fields_fails_closed(field):
+    base, candidate = paired_fixture()
+    candidate.pop(field)
+    with pytest.raises(ValueError, match="Incomplete"):
+        compare_holdout(base, candidate)
+
+
+def test_missing_verified_task_result_fails_closed():
+    base, candidate = paired_fixture()
+    candidate["paired_cases"][0].pop("verified_task_passed")
+    with pytest.raises(ValueError, match="verified task"):
+        compare_holdout(base, candidate)

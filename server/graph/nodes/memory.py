@@ -58,17 +58,28 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
     db = get_session()
     try:
         conv = get_or_create_conversation(db, session_id)
+        atomic = bool(state.get("atomic_memory"))
         if input_text:
-            save_message(db, session_id, "user", input_text)
+            if atomic:
+                save_message(db, session_id, "user", input_text, commit=False)
+            else:
+                save_message(db, session_id, "user", input_text)
         if reply:
-            save_message(db, session_id, "assistant", reply)
+            if atomic:
+                save_message(db, session_id, "assistant", reply, commit=False)
+            else:
+                save_message(db, session_id, "assistant", reply)
         # Store canonical slot records and merge whatever the graph did not
         # touch, so a partially-filled state cannot erase an existing profile.
         existing = load_conversation_slots(db, session_id) or {}
         canonical = normalize_slots(slots, existing=existing)
         if query_state:
             canonical["_query_state"] = query_state
-        save_slots(db, session_id, canonical)
+        if atomic:
+            save_slots(db, session_id, canonical, commit=False)
+            db.commit()
+        else:
+            save_slots(db, session_id, canonical)
 
         # Check conversation length for summarization need
         msg_count = len(conv.messages) if conv.id else 0
@@ -86,6 +97,7 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
             }
         )
     except Exception as exc:
+        db.rollback()
         logger.warning("memory_update failed (error type: %s)", type(exc).__name__)
         trace.append(
             {

@@ -1,5 +1,7 @@
 # Gaobao Advisor｜可核验的高考志愿辅助决策系统
 
+> **Memory 专项定位（2026-11-24）**：统一对话上下文、可选语义压缩、版本化 Session Snapshot 和独立的用户偏好机制；后两者受开关、隐私与 CI 门禁约束，不能用历史摘要代替招生 SQL 证据。见 [Memory 专项工程定位](docs/architecture/memory-engineering-positioning-20261124.md)。
+
 **AI 应用全栈交付 + 可信数据查询 + Agent 运行时可靠性实验**
 
 围绕“考生如何在信息不完整时获得可追溯、可解释的志愿咨询结果”，实现 **画像追问 → 结构化 SQL 查询 → 合成知识检索 → 来源/风险检查 → SSE 交互** 的端到端业务链路。工程上包含 Vue 3、FastAPI、受约束的 LangGraph 工作流，以及可选的 Java Gateway、MySQL、Redis、Docker Compose 和 CI 集成验证。
@@ -7,6 +9,8 @@
 **Agent Harness 工程实验**独立于生产问答路由：用真正的只读业务工具检验模型/Planner 的多步工具执行、预算控制、Fail-Closed 和离线 Eval，不将使用框架或通过单测等同于业务成功。
 
 > **代码归属：** 基于上游早期 MIT 许可代码继续二次开发与工程加固，保留原始许可声明；具体见 [第三方归属说明](THIRD_PARTY_NOTICES.md)。
+
+**Agent V1 Harness 工程验证**：[Skills / 合成规则记忆与 Eval 验收](docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md)。这些独立实验模块不属于默认聊天路径，除非经过明确集成和真实模型/业务评测，不能计为线上能力。
 
 > **数据边界先行：** 仓库默认只附带程序生成的 **SYNTHETIC_DEMO** 合成演示数据，不对应任何真实院校、专业或录取结果，**不可用于真实志愿决策**。真实数据导入能力保留在源码中，使用者需自行提供合法授权数据。
 
@@ -21,9 +25,38 @@
 
 ---
 
+**2026 Agent 求职定位与验收责任：**[最近阶段：Agent Harness、业务 Eval、Context 与 AI 全栈](docs/portfolio/2026-agent-interview-positioning.md)。任职时间线与公开代码继续维护的时间线分别核实。
+
+## 仓库状态怎么查
+
+默认分支为 `master`。实时核对 [`master` 提交](https://github.com/Xander-Xai/Gaobao-Advisor/commits/master/) · [Pull Requests](https://github.com/Xander-Xai/Gaobao-Advisor/pulls) · [Issues](https://github.com/Xander-Xai/Gaobao-Advisor/issues) · [Actions](https://github.com/Xander-Xai/Gaobao-Advisor/actions?query=branch%3Amaster) · [Releases](https://github.com/Xander-Xai/Gaobao-Advisor/releases)。
+以同一提交核对代码、测试和 Actions。PR 正文中的历史决策与 CI 回执仅对应当时的提交。
+
+- 公共问答先校验并持久化最终答复，再通过 SSE 推送，见 [架构时序](docs/architecture/README.md)和 [PR #139](https://github.com/Xander-Xai/Gaobao-Advisor/pull/139)。
+- SQL/RAG 串并行对照是合成评测，见 [实验记录](docs/performance/sql-rag-parallelization-gate-20261124.md)和 [PR #141](https://github.com/Xander-Xai/Gaobao-Advisor/pull/141)。决策卡独立判分会拒绝重复或替换院校，见 [PR #142](https://github.com/Xander-Xai/Gaobao-Advisor/pull/142)。
+- Java Gateway/Catalog 随 [PR #89](https://github.com/Xander-Xai/Gaobao-Advisor/pull/89) 合入，属于可选部署。该 PR 正文的 `Draft / Owner HOLD` 是合并前记录。
+
+## 会话上下文管理（独立于跨任务长期记忆）
+
+在线对话的同步、传统流式和公开 SSE 最终候选生成，使用统一的
+`server/agent/chat_context.py` 来限制历史上下文并保留本轮 SQL/RAG 来源。
+默认只保留最近 20 轮并显式标记丢失的旧历史；需要语义压缩时，可在**授权的开发环境**
+开启 `GAOBAO_CHAT_COMPACTION_ENABLED=true`，再由现有 `MemoryManager`
+对旧历史按需摘要、保留最近 10 轮。摘要是**未经核验的用户对话线索**，不构成招生证据或工具审批。
+
+该开关默认关闭，因为启用后每次满足条件的请求可能增加模型调用费用。
+摘要目前不持久化，不具备 Pi/OpenCode 的完整会话分叉与增量恢复机制，
+也没有真实模型 A/B、Token 降本证明或生产个人信息许可。
+操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
+跨任务用户偏好记忆由独立 Draft PR #159 承接（旧 #135 仍为历史依赖栈），尚未合并，不应与会话压缩混同。
+
+进一步的**可复用会话摘要快照**已合入 master（PR #149），默认关闭：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。仍需单独授权开关 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，且当前明确禁止生产环境启用；具体限制与 Alembic 迁移冲突见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
+
 ## Agent Harness / Eval 实验
 
-与现有 17 节点业务图**分离**的只读执行层，位于 `server/agent/readonly_harness.py`、`readonly_model_planner.py` 和 `readonly_tools.py`。这里实现的是 **Planner → Tool → Observation → Finish/Abstain** 的受约束循环，不是把业务 LangGraph 节点数当成“工具步长”。
+合成业务 Context A/B 已随 [PR #160](https://github.com/Xander-Xai/Gaobao-Advisor/pull/160) 合入；`python -m benchmarks.context_ab_eval --scripted-smoke --out-dir /tmp/gaobao-context-ab` 可复现固定 SQL 真值对照。脚本化控制器不代表真实模型效果或 Token 降本。真实模型版本一致性增强见 [PR #162](https://github.com/Xander-Xai/Gaobao-Advisor/pull/162)，以其实时合并与 CI 状态为准。
+
+与[公共问答业务图](docs/architecture/README.md)**分离**的只读执行层，位于 `server/agent/readonly_harness.py`、`readonly_model_planner.py` 和 `readonly_tools.py`。这里实现的是 **Planner → Tool → Observation → Finish/Abstain** 的受约束循环，不是把业务 LangGraph 节点数当成“工具步长”。
 
 | 可验证能力 | 代码与验收 |
 |---|---|
@@ -69,6 +102,8 @@ python -m benchmarks.decision_card_business_eval \
 **输入**：两所事先声明的虚构院校、一个虚构专业、虚构省份、合成分数、物理类/历史类与最新合成年份。**工具链**：`major_lookup`（专业门类）、`admission_lookup` ×2（录取分数/位次及历史选科类别）、`plan_lookup` ×2（招生计划/选科要求），每次都通过现有数据库真实查询，并按数据行生成来源指纹，而不是让模型编造数字。
 
 **输出**：完整证据才提供两所虚构学校的历史最低分、分差、最低位次、招生计划数、选科约束与来源 ID。缺记录、选科冲突、无效来源/字段或工具出错时返回 `needs_review`，不显示有误导性的部分比较。所有结果注明**历史分差≠录取概率**，实际考生位次、当年官方计划与政策均未核验，不能给真实“冲稳保”推荐。
+
+**P4 验证门禁：** 该业务卡只可作为合成历史事实与拒答路径的工程证明。每次主分支集成必须使用对应提交的完整 CI/CodeQL 结果；真实模型效果、考生决策正确率与人工招生专家审查仍未测量。
 
 实验开关、operator 权限、生产禁用规则与 P3 相同。打开运营工作台 `/admin` 的「Agent 研究」标签，可点击「核验历史数据与招生约束」查看演示，结果显示真实 5 次工具查询和可信来源；也可：
 
@@ -123,17 +158,21 @@ curl -sS -X POST http://localhost:8000/api/v1/admin/agent-experiments/research \
 | 引用正确但事实错误仍拒绝 | `benchmarks/harness_answer_eval.py` 与 `tests/test_readonly_model_verified_task.py` | 预先冻结的合成事实和工具来源双重验证 |
 | Ground Truth 候选冻结 | `benchmarks/groundtruth_pipeline.py` | 20 条合成候选、开发/holdout、SHA 和审核门禁；**默认待人工审核** |
 | 优化前后评价门禁 | `benchmarks/harness_optimizer.py` | 同模型/同数据集、质量与安全不退化、真实 Token 用量才可提交人工审查；尚无实测收益 |
-| 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；不是生产级多租户 OS 沙箱 |
+| 真实受限 Docker Workspace | `benchmarks/sandbox_workspace.py` | 无网络、只读根、非特权用户、CPU/内存限制及临时挂载；**独立最小 Python 镜像 + 可信测试脚本只读挂载（本次 PR 待验收）**；不是生产级多租户 OS 沙箱 |
 | Coding Agent 真实执行链路 | `benchmarks/sandbox_coding_agent.py` | **两个合成算术代码修复 2/2，通过真实容器测试；控制器为 SCRIPTED_NOT_LLM** |
 | 可选模型自主修复 | `benchmarks/sandbox_model_planner.py` | API 适配器已实现、显式授权与 Token 预算；**尚无真实模型跑分** |
 
 [最新 CI 证据（1288 passed / 34 skipped）](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/44579602863) · [CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/44579602669)
 
+| 沙箱安全加固与反例验收 | [docs/security/gaobao-agent-sandbox-contract-20261124.md](docs/security/gaobao-agent-sandbox-contract-20261124.md) | Docker 客户端输出 64 KiB 上限、IPC/FD 限制、硬链接拒绝、真实容器网络/根文件系统/身份负例探测；仅合成实验 |
+
+[Pi / OpenCode 沙箱设计与安全边界](docs/security/pi-opencode-sandbox-architecture-20261124.md) — 仅强化高报离线 Coding Agent 合成实验，**不开放公开聊天任意代码执行**；本 PR 最新 CI 未通过前不宣称生产隔离完成。
+
 沙箱演示（Docker 环境，全部为虚构代码，脚本控制器不产生外部模型费用）：
 
 ```bash
-docker build -t gb-advisor:ci .
-IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+docker build -f Dockerfile.sandbox -t gb-advisor:sandbox-ci .
+IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
 python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/workspace-eval.json
 python -m benchmarks.sandbox_coding_agent --image "$IMAGE_ID" --out /tmp/coding-eval.json
 ```
@@ -147,6 +186,8 @@ python -m benchmarks.readonly_harness_eval --out /tmp/gaobao-harness-eval.json
 ```
 
 **指标边界：** 30/30 表示脚本化控制器在已定义的工具流程/安全契约中通过，不是大模型自主规划成功率，也不是高考录取建议准确率。可选的 OpenAI-compatible Planner 尚未完成真实模型的独立 Benchmark。隔离 SQLite + 工具白名单**不等于** Claude Code/Pi 的 OS Sandbox。完整机制、风险和求职证据边界见 [Agent Harness 实验手册](docs/agent-readonly-harness-evidence-20261120.md)。
+
+**PR 合并门禁：** 对每次新增提交，必须以该 PR 当前 HEAD SHA 的必需 CI/CodeQL 检查为准；历史绿色检查不自动代表后续文档或代码提交已验证。
 
 ---
 
@@ -359,18 +400,18 @@ profile，不改变默认行为。
 
 ---
 
-## 验收与生产状态（2026-11-07 复核）
+## 2026-11-07 验收快照
 
 | 维度 | 状态 |
 |---|---|
 | Code Complete（`master`） | 已交付：Python/FastAPI + LangGraph + Vue 3 +.SQLite/MySQL 可选 profile |
-| 自动化测试（`master` CI） | PASS：Python 3.10/3.11、前端、Compose E2E、CodeQL、Secret Scan（见 Actions） |
+| 该基线的自动化测试 | PASS：Python 3.10/3.11、前端、Compose E2E、CodeQL、Secret Scan（见 Actions） |
 | 功能分支验收（PR #89） | 已合入 `master`（`7c87686`）；合并后主 CI、CodeQL、Java Services 全绿，但仅为合成数据短时观测 |
 | 性能基准 | **部分达标**：`python-overview` 聚合已优化（16→9 次往返，PR #93），仓库内基准 `benchmarks/overview_perf_bench.py` 同配置 50 并发 median -45%、RPS +75%；短时合成数据结果不等于容量或 SLA，见 [性能文档](docs/performance/java-python-load.md) |
 | 公网生产 | **NO-GO**：无 TLS、真实数据授权、专用 SELECT-only 凭据、跨主机 HA、容量/SLA 与隐私审批 |
 
 **区分：** `Code Complete ≠ Acceptance PASS ≠ Production Ready`。CI 绿只能证明
-自动化检查通过，不能替代真实负载、真实数据与生产运行验证。当前仓库治理与风险
+自动化检查通过，不能替代真实负载、真实数据与生产运行验证。该日期的仓库治理与风险
 记录见 [docs/governance/repository-status-2026-11-07.md](docs/governance/repository-status-2026-11-07.md)。
 
 ---

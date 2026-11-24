@@ -104,18 +104,21 @@ sequenceDiagram
     else Profile complete or knowledge query
         G->>G: quality_orchestrate
         G->>DB: data_query (rank/score/plan lookup)
+    G->>G: validate_data (per-school provenance, no cross-school comparison)
         G->>RAG: rag_retrieve (BM25, optional dense)
         RAG-->>G: chunks + citations or explicit NO_EVIDENCE/error
         G->>G: reason -> structure_output -> render_reply
     end
-    G->>G: source_attribution -> quality_post_check -> quality_judge -> memory_update
-    API-->>SPA: slots / structured / sources events
+    Note over G,API: Public SSE invokes preparation-only graph, stopping at render_reply
     alt LLM key configured and a model path is selected
-        API->>LLM: stream tokens
-        LLM-->>API: token chunks
-    else No key
-        API-->>SPA: deterministic grounded template + degraded event
+        API->>LLM: async model request (buffer draft)
+        LLM-->>API: unpublished candidate chunks
+    else No key / no policy evidence
+        API->>API: deterministic template / explicit safe refusal
     end
+    API->>API: source_attribution -> quality_post_check -> quality_judge
+    API->>DB: persist final user+assistant+slots in one transaction
+    API-->>SPA: slots / structured / sources + validated answer SSE events
     API-->>SPA: done {session_id, session_token}
     SPA->>API: Later turns with Bearer token
 ```
@@ -127,8 +130,11 @@ Important invariants:
   `tests/test_public_demo_acceptance.py::TestSessionIdentity`).
 * The database is the source of truth for a persisted profile; stale client
   slots only fill unknown keys.
-* The graph stops before model streaming. Token streaming is handled by
-  `server/routes/chat.py`; the template reply is the offline/failure fallback.
+* The public chat path uses `build_advisor_graph(finalize=False)` for preparation;
+  the full graph remains available to offline callers. The SSE route buffers
+  model output, then validates and atomically stores the final answer before
+  publishing chunks. These SSE chunks are **not** raw provider token latency.
+  The template reply is the offline/error/quality-gate fallback.
 * RAG failures are explicit (`RAG_ERROR` / `NO_EVIDENCE` / `RAG_DISABLED`), not
   silently converted into an answer without evidence.
 
@@ -142,13 +148,19 @@ flowchart TD
     S["security_scan"] --> I["intent_detect"] --> R["scene_route"] --> E["slot_extract"] --> P{"profile_check"}
     P -->|missing fields| Q["question_generate"] --> Render["render_reply"]
     P -->|"existing reply"| Render
-    P -->|complete / knowledge query| O["quality_orchestrate"] --> D["data_query"] --> K["rag_retrieve"] --> Reason["reason"] --> St["structure_output"] --> Render
+    P -->|complete / knowledge query| O["quality_orchestrate"] --> D["data_query"] --> V["validate_data"] --> K["rag_retrieve"] --> Reason["reason"] --> St["structure_output"] --> Render
     Render --> SA["source_attribution"] --> PC["quality_post_check"] --> J["quality_judge"] --> F["feedback"] --> M["memory_update"] --> End(["END"])
 ```
 
+The diagram above represents the full offline graph. The public chat route uses
+the preparation-only variant ending at `render_reply`, then runs the same
+finalizers against the **actual candidate answer**, not the template.
+
 State channels include slots/profile snapshot, RAG chunks/evidence/sources, data
-query results, structured result, reply/reply source, quality scores, retrieval
-state and the persisted `_query_state` used by the follow-up question engine.
+query results, per-school provenance validation, structured result, reply/reply
+source, quality scores, retrieval state and the persisted `_query_state` used
+by the follow-up question engine. LLM-as-Judge scores remain diagnostic rather
+than independently verified proof of factual correctness.
 
 ## 4. RAG retrieval chain
 
