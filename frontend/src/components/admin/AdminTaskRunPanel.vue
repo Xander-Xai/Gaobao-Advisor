@@ -18,6 +18,7 @@
         <label class="text-xs text-slate-600" for="agent-engine">自主执行引擎</label>
         <select id="agent-engine" v-model="engine" data-testid="taskrun-engine" class="rounded-md border border-slate-300 px-2 py-1 text-sm">
           <option value="deterministic">确定性基线（无模型费用）</option>
+          <option value="native_harness">原生 Harness（只能由授权 Worker 启动）</option>
           <option value="deepagents">Deep Agents（只能由授权 Worker 启动）</option>
         </select>
         <button type="button" data-testid="taskrun-create" :disabled="busy" class="rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50" @click="createRun">
@@ -69,8 +70,8 @@
           @click="execute"
         >运行已批准的合成任务</button>
       </div>
-      <p v-if="task.status === 'APPROVED' && task.engine === 'deepagents'" data-testid="taskrun-model-worker" class="text-xs text-amber-800">
-        Deep Agents 必须由独立 Worker 经外部 API 授权、密钥和模型预算检查后运行；浏览器不会自动调用模型。
+      <p v-if="task.status === 'APPROVED' && (task.engine === 'deepagents' || task.engine === 'native_harness')" data-testid="taskrun-model-worker" class="text-xs text-amber-800">
+        模型引擎必须由独立 Worker 经外部 API 授权、密钥和模型预算检查后运行；浏览器不会自动调用模型。
       </p>
       <p v-if="task.status === 'PENDING_APPROVAL' && admin.user?.username === task.owner" class="text-xs text-amber-800">
         发起人不可审批自己的任务，请由另一位管理员核验。
@@ -106,7 +107,7 @@ const admin = useAdminStore()
 const example = ref<SyntheticDecisionCardExample | null>(null)
 const task = ref<SyntheticTaskRun | null>(null)
 const runId = ref('')
-const engine = ref<'deterministic' | 'deepagents'>('deterministic')
+const engine = ref<'deterministic' | 'deepagents' | 'native_harness'>('deterministic')
 const busy = ref(false)
 const disabled = ref(false)
 const error = ref('')

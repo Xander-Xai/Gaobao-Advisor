@@ -66,3 +66,22 @@ pytest -q tests/test_portfolio_taskrun_http_e2e.py
 ### 真实只读 Harness Eval 执行前预检
 
 `python -m benchmarks.readonly_model_eval --model <固定模型版本> --reviewed-dataset <人工审定文件> --out /tmp/gb-plan.json --plan-only` 不需密钥或网络，输出计划分母、Holdout 数、冻结选择哈希和预算，不调用 Provider。审定集默认执行全量（当前 20 条，含 5 条 Holdout）；显式截断标记 REVIEW_DECLARED_SUBSET，不进入优化审核。未审定集默认 5 条探索性用例。实际执行移除 --plan-only，并在授权费用后添加 --permit-external-model，使用不同输出路径；原报告不得覆盖。此计划不代表人工审定真实完成、模型质量或账单。
+
+
+### 原生 Harness × 审批 TaskRun（实验增量）
+
+管理端可创建 `native_harness` 合成决策卡任务，仍须不同管理员审批。HTTP execute 拒绝模型引擎；
+授权操作员可显式运行：
+
+```bash
+python -m server.agent.taskrun_worker --journal /absolute/path/tasks.sqlite --run-id syn_... \
+  --model openai:MODEL_ID --permit-external-model
+```
+
+需要显式非生产 APP_ENV、合成 SQLite、禁用 outbound fetch、实验开关及 Provider Key。
+原生模型 Planner 仅在 Worker 中选择固定画像下的五个只读查询；执行前检查任务租约，
+每次模型调用及 SQL 工具前再次检查；拒绝模型版本漂移、缺失身份和无法计量的结果。
+独立 SQL 回执复核后才持久化，管理端可刷新查看。Provider 用量为响应后计量，非硬账单上限；
+取消不能撤销在途请求，丢失租约后禁止新模型调用/新 SQL 操作及发布。
+此为管理端合成任务路径，不改变公开聊天，不声称真实模型/真实招生效果。
+关联 #104、#147；回归 `tests/test_native_taskrun_harness.py` 和 `tests/test_agent_taskrun_api.py`。

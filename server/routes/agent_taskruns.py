@@ -37,7 +37,7 @@ router = APIRouter(
 
 class NewSyntheticTaskRun(BaseModel):
     profile: SyntheticDecisionCardRequest
-    engine: Literal["deterministic", "deepagents"] = "deterministic"
+    engine: Literal["deterministic", "deepagents", "native_harness"] = "deterministic"
     idempotency_key: str = Field(..., min_length=8, max_length=96, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
@@ -249,7 +249,7 @@ async def execute_synthetic_taskrun(
 ) -> dict:
     """Only fast deterministic tasks are callable through HTTP.
 
-    Deep Agents runs require the separately invoked, explicitly authorized
+    Model-driven runs require the separately invoked, explicitly authorized
     worker CLI so a browser click cannot trigger paid external model calls.
     """
     store = _store()
@@ -258,7 +258,7 @@ async def execute_synthetic_taskrun(
     except (TaskRunNotFound, ValueError) as exc:
         raise HTTPException(status_code=404, detail="No visible TaskRun") from exc
     if item["engine"] not in {"deterministic", "portfolio"}:
-        raise HTTPException(status_code=409, detail="Deep Agents tasks require explicitly authorized worker")
+        raise HTTPException(status_code=409, detail="Model-driven tasks require explicitly authorized worker")
     if item["status"] != "APPROVED":
         raise HTTPException(status_code=409, detail="TaskRun must be approved and claimable")
     from server.agent.taskrun_worker import execute_approved_run

@@ -23,7 +23,7 @@ from server.observability.agent_trace import current_traceparent, valid_tracepar
 
 _RUN_RE = re.compile(r"^syn_[0-9a-f]{32}$")
 _IDEMPOTENCY_RE = re.compile(r"^[A-Za-z0-9_.:-]{8,96}$")
-_ALLOWED_ENGINES = frozenset({"deterministic", "deepagents", "portfolio"})
+_ALLOWED_ENGINES = frozenset({"deterministic", "deepagents", "portfolio", "native_harness"})
 _MAX_ATTEMPTS = 2
 _MAX_OUTSTANDING_PER_OWNER = 8
 _MAX_TASK_JOURNAL_ROWS = 5000
