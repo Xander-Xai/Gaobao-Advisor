@@ -199,9 +199,7 @@ def _run_arm(
     return report
 
 
-def _validate_paid_prefix(
-    report: dict[str, Any], prior: list[dict[str, Any]], model: str, arm: str
-) -> None:
+def _validate_paid_prefix(report: dict[str, Any], prior: list[dict[str, Any]], model: str, arm: str) -> None:
     """Reject incompatible completed arms before spending on any further trial."""
     indexed = _validate(report)
     if report["model_id"] != model or report.get("prompt_variant") != arm:
