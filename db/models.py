@@ -533,6 +533,8 @@ class UserMemoryVault(Base):
 
     id = Column(String(32), primary_key=True)
     token_hash = Column(String(64), nullable=False)
+    # Monotonic vault-wide revision; never reset when entries expire or are deleted.
+    last_version = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
 
     __table_args__ = (
