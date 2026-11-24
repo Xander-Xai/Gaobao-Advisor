@@ -50,3 +50,43 @@ Local Compose binds all published ports to loopback and keeps `USER_MEMORY_ENABL
 Acceptance: start local Compose after configuring operator/admin authentication; verify unauthenticated requests fail and operator example endpoint succeeds; create a synthetic task and approve with a different authorized admin; verify production rejects experiments and explicit false disables them. Run existing API/TaskRun/memory tests and exact-head CI. No new runtime results are claimed.
 
 The optional MySQL/Redis full Compose overlay keeps synthetic experiments, cross-task memory and compaction **off** unless explicitly enabled via shell or `--env-file .env.full`. Run the full overlay with `docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml --profile full up --build`. Compose interpolation and service env_file are distinct. The existing full Compose CI script now renders both profiles, checks loopback bindings, local defaults, explicit false rollback, full default-off and explicit opt-in without logging resolved credentials. This is configuration evidence only, not a model or privacy production acceptance.
+
+## Deep Agents business research (2026-11-25)
+
+The synthetic five-tool adapter remains a checkpoint/ledger regression.
+The new operator-local `server/agent/admissions_deepagents.py` serves actual
+authorized admissions records: two schools, one major, one province/batch,
+one subject cohort and up to five years. Deep Agents plans with write_todos,
+reads a fixed virtual skill, and delegates through its task tool to two
+compiled deterministic LangGraph specialists: historical scores/ranks and
+enrollment plans/subject requirements/tuition. Specialists run bounded
+parameterized SQL on the host, not model-generated SQL. Only coverage counts
+and opaque receipts go to the model; no applicant data or raw rows. The host
+requires both submitted receipt IDs, re-reads SQL and explicitly flags missing,
+ambiguous or incomplete records. The private result is a research evidence
+bundle, not an admission recommendation. Model mode has a separate consent,
+at most eight main model calls, no SDK retries, and no subagent model calls.
+
+```bash
+# Configure DATABASE_URL (authorized read-only DB) and OPENAI_API_KEY privately.
+pip install -r requirements-deepagents.txt
+python -m server.agent.admissions_deepagents --authorized-data --authorize-model-call \
+  --approval-ref internal-approval-id --school-ids 101 102 --major-id 10 \
+  --province 广东 --subject-type 物理 --batch 本科批 --year-from 2022 --year-to 2025 \
+  --model openai:your-model --out /private/research-receipt.json
+```
+
+The new path uses an in-memory graph checkpoint, not the synthetic task
+journal or durable synthetic ledger. Operator-only local CLI; real model
+autonomy, SDK invocation with the provider, authorized data quality, online
+routing, durable owner-bound TaskRun, report integration and linkage to the
+business sandbox are not validated. CI exercises real SQL and compiled
+specialists with an injected controller and constructs the actual SDK graph;
+neither constitutes a real-model run. Ordinary SQL/RAG chat remains intact.
+
+Optional `--sandbox-image sha256:...` joins the approved history specialist
+and the business sandbox: the main agent may generate one Python program,
+executed against only the previously captured history rows, grouped by school
+and year. Submission requires an independently verified sandbox receipt.
+A changed source blocks the entire final evidence bundle. This is still a
+local operator path, not a public route or a durable TaskRun.
