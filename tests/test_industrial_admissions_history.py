@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from db.database import Base
 from db.models import AdmissionScore, School, YiFenYiDuan
-from server.services.industrial_admissions import build_history_reply, query_history
+from server.services.industrial_admissions import build_history_reply, exact_score, query_history
 
 
 @pytest.fixture
@@ -121,3 +121,22 @@ def test_industrial_text_and_card_share_exact_receipts(history_db, monkeypatch):
     refused, card = build_history_reply({"scene": "gaokao", "knowledge_query": True})
     assert "尚未获准发布" in refused
     assert not card["facts"]
+
+
+@pytest.mark.parametrize(
+    ("slots", "expected"),
+    [
+        ({"score": 600}, 600),
+        ({"score_rank": "600分 / 位次3000"}, 600),
+        ({"score": "600", "score_rank": "600分"}, 600),
+        ({"score": 600, "score_rank": "601分"}, None),
+        ({"score_rank": "位次600"}, None),
+        ({"score_rank": "600"}, None),
+        ({"score_rank": "6000分"}, None),
+        ({"score_rank": "一本线上100分"}, None),
+        ({"score": 600.5}, None),
+        ({"score": True}, None),
+    ],
+)
+def test_industrial_score_requires_exact_unambiguous_value(slots, expected):
+    assert exact_score(slots) == expected
