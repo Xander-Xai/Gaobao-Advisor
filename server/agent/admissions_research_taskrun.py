@@ -295,19 +295,21 @@ class ResearchJournal:
     def finish(self, run_id: str, lease: str, result: dict | None, failure: str | None):
         with self.tx() as db:
             row = self._row(db, run_id)
-            if row["state"] != "RUNNING" or row["lease"] != lease:
-                raise ResearchConflict("Lease lost or task cancelled")
-            state = "FAILED"
-            if result is not None:
-                if len(canonical(result)) > 50000:
-                    raise ValueError("Result exceeds journal budget")
-                state = "SUCCEEDED" if result["status"] == "VERIFIED_RESEARCH" else "NEEDS_REVIEW"
-            db.execute(
-                "UPDATE authorized_research_runs SET state=?,result=?,failure=?,lease=NULL,deadline=NULL,updated=? "
-                "WHERE id=?",
-                (state, canonical(result) if result else None, failure, time.time(), run_id),
-            )
-            return self._view(self._row(db, run_id))
+            if row["state"] == "RUNNING" and row["lease"] == lease:
+                state = "FAILED"
+                if result is not None:
+                    if len(canonical(result)) > 50000:
+                        raise ValueError("Result exceeds journal budget")
+                    state = "SUCCEEDED" if result["status"] == "VERIFIED_RESEARCH" else "NEEDS_REVIEW"
+                db.execute(
+                    "UPDATE authorized_research_runs SET state=?,result=?,failure=?,lease=NULL,deadline=NULL,updated=? "
+                    "WHERE id=?",
+                    (state, canonical(result) if result else None, failure, time.time(), run_id),
+                )
+                return self._view(self._row(db, run_id))
+        # Commit any expiry performed by _row before reporting the conflict.
+        # Raising inside tx would roll back the EXPIRED transition.
+        raise ResearchConflict("Lease lost or task cancelled")
 
 
 def open_configured_journal():
