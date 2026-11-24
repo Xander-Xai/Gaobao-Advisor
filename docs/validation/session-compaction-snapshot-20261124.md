@@ -45,9 +45,10 @@ public async reply candidate. Both flags are required:
 ```bash
 export GAOBAO_CHAT_COMPACTION_ENABLED=true
 export GAOBAO_CHAT_SNAPSHOT_ENABLED=true
+export APP_ENV=development  # explicitly required; "production" and unset are blocked
 ```
 
-`APP_ENV=production` **rejects the experimental snapshot path** until an
+Only explicit `APP_ENV=development|test|testing|local` enables the experimental snapshot path; unset, staging and production environments **reject it** until an
 approved account/privacy design exists. Do not enable with real student data,
 sensitive conversations, or an unreviewed model provider: snapshot text is
 stored plaintext in the application database. There is no frontend consent
