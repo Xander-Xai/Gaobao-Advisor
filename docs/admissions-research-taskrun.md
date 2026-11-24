@@ -4,6 +4,7 @@ The synthetic journal is an isolated evaluation fixture, not a second business r
 The operator API creates and inspects the run; a different admin approves its
 exact request digest. Only a separately invoked worker can spend model tokens
 or start a sandbox. No browser click triggers model calls.
+When `ADMISSIONS_RESEARCH_ENABLED=true`, the legacy standalone `admissions_deepagents` CLI refuses execution before opening output or calling a provider. Managed operators must use the approved journal worker or dispatcher below. The standalone CLI remains an explicitly authorized offline validation path only when managed research is disabled; it is not a second managed lifecycle or a production fallback.
 
 Configure ADMISSIONS_RESEARCH_ENABLED=true, ADMISSIONS_RESEARCH_DATASET_REF
 (an operator-approved identifier; not independently verified provenance),
