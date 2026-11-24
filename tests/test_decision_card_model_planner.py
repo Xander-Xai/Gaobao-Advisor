@@ -201,6 +201,32 @@ assert negative_card["status"] == "needs_review"
 assert negative_card["observed_negative_evidence_count"] >= 1
 assert negative_card["schools"] == []
 assert negative_assessment["passed"], negative_assessment
+class MalformedResponse:
+    def create(self, **kwargs):
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="{invalid-json"))],
+            usage=SimpleNamespace(prompt_tokens=18, completion_tokens=7),
+        )
+
+bad_client = SimpleNamespace(chat=SimpleNamespace(completions=MalformedResponse()))
+bad_card = build_synthetic_decision_card(
+    profile, planner=DecisionCardModelPlanner(bad_client, "fake-model-not-llm", profile),
+    require_provider_usage=True,
+)
+bad_execution = bad_card["execution"]
+assert bad_card["status"] == "needs_review"
+assert bad_card["schools"] == []
+assert bad_execution["reason"] == "planner_response_invalid"
+assert bad_execution["tool_calls"] == 0
+assert bad_execution["model_steps"] == 1
+assert bad_execution["prompt_tokens"] == 18
+assert bad_execution["completion_tokens"] == 7
+bad_trace = grade_step_trace(bad_execution)
+assert bad_trace["provider_prompt_tokens"] == 18
+assert bad_trace["provider_completion_tokens"] == 7
+assert bad_trace["step_events"][0]["kind"] == "planner_error"
+assert "invalid-json" not in json.dumps(bad_trace)
+
 print(json.dumps({"status": "PASS", "fake_model": True, "source_count": len(card["evidence_ids"])}))
 """
 
@@ -217,3 +243,14 @@ def test_injected_fake_model_guides_actual_sql_tools_with_independent_oracle(tmp
     assert '"status": "PASS"' in completed.stdout
     assert '"fake_model": true' in completed.stdout
     assert '"source_count": 5' in completed.stdout
+
+
+@pytest.mark.parametrize("payload", [None, [], {"kind": []}, {}])
+def test_malformed_model_response_keeps_usage_without_action(payload):
+    client, _ = fake_client(payload)
+    decision = DecisionCardModelPlanner(client, "fake", PROFILE).decide("fictional", [], SCHEMAS)
+    assert decision.kind == "invalid"
+    assert decision.prompt_tokens == 11
+    assert decision.completion_tokens == 5
+    assert decision.tool == ""
+    assert not decision.arguments

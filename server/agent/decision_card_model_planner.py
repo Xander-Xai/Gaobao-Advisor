@@ -130,17 +130,22 @@ class DecisionCardModelPlanner:
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False, sort_keys=True)},
             ],
         )
-        raw = json.loads(response.choices[0].message.content)
-        if not isinstance(raw, dict):
-            raise ValueError("Model output must be a JSON object")
-        kind = raw.get("kind")
-        if kind not in {"tool", "finish", "abstain"}:
-            raise ValueError("Unsupported model action")
         usage = getattr(response, "usage", None)
         tokens = {
             "prompt_tokens": getattr(usage, "prompt_tokens", None),
             "completion_tokens": getattr(usage, "completion_tokens", None),
         }
+        # Malformed responses may still be billable. Preserve usage without
+        # persisting raw output or executing any proposed action.
+        try:
+            raw = json.loads(response.choices[0].message.content)
+        except (AttributeError, IndexError, TypeError, ValueError):
+            return Decision("invalid", **tokens)
+        if not isinstance(raw, dict) or not isinstance(raw.get("kind"), str):
+            return Decision("invalid", **tokens)
+        kind = raw["kind"]
+        if kind not in {"tool", "finish", "abstain"}:
+            raise ValueError("Unsupported model action")
         if kind == "abstain":
             if set(raw) != {"kind"}:
                 raise ValueError("Abstention must not contain free-form text or actions")
