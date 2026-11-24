@@ -39,8 +39,7 @@ The original `conversations` and `conversation_messages` remain canonical.
 
 ## Flags
 
-This module is deliberately **off by default** and only integrated into the
-public async reply candidate. Both flags are required:
+The standard local synthetic Java/MySQL/Redis stack defaults both flags to **true**. Raw/lightweight and production paths remain off by default. The module is only integrated into the public async reply candidate. Both flags are required; explicit false disables the corresponding feature:
 
 ```bash
 export GAOBAO_CHAT_COMPACTION_ENABLED=true

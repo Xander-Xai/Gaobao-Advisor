@@ -15,7 +15,7 @@
 | 可选模型自主工具选择 | `server/agent/decision_card_model_planner.py` | 真实模型适配器存在，但实际 provider 任务成功率尚未测量 |
 | 业务真值 | `server/agent/portfolio_sql_oracle.py`, `benchmarks/decision_card_business_eval.py` | SQLite 合成事实的独立评分，不等于真实高考推荐效果 |
 | Checkpoint/TaskRun/隔离实验 | `server/agent/taskrun_*.py`, `synthetic_checkpoint.py`, `benchmarks/sandbox_workspace.py` | 局部工程机制的合成/本地证据，不能说生产多租户沙箱 |
-| 全栈组件 | `server/main.py`, `frontend/`, `java-services/`, `docker-compose*.yml` | Java、MySQL、Redis 均需讲清可选 profile 与验收环境 |
+| 全栈组件 | `server/main.py`, `frontend/`, `java-services/`, `docker-compose*.yml` | Java、MySQL、Redis 为标准本地架构，验收范围仍是合成数据 |
 
 ## 缺口责任与执行顺序（只在本仓库处理）
 
@@ -23,7 +23,7 @@
 2. **P0 — 真实成功率与拒答准确性**：开发集和冻结 Holdout 严格隔离；一律拒答不能算成功。无真实招生授权/专家金标时，只能报告 **synthetic task success**，不说录取建议准确率。
 3. **P0 — 优化对照（PR #143 为已有切片）**：同一个真实模型、同一业务案例、同一 SQL Oracle、同预算的 Prompt/Skill/Context A/B，对比完成率、任务成本、工具步数、质量与失败；不能拿规则控制器的零 Token 与真实模型比较为“Token 降低”。
 4. **P1 — Replan、Context 和长期记忆**：只对真实失败模式添加 Replan/Context 改进，保留来源、身份边界、预算、撤回/失效和跨任务隐私；评测后才考虑合入。现有堆叠 Draft PR #132–#138 按依赖链与安全审查执行，禁止把 Draft 视为主线。
-5. **P1 — 全栈端到端**：Vue → API → SQL/知识 → SSE/卡片 → trace → 用户可核验结果；两种非法权限/数据缺失拒答；独立 MySQL + Redis + Java overlay 可选，不强制把可选组件全开。
+5. **P1 — 全栈端到端**：Vue → API → SQL/知识 → SSE/卡片 → trace → 用户可核验结果；两种非法权限/数据缺失拒答；标准部署包含 MySQL + Redis + Java，轻量 SQLite 仅开发/测试。
 6. **P2 — 新生态**：只在场景确有需要时对接 Deep Agents/Skills/MCP；受限 Workspace 不等于 OS/多租户生产 sandbox，不能凭技术标签升格证据。
 
 ## 面试最小验收包
@@ -103,3 +103,8 @@ queries receive safety plus selected heuristics and anti-patterns under a
 source of instructions. The context budget cannot silently drop the system
 message. Tests exercise actual sync/async context construction with and
 without retrieved evidence. No measured Token or quality improvement claimed.
+
+
+### Standard deployment decision (2026-11-25)
+
+Use `python scripts/compose_standard.py up --build -d`: Java Gateway/Catalog, MySQL, Redis and quality worker are required layers. The standard synthetic-only local profile defaults semantic compaction and SQL session snapshots on; explicit false disables them. Earlier lightweight profile instructions are historical/compatibility only. No production privacy approval or new real-provider results are implied.

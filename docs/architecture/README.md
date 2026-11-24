@@ -16,8 +16,8 @@ record why the larger decisions were made.
 | Native readonly Harness | 保留为最小参考和可控评测基线 | 不成为第二套默认聊天引擎；不重复扩展通用生产运行时 |
 | Deep Agents | 唯一复杂研究候选执行引擎 | 已有 operator research runner；独立的确定性 SQL subgraph 不是自主模型专家；批准范围、工具预算、SQL 回执和结果验证优先；受控研究 API 与 worker 共用独立私有 journal；本分支实现不等于主线或生产验收 |
 | Sandbox | 仅招生分析有业务主责 | 算术代码修复是隔离回归 fixture，不是用户功能；只准批准数据快照、受限容器、独立 Oracle 校验；无 Docker socket/任意 host shell 暴露给模型 |
-| Memory / Context | 保留分层 | SQL 事实/当前任务不截断；摘要是非可信上下文；长期偏好独立且可撤回，不能替代录取依据 |
-| SQLite / MySQL / Redis / Java | 单体默认，外部组件可选 | Java 仅目录读服务 overlay；不建立另一套 chat/Agent 入口；扩容需求或隔离收益不足不扩展 |
+| Memory / Context | 保留分层；标准本地合成部署默认启用语义压缩和持久快照 | SQL 事实/当前任务不截断；摘要是非可信上下文；长期偏好独立且可撤回，不能替代录取依据 |
+| MySQL / Redis / Java | 标准部署正式组件 | MySQL 为业务事实、会话与快照存储；Redis 为限流和质检队列；Java Gateway/Catalog 为入口和只读目录；Python 为唯一 Agent 入口；SQLite 仅轻量开发及独立受控 journal |
 | Eval | 独立业务真值优先 | 合成 Oracle 与真实模型、真实招生效果分开；A/B 只允许一个明确变量，不自动发布模型修改 |
 
 **目标边界（非已上线）**：简单咨询 → 确定性业务图；复杂研究 → 经批准的 Deep Agents 执行 → 只读 SQL/分析沙箱 → 独立证据核验 → 报告。Deep Agents 的 InMemorySaver 不等于持久图恢复；受控研究 journal 持久化任务生命周期、身份/审批和执行回执，过期任务不自动重放，不建立平行生产队列。原生 Harness、合成实验、旧 benchmark 保留用于对照或回归，不为每条路径重复增设功能。
@@ -59,15 +59,15 @@ Acceptance: exact-head CI, API and SSE contracts, deterministic negative cases a
    intent/scene routing, slot extraction, profile checks, structured data
    queries, RAG retrieval, reasoning, structured output, source attribution and
    quality checks.
-4. **Optional worker** — consumes data-quality jobs from Redis and writes
+4. **Quality worker** — consumes data-quality jobs from Redis and writes
    findings to the database.
 
-The default deployment uses SQLite and no LLM key. The optional full profile
-adds MySQL 8.4, Redis 7, and a separate worker.
+5. **Java Gateway and Catalog** — standard ingress routing and read-only catalog queries.
 
-> **Opt-in Java overlay (merged in #89, squash `7c87686`):** PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89)
-> adds an optional Java 21 / Spring Boot 4.0.9 / Spring Cloud 2025.1.4 overlay to
-> the default deployment: Nginx keeps `/ws/**` on Python, sends
+The standard local deployment (`python scripts/compose_standard.py up --build -d`) requires MySQL 8.4, Redis 7, Java Gateway/Catalog and the worker, with no LLM key required. The SQLite base remains a lightweight smoke/development compatibility path; private research journals remain isolated SQLite. Session compaction and SQL snapshots default on in the standard local synthetic stack; explicit false rolls back, and the existing production plaintext prohibition is unchanged.
+
+> **Standard Java gateway/catalog (original implementation merged in #89, squash `7c87686`):** PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89)
+> introduced Java 21 / Spring Boot 4.0.9 / Spring Cloud 2025.1.4 as a layer now required by the standard architecture: Nginx keeps `/ws/**` on Python, sends
 > `/api/v1/catalog/**` to a Java Gateway + read-only MySQL Catalog
 > (Redis Lua fail-closed global throttling, HTTP 429 on exhaustion, 503 on Redis
 > outage), and leaves all other `/api/**` — chat SSE, auth, graph, admin — on the
@@ -80,7 +80,10 @@ adds MySQL 8.4, Redis 7, and a separate worker.
 flowchart LR
     Browser["Browser<br/>Vue 3 SPA"] -->|HTTP / SSE| Nginx["Nginx<br/>demo reverse proxy"]
     Nginx --> Frontend["Frontend container<br/>static SPA"]
-    Nginx -->|/api /ws| API["FastAPI<br/>server.main:app"]
+    Nginx -->|/api| Gateway["Java Gateway"]
+    Nginx -->|/ws| API["FastAPI<br/>server.main:app"]
+    Gateway -->|catalog| Catalog["Java Catalog"]
+    Gateway -->|other API / SSE| API
 
     API --> Auth["Session capability tokens<br/>server/auth.py"]
     API --> Chat["Chat SSE<br/>routes/chat.py"]
@@ -94,7 +97,10 @@ flowchart LR
     Graph --> Skills["SkillService<br/>fail-closed safety rules"]
     Graph --> Quality["Quality / hallucination checks"]
 
-    DataQuery --> DB[("SQLite or MySQL<br/>SQLAlchemy")]
+    DataQuery --> DB[("MySQL 8.4<br/>SQLAlchemy")]
+    Catalog --> DB
+    Gateway --> Redis
+    Chat --> DB
     Profile --> DB
     Admin --> DB
     RAG --> Corpus["knowledge/synthetic_demo<br/>integrity-checked corpus"]
@@ -320,33 +326,29 @@ Redis, is the state source of truth. Recovery is lease-based (60s delivery /
 
 ```mermaid
 flowchart TB
-    subgraph Demo["Default Docker Compose (SQLite)"]
+    subgraph Standard["Standard local deployment"]
         N["nginx :80"] --> F["frontend :80"]
-        N --> A["api :8000"]
-        A --> V[("gaobao_data volume<br/>demo.db")]
-    end
-    subgraph Full["Optional --profile full"]
-        N2["nginx"] --> F2["frontend"]
-        N2 --> A2["api"]
-        A2 --> M[("MySQL 8.4<br/>Alembic schema")]
-        A2 --> R[("Redis 7")]
-        W["worker"] --> M
+        N --> GW["java-gateway :8080"]
+        N -->|/ws| A["api :8000 (Python)"]
+        GW --> CAT["java-catalog :8081"]
+        GW --> A
+        A --> M[("MySQL 8.4 / session snapshots")]
+        CAT --> M
+        A --> R[("Redis 7")]
+        GW --> R
+        W["quality worker"] --> M
         W --> R
     end
-    subgraph Java["Optional Java overlay (--profile java)"]
-        N3["nginx :80"] --> GW["java-gateway :8080"]
-        GW --> CAT["java-catalog :8081<br/>read-only SELECT"]
-        GW --> A3["api :8000 (Python)"]
-        CAT --> M3[("MySQL 8.4")]
-        GW --> R3[("Redis 7<br/>rate-limit bucket")]
+    subgraph Smoke["Lightweight development / smoke only"]
+        B["Python API"] --> S[("SQLite demo")]
     end
 ```
 
-MySQL and Redis are not published to the host in the full profile; services use
+MySQL and Redis are not published to the host in the standard deployment; services use
 the Compose network. Production TLS configuration is separate from the HTTP-only
 demo proxy.
 
-In the Java overlay Nginx exposes only port 80 on the host: the Compose
+In the standard deployment Nginx exposes only port 80 on the host: the Compose
 `!reset []` directive removes the Python API `8000` and frontend `3080`
 host mappings so the gateway cannot be bypassed.
 
@@ -392,7 +394,7 @@ host mappings so the gateway cannot be bypassed.
 
 The full generated schema is available at `/docs` when the API is running.
 
-With the Java overlay enabled, the gateway additionally serves
+In the standard deployment, the gateway serves
 `GET /api/v1/catalog/schools` and `GET /api/v1/catalog/schools/{id}` (read-only
 MySQL catalog, Redis-rate-limited). Every other path is still served by the
 Python application.
