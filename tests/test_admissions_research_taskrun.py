@@ -215,3 +215,48 @@ def test_late_finish_persists_expiry_even_when_publication_is_rejected(journal, 
         assert tuple(row) == ("EXPIRED", None, None, None, "lease_expired_no_replay")
     with pytest.raises(ResearchConflict):
         journal.claim(run_id, spec["dataset_ref"])
+
+
+
+def test_worker_slot_remains_held_after_cancel_until_runner_returns(journal, spec):
+    first = journal.create("operator", "request-concurrent-001", spec)
+    second = journal.create("operator", "request-concurrent-002", spec)
+    for item in (first, second):
+        journal.approve(item["run_id"], "admin", item["spec_sha256"])
+    competing_worker = ResearchJournal(journal.path)
+
+    def must_not_run(*args, **kwargs):
+        pytest.fail("competing worker must not spend model budget")
+
+    def first_runner(*args, **kwargs):
+        journal.cancel(first["run_id"], "operator")
+        with pytest.raises(ResearchConflict, match="worker already active"):
+            execute_approved(
+                competing_worker, second["run_id"], spec["dataset_ref"], None, runner=must_not_run
+            )
+        assert competing_worker.get(second["run_id"], "operator")["status"] == "APPROVED"
+        kwargs["lease_guard"]()
+
+    with pytest.raises(ResearchConflict, match="Lease lost"):
+        execute_approved(journal, first["run_id"], spec["dataset_ref"], None, runner=first_runner)
+
+    # Only after the active runner has returned may another worker claim.
+    result = execute_approved(
+        competing_worker,
+        second["run_id"],
+        spec["dataset_ref"],
+        None,
+        runner=lambda *args, **kwargs: {"status": "BLOCKED"},
+    )
+    assert result["status"] == "FAILED"
+
+
+def test_worker_lock_rejects_symlink(journal, tmp_path):
+    target = tmp_path / "other.lock"
+    target.write_text("do not modify")
+    lock = journal.path.with_name(journal.path.name + ".worker.lock")
+    lock.symlink_to(target)
+    with pytest.raises(OSError):
+        with journal.execution_slot():
+            pytest.fail("symlink must not be accepted")
+    assert target.read_text() == "do not modify"

@@ -44,3 +44,10 @@ image and task lease. Timeout, isolation/cleanup failure, exhausted budget or
 successful execution cannot trigger a retry. The model sees only the fixed
 error code and retry eligibility; the receipt records attempts. This is bounded
 reflection, not unrestricted replanning or automatic paid task replay.
+
+The manual worker and dispatcher share a single-host exclusive execution slot
+for each private journal. Lock contention returns ResearchConflict before claim
+and no provider call is made. A cancelled run holds the slot until its local
+runner exits; a worker crash releases the OS lock but does not requeue that run.
+Use one canonical journal on local disk; distributed workers and provider-wide
+budget accounting require separate deployment controls.

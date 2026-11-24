@@ -128,6 +128,32 @@ class ResearchJournal:
         finally:
             db.close()
 
+    @contextmanager
+    def execution_slot(self):
+        """Serialize paid execution on one Linux host, including cancelled calls in flight."""
+        import fcntl
+
+        lock_path = self.path.with_name(self.path.name + ".worker.lock")
+        fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        try:
+            info = os.fstat(fd)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_mode & 0o077
+                or info.st_uid != os.getuid()
+                or info.st_nlink != 1
+            ):
+                raise ValueError("Private regular worker lock required")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise ResearchConflict("Research worker already active") from None
+            # Do not unlink this file: competing processes must lock the same inode.
+            # Closing the descriptor releases the lock on normal exit or process death.
+            yield
+        finally:
+            os.close(fd)
+
     @staticmethod
     def _row(db, run_id):
         if not ID.fullmatch(run_id):
@@ -321,6 +347,11 @@ def open_configured_journal():
 
 
 def execute_approved(journal, run_id, dataset_ref, session_factory, *, runner=run_admissions_research):
+    with journal.execution_slot():
+        return _execute_approved_under_lock(journal, run_id, dataset_ref, session_factory, runner=runner)
+
+
+def _execute_approved_under_lock(journal, run_id, dataset_ref, session_factory, *, runner):
     spec, lease = journal.claim(run_id, dataset_ref)
 
     def guard():
