@@ -228,6 +228,84 @@ def execute_admissions_analysis(
     return receipt
 
 
+def run_analysis_agent(
+    rows: list[dict[str, Any]],
+    scope: Scope,
+    group_by: tuple[str, ...],
+    *,
+    client: Any,
+    model: str,
+    image_id: str,
+    approval_ref: str,
+    authorized: bool = False,
+    model_authorized: bool = False,
+) -> dict[str, Any]:
+    """One bounded code-generation/execute/verify/repair loop; never sends SQL rows to provider."""
+    if authorized is not True or model_authorized is not True:
+        raise ValueError("Separate data and model-call authorization required")
+    if not model.strip() or not _IMAGE.fullmatch(image_id) or not approval_ref.strip():
+        raise ValueError("Invalid explicit model, image or approval reference")
+    _expected(rows, group_by)
+    attempts = []
+    last = {"schema": "admissions-analysis/v1", "status": "BLOCKED", "error": "model_generation_failed"}
+    system = (
+        "Generate Python 3.11 stdlib-only analysis code. Return exactly one JSON object with a code string. "
+        "Read /input/rows.json containing rows and group_by; group rows by the ordered fields in group_by. "
+        "Print exactly one JSON object with groups sorted by key. Each group must have key (list of IDs), "
+        "records, missing_min_scores, median_min_score, lowest_min_score, highest_min_score, "
+        "best_min_rank, worst_min_rank. Score metrics use non-null min_score, rank metrics use non-null "
+        "min_rank. Missing metrics are null. Use statistics.median; no network or external dependencies. "
+        "Do not make admission predictions. No data rows are provided to the model."
+    )
+    for _ in range(2):
+        attempt: dict[str, Any] = {"requested_model": model, "provider_reported_model": None}
+        attempts.append(attempt)
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                temperature=0,
+                max_tokens=1800,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": system},
+                    {
+                        "role": "user",
+                        "content": json.dumps({
+                            "numeric_fields": FIELDS,
+                            "group_by": group_by,
+                            "previous_failure": last.get("error") if len(attempts) > 1 else None,
+                        }),
+                    },
+                ],
+            )
+            returned_model = getattr(response, "model", None)
+            attempt["provider_reported_model"] = returned_model if isinstance(returned_model, str) else None
+            usage = getattr(response, "usage", None)
+            for field in ("prompt_tokens", "completion_tokens"):
+                count = getattr(usage, field, None)
+                attempt[field] = count if type(count) is int and count >= 0 else None
+            body = json.loads(response.choices[0].message.content)
+            if not isinstance(body, dict) or set(body) != {"code"} or not isinstance(body["code"], str):
+                raise ValueError("Invalid model output")
+            program = body["code"].encode()
+            if not 1 <= len(program) <= MAX_CODE_BYTES:
+                raise ValueError("Invalid model code size")
+        except Exception:
+            attempt["outcome"] = "model_generation_failed"
+            break
+        last = execute_admissions_analysis(
+            rows, scope, group_by, program, image_id=image_id, approval_ref=approval_ref, authorized=True
+        )
+        attempt["code_sha256"] = _digest(program)
+        attempt["outcome"] = last["status"]
+        if last["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS":
+            break
+        if last.get("error") not in {"oracle_mismatch", "invalid_analysis_output", "execution_failed"}:
+            break
+    last["model_execution"] = {"max_requests": 2, "attempts": attempts, "billing_verified": False}
+    return last
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--authorized-data", action="store_true", required=True)
@@ -240,7 +318,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--level", choices=("school", "major"), default="school")
     parser.add_argument("--school-id", type=int)
     parser.add_argument("--group-by", choices=("year", "school_id", "major_id"), nargs="+", required=True)
-    parser.add_argument("--code", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--code", type=Path)
+    source.add_argument("--model")
+    parser.add_argument("--authorize-model-call", action="store_true")
     parser.add_argument("--image", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -249,8 +330,14 @@ def main(argv: list[str] | None = None) -> int:
     scope = Scope(
         args.province, args.subject_type, args.batch, args.year_from, args.year_to, args.level, args.school_id
     )
-    with args.code.open("rb") as handle:
-        program = handle.read(MAX_CODE_BYTES + 1)
+    if args.model and (not args.authorize_model_call or not os.environ.get("OPENAI_API_KEY")):
+        parser.error("Model mode requires explicit --authorize-model-call and OPENAI_API_KEY")
+    program = None
+    if args.code:
+        with args.code.open("rb") as handle:
+            program = handle.read(MAX_CODE_BYTES + 1)
+        if not 1 <= len(program) <= MAX_CODE_BYTES:
+            parser.error("Invalid analysis program size")
     # Reserve a private fresh receipt before contacting the database or Docker.
     fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "wb") as handle:
@@ -259,10 +346,23 @@ def main(argv: list[str] | None = None) -> int:
 
             with get_session() as session:
                 rows = collect_admissions_rows(session, scope)
-            receipt = execute_admissions_analysis(
-                rows, scope, tuple(args.group_by), program,
-                image_id=args.image, approval_ref=args.approval_ref, authorized=args.authorized_data,
-            )
+            if args.model:
+                from openai import OpenAI
+
+                client = OpenAI(timeout=30.0, max_retries=0)
+                try:
+                    receipt = run_analysis_agent(
+                        rows, scope, tuple(args.group_by), client=client, model=args.model,
+                        image_id=args.image, approval_ref=args.approval_ref,
+                        authorized=args.authorized_data, model_authorized=args.authorize_model_call,
+                    )
+                finally:
+                    client.close()
+            else:
+                receipt = execute_admissions_analysis(
+                    rows, scope, tuple(args.group_by), program,
+                    image_id=args.image, approval_ref=args.approval_ref, authorized=args.authorized_data,
+                )
         except Exception:
             # No DB URL, SQL exception, generated program or raw records in receipt.
             receipt = {"schema": "admissions-analysis/v1", "status": "BLOCKED", "error": "preflight_failed"}

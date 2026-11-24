@@ -134,8 +134,16 @@ records or stdout. Keep receipts private. No silent fallback or writes
 to the admissions tables. CI uses a fictional SQLite fixture through the
 same SQL and OCI path; real authorized dataset use is pending.
 
-This first business slice is callable from an operator-side Agent tool host
-or CLI, not registered in anonymous chat or the synthetic-only Harness.
+This business slice is callable from an operator-side Agent tool host or CLI,
+not registered in anonymous chat or the synthetic-only Harness. Model mode
+replaces `--code /private/analysis.py` with `--model <provider-model>
+--authorize-model-call` and uses `OPENAI_API_KEY` / optional `OPENAI_BASE_URL`.
+The bounded Agent loop generates code, executes it in Docker, independently
+verifies output, and repairs once on a recoverable program/oracle failure.
+It sends only the schema, grouping fields and fixed failure code to the model,
+never SQL rows, profiles or approval reference. At most two provider requests,
+1800 completion tokens per request, no SDK retries. Provider-reported usage is
+recorded, but costs and model effectiveness remain unmeasured.
 The next slice is authenticated task dispatch, owner-bound receipts, review
 and report attachment via a separate sandbox worker (no Docker socket in
 FastAPI); arbitrary user code and production multi-tenancy remain out of scope.

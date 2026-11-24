@@ -87,3 +87,39 @@ def test_no_rows_or_too_many_rows_never_run(monkeypatch):
             sandbox.execute_admissions_analysis(
                 rows, SCOPE, ("year",), b"print('x')", image_id=IMAGE, approval_ref="approved", authorized=True
             )
+
+
+def test_model_loop_only_sends_schema_and_retries_on_oracle_mismatch(monkeypatch):
+    from types import SimpleNamespace
+
+    prompts = []
+    calls = []
+
+    def generate(**kwargs):
+        prompts.append(kwargs)
+        return SimpleNamespace(
+            model="test-model", usage=SimpleNamespace(prompt_tokens=20, completion_tokens=40),
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({"code": "print(1)"})))],
+        )
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=generate)))
+
+    def execute(*args, **kwargs):
+        calls.append(args)
+        if len(calls) == 1:
+            return {"status": "BLOCKED", "error": "oracle_mismatch"}
+        return {"status": "VERIFIED_DESCRIPTIVE_ANALYSIS", "result": RESULT}
+
+    monkeypatch.setattr(sandbox, "execute_admissions_analysis", execute)
+    receipt = sandbox.run_analysis_agent(
+        ROWS, SCOPE, ("year",), client=client, model="test-model", image_id=IMAGE,
+        approval_ref="internal-approval", authorized=True, model_authorized=True,
+    )
+    assert receipt["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS"
+    assert len(prompts) == len(calls) == 2
+    assert all(p["max_tokens"] == 1800 for p in prompts)
+    for prompt in prompts:
+        text = json.dumps(prompt)
+        assert "8000" not in text and "10000" not in text and "internal-approval" not in text
+    assert "oracle_mismatch" in json.dumps(prompts[-1])
+    assert receipt["model_execution"]["billing_verified"] is False
