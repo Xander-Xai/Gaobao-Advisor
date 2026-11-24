@@ -45,12 +45,12 @@ def propose_bounded_changes(failure_codes: list[str]) -> list[dict[str, Any]]:
 
 
 def _indexed(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    if result.get("suite_complete") is not True or result.get("unexecuted_case_ids") != []:
+        raise ValueError("Incomplete model evaluation suite is not eligible for optimization")
     if result.get("controller") != "REAL_MODEL_NOT_SCRIPTED":
         raise ValueError("Paired optimization requires explicitly declared real-model runs")
     if result.get("groundtruth_review") != "REVIEW_DECLARED":
         raise ValueError("Optimization requires an explicit reviewed dataset declaration")
-    if result.get("suite_complete") is not True or result.get("unexecuted_case_ids") != []:
-        raise ValueError("Incomplete model evaluation suite is not eligible for optimization")
     identity = result.get("model_identity")
     if (
         not isinstance(identity, dict)
