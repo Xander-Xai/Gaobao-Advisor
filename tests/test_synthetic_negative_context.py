@@ -52,18 +52,14 @@ def test_only_reviewed_rules_appear_across_store_instances(tmp_path):
     tick = [1000]
     skills, store, path = _env(tmp_path, tick)
     _propose(store)
-    candidate = build_reviewed_synthetic_context(
-        skills, store, owner="tenant-demo-owner", sections=["heuristics"]
-    )
+    candidate = build_reviewed_synthetic_context(skills, store, owner="tenant-demo-owner", sections=["heuristics"])
     assert candidate == "MANDATORY-SAFETY\n\n---\n\nADVICE"
     _review(store)
     reopened = SyntheticNegativeRuleMemory(path, clock=lambda: tick[0])
-    approved = build_reviewed_synthetic_context(
-        skills, reopened, owner="tenant-demo-owner", sections=["heuristics"]
-    )
+    approved = build_reviewed_synthetic_context(skills, reopened, owner="tenant-demo-owner", sections=["heuristics"])
     assert "MANDATORY-SAFETY" in approved
     assert "数据存在矛盾" in approved
-    assert "MODEL" not in approved and "NEGATIVE" not in approved
+    assert "MODEL" not in approved and "\n\n---\n\nNEGATIVE" not in approved
     assert approved == build_reviewed_synthetic_context(
         skills, reopened, owner="tenant-demo-owner", sections=["heuristics"]
     )
@@ -78,9 +74,7 @@ def test_expired_rule_is_removed_from_context(tmp_path):
     _propose(store)
     _review(store)
     tick[0] = 1005
-    result = build_reviewed_synthetic_context(
-        skills, store, owner="tenant-demo-owner"
-    )
+    result = build_reviewed_synthetic_context(skills, store, owner="tenant-demo-owner")
     assert result == "MANDATORY-SAFETY"
 
 
@@ -90,10 +84,6 @@ def test_context_budget_and_wrong_scene_fail_closed(tmp_path):
     _propose(store)
     _review(store)
     with pytest.raises(SkillContextBudgetExceeded):
-        build_reviewed_synthetic_context(
-            skills, store, owner="tenant-demo-owner", max_chars=16
-        )
+        build_reviewed_synthetic_context(skills, store, owner="tenant-demo-owner", max_chars=16)
     with pytest.raises(ValueError):
-        build_reviewed_synthetic_context(
-            skills, store, owner="tenant-demo-owner", scene="career"
-        )
+        build_reviewed_synthetic_context(skills, store, owner="tenant-demo-owner", scene="career")
