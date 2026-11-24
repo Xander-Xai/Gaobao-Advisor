@@ -25,9 +25,10 @@ Engineering evidence:
   isolation.
 - [Governance ledger](governance/repository-audit.md) — historical state and
   action log.
-- [Repository status](governance/repository-status-2026-11-07.md) — current
-  architecture/acceptance snapshot and the PR/Issue/branch decisions taken on
-  2026-11-07.
+- [Current repository lookup](../README.md#仓库状态怎么查) — GitHub branch, PR,
+  Issue and Actions sources.
+- [2026-11-07 repository snapshot](governance/repository-status-2026-11-07.md) —
+  architecture, acceptance and governance decisions for that baseline.
 - [Audits](audits/) — redacted governance/security reports.
 
 Default demo data is synthetic. Do not add real admissions databases, private

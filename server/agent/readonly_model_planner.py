@@ -6,10 +6,12 @@ client and model. Use only fictional SYNTHETIC_DEMO tasks, not user profiles.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
 from server.agent.readonly_harness import Decision
+from skills.service import Scene, SkillService
 
 _SYSTEM = (
     "You control a read-only synthetic admissions assistant. "
@@ -30,11 +32,43 @@ _SYSTEM = (
 class OpenAIJsonPlanner:
     """Model-driven action selection using the injected OpenAI-style client."""
 
-    def __init__(self, client: Any, model: str) -> None:
+    def __init__(
+        self, client: Any, model: str, *, skill_policy: str = "baseline", skill_service: SkillService | None = None
+    ) -> None:
         if not isinstance(model, str) or not model.strip():
             raise ValueError("A model name is required")
         self._client = client
         self._model = model
+        if skill_policy not in {"baseline", "staged-v1"}:
+            raise ValueError("Unsupported skill policy")
+        self._skill_policy = skill_policy
+        self._skill_contexts: dict[str, str] = {}
+        if skill_policy == "staged-v1":
+            service = skill_service or SkillService()
+            # Server-owned, frozen policy; never select file paths or sections from model text.
+            for stage, sections in {
+                "initial": ("mental_models",),
+                "observed": ("heuristics", "anti_patterns"),
+            }.items():
+                self._skill_contexts[stage] = service.build_disclosed_context(Scene.GAOKAO, sections, max_chars=5500)
+
+    def skill_policy_receipt(self) -> dict[str, Any]:
+        """Report configuration, not measured token savings or model quality."""
+        return {
+            "policy": self._skill_policy,
+            "context_sha256": {
+                stage: hashlib.sha256(text.encode("utf-8")).hexdigest() for stage, text in self._skill_contexts.items()
+            },
+            "context_chars": {stage: len(text) for stage, text in self._skill_contexts.items()},
+        }
+
+    def _system_context(self, history: list[dict[str, Any]]) -> str:
+        if not self._skill_contexts:
+            return _SYSTEM
+        # Only the execution phase determines disclosure. Observation content
+        # cannot request another skill or change the fixed tool allowlist.
+        stage = "observed" if history else "initial"
+        return _SYSTEM + "\n\n" + self._skill_contexts[stage]
 
     def decide(self, task: str, history: list[dict[str, Any]], tool_schemas: dict[str, dict[str, str]]) -> Decision:
         response = self._client.chat.completions.create(
@@ -43,7 +77,7 @@ class OpenAIJsonPlanner:
             max_tokens=384,
             response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": _SYSTEM},
+                {"role": "system", "content": self._system_context(history)},
                 {
                     "role": "user",
                     "content": json.dumps(

@@ -191,6 +191,9 @@ class Conversation(Base):
         cascade="all, delete-orphan",
         order_by="ConversationMessage.id",
     )
+    compaction_snapshot = relationship(
+        "SessionCompactionSnapshot", back_populates="conversation", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class ConversationMessage(Base):
@@ -524,3 +527,66 @@ class QualityTaskOutbox(Base):
 
     def __repr__(self) -> str:
         return f"<QualityTaskOutbox(job={self.job_id}, {self.status})>"
+
+
+class SessionCompactionSnapshot(Base):
+    """Opt-in, ephemeral-in-policy summary cache bound to one Conversation row.
+
+    This is untrusted session-context optimization, not an admissions fact
+    store or user-profile memory. SQL FK/ORM cascade are deliberate so deleting
+    a conversation also removes its cached summary.
+    """
+
+    __tablename__ = "session_compaction_snapshots"
+
+    conversation_id = Column(
+        Integer, ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True, nullable=False
+    )
+    covered_count = Column(Integer, nullable=False)
+    covered_sha256 = Column(String(64), nullable=False)
+    policy_sha256 = Column(String(64), nullable=False)
+    summary = Column(Text, nullable=False)
+    version = Column(Integer, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    conversation = relationship("Conversation", back_populates="compaction_snapshot")
+
+    __table_args__ = (Index("ix_session_compaction_expires", "expires_at"),)
+
+
+class UserMemoryVault(Base):
+    """Independent opt-in cross-task identity; only a SHA-256 token digest is stored."""
+
+    __tablename__ = "user_memory_vaults"
+
+    id = Column(String(32), primary_key=True)
+    token_hash = Column(String(64), nullable=False)
+    # Monotonic vault-wide revision; never reset when entries expire or are deleted.
+    last_version = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_user_mem_token_hash"),
+        Index("ix_user_mem_vault_token", "token_hash"),
+    )
+
+
+class UserMemoryEntry(Base):
+    """User-confirmed preference only; distinct from synthetic task evidence."""
+
+    __tablename__ = "user_memory_entries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vault_id = Column(String(32), ForeignKey("user_memory_vaults.id"), nullable=False)
+    memory_key = Column(String(32), nullable=False)
+    value = Column(String(160), nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("vault_id", "memory_key", name="uq_user_mem_vault_key"),
+        Index("ix_user_mem_expiry", "expires_at"),
+    )
