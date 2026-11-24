@@ -65,6 +65,7 @@ jobs:
           python -m benchmarks.readonly_harness_eval --out /tmp/gaobao-agent-evidence/readonly-policy-30cases.json
           python -m benchmarks.groundtruth_pipeline --out /tmp/gaobao-agent-evidence/groundtruth-pending-review.json
           python -m benchmarks.decision_card_business_eval --out /tmp/gaobao-agent-evidence/business-8case-deterministic-baseline.json
+          python -m benchmarks.chat_gate_eval --out /tmp/gaobao-agent-evidence/chat-gate-synthetic-eval.json
           python -m benchmarks.synthetic_replanning_eval --inject-transient --out /tmp/gaobao-agent-evidence/replanning-8case-scripted.json
           python -m benchmarks.context_ab_eval --scripted-smoke --out-dir /tmp/gaobao-context-ab-ci
           cp /tmp/gaobao-context-ab-ci/context-ab-summary.json /tmp/gaobao-agent-evidence/context-ab-scripted-summary.json
