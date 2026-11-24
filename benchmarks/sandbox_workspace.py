@@ -34,12 +34,21 @@ def _validated_workspace(path: Path) -> Path:
         raise ValueError("Refusing host-root or non-scratch workspace")
     if marker.read_text(encoding="utf-8").strip() != "SYNTHETIC_ONLY":
         raise ValueError("Synthetic workspace marker has invalid content")
+    # Docker parses --mount as comma-separated fields, even without a shell.
+    # Reject ambiguous host paths instead of allowing extra mount parameters.
+    if any(char in str(root) for char in (",", "\n", "\r", '"')):
+        raise ValueError("Synthetic workspace path contains a mount delimiter")
     # Scratch workspaces should not contain mounts, links, devices or huge files.
     entries = list(root.iterdir())
     if len(entries) > 32:
         raise ValueError("Synthetic workspace contains too many entries")
     for child in entries:
-        if child.is_symlink() or not child.is_file() or child.stat().st_size > 2 * 1024 * 1024:
+        if (
+            child.is_symlink()
+            or not child.is_file()
+            or child.stat().st_nlink != 1
+            or child.stat().st_size > 2 * 1024 * 1024
+        ):
             raise ValueError("Synthetic workspace contains an unsafe entry")
     return root
 
