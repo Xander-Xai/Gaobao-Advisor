@@ -66,3 +66,15 @@ pytest -q tests/test_portfolio_taskrun_http_e2e.py
 ### 真实只读 Harness Eval 执行前预检
 
 `python -m benchmarks.readonly_model_eval --model <固定模型版本> --reviewed-dataset <人工审定文件> --out /tmp/gb-plan.json --plan-only` 不需密钥或网络，输出计划分母、Holdout 数、冻结选择哈希和预算，不调用 Provider。审定集默认执行全量（当前 20 条，含 5 条 Holdout）；显式截断标记 REVIEW_DECLARED_SUBSET，不进入优化审核。未审定集默认 5 条探索性用例。实际执行移除 --plan-only，并在授权费用后添加 --permit-external-model，使用不同输出路径；原报告不得覆盖。此计划不代表人工审定真实完成、模型质量或账单。
+
+
+### 模型非法响应与真实调用失败的计量边界
+
+只读 Harness 收到无法解析的 JSON、非法 action 或错误的工具字段类型时，
+记录固定失败码 `planner_response_invalid`（不执行工具、不记录原始输出），保留
+Provider 返回的有效 usage。该样本仍为失败；评测可在剩余预算内继续后续案例。
+没有响应或 usage 不可用时保持未知并停止真实评测套件。预算仍为响应后计量，
+不是硬性账单上限。此修复不改变默认在线聊天链路，真实 Provider 结果仍待实测。
+
+复核：`pytest -q tests/test_readonly_harness.py tests/test_readonly_eval_suite_budget.py`。
+关联 #104、#147。

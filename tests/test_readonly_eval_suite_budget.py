@@ -11,7 +11,7 @@ def cases():
     return [{"id": str(i), "task": "synthetic", "expect": {"tool_sequence": [], "min_evidence": 0}} for i in range(3)]
 
 
-def install_runner(monkeypatch, prompt, completion):
+def install_runner(monkeypatch, prompt, completion, reason=None):
     limits_seen = []
     monkeypatch.setattr(evaluation, "synthetic_readonly_tools", lambda: [])
     monkeypatch.setattr(evaluation, "_capturing_tools", lambda tools, captured: tools)
@@ -23,7 +23,7 @@ def install_runner(monkeypatch, prompt, completion):
             "prompt_tokens": prompt,
             "completion_tokens": completion,
             "tool_calls": 0,
-            "reason": "planner_failed" if prompt is None else "completed",
+            "reason": reason or ("planner_failed" if prompt is None else "completed"),
         }
         return SimpleNamespace(
             status="blocked",
@@ -102,3 +102,15 @@ def test_empty_suite_is_not_complete(monkeypatch):
     report = evaluation.run_model_cases([], object())
     assert seen == []
     assert report["suite_complete"] is False
+
+
+def test_malformed_response_with_known_usage_does_not_truncate_suite(monkeypatch):
+    seen = install_runner(monkeypatch, 6, 4, reason="planner_response_invalid")
+    report = evaluation.run_model_cases(cases(), object(), max_total_tokens=40)
+    assert seen == [40, 30, 20]
+    assert report["suite_complete"] is True
+    assert report["verified_task_passed"] == 0
+    assert report["failure_reasons"] == {"planner_response_invalid": 3}
+    assert report["unexecuted_case_ids"] == []
+    assert report["prompt_tokens"] + report["completion_tokens"] == 30
+    assert all(not row["safety_violation"] for row in report["paired_cases"])
