@@ -147,7 +147,7 @@ def build_research_subgraph(name: str, collect: Callable[[str], str]):
     return graph.compile()
 
 
-def build_deep_agent(model_id: str, tools: list, subagents: list):
+def build_deep_agent(model_id: str, tools: list, subagents: list, *, lease_guard=None):
     """Optional SDK construction. Restrict default tools but keep task/todos."""
     from deepagents import (
         GeneralPurposeSubagentProfile,
@@ -157,7 +157,7 @@ def build_deep_agent(model_id: str, tools: list, subagents: list):
     )
     from deepagents.backends import StateBackend
     from deepagents.middleware import FilesystemMiddleware
-    from langchain.agents.middleware import ModelCallLimitMiddleware, TodoListMiddleware
+    from langchain.agents.middleware import AgentMiddleware, ModelCallLimitMiddleware, TodoListMiddleware
     from langchain_openai import ChatOpenAI
     from langgraph.checkpoint.memory import InMemorySaver
 
@@ -178,6 +178,12 @@ def build_deep_agent(model_id: str, tools: list, subagents: list):
         timeout=20,
         max_retries=0,
     )
+    class LeaseMiddleware(AgentMiddleware):
+        def before_model(self, state, runtime):
+            if lease_guard is not None:
+                lease_guard()
+            return None
+
     return create_deep_agent(
         model=model,
         tools=tools,
@@ -186,6 +192,7 @@ def build_deep_agent(model_id: str, tools: list, subagents: list):
         middleware=[
             FilesystemMiddleware(backend=backend, tools=["read_file"]),
             TodoListMiddleware(),
+            LeaseMiddleware(),
             ModelCallLimitMiddleware(run_limit=8, exit_behavior="end"),
         ],
         skills=["/skills/"],
@@ -204,6 +211,7 @@ def run_admissions_research(
     model_authorized: bool = False,
     agent_factory: Callable = build_deep_agent,
     analysis_image_id: str | None = None,
+    lease_guard: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Private operator entrypoint. Only validated SQL evidence may be returned."""
     if authorized is not True or model_authorized is not True:
@@ -222,13 +230,19 @@ def run_admissions_research(
         raise ValueError("Invalid immutable sandbox image")
     kinds = ("admission-history", "enrollment-plans")
 
+    def guard() -> None:
+        if lease_guard is not None:
+            lease_guard()
+
     def collect(kind: str) -> str:
+        guard()
         with lock:
             if kind not in kinds or kind in attempted or submitted:
                 raise ValueError("Unapproved or repeated research delegation")
             attempted.add(kind)
         with session_factory() as session:
             rows = read_research_rows(session, scope, kind)
+        guard()
         coverage = _coverage(rows, scope, kind)
         ref = _digest({"task": task_id, "scope": asdict(scope), "kind": kind, "rows": rows})
         with lock:
@@ -253,6 +267,7 @@ def run_admissions_research(
         descriptive statistics schema specified in the system instructions.
         """
         nonlocal analysis_attempted, analysis_receipt
+        guard()
         from server.agent.admissions_analysis_sandbox import Scope, execute_admissions_analysis
 
         with lock:
@@ -270,6 +285,7 @@ def run_admissions_research(
             approval_ref=approval_ref,
             authorized=True,
         )
+        guard()
         with lock:
             analysis_receipt = result
         return _canonical({"status": result["status"], "result_sha256": result.get("result_sha256")})
@@ -277,6 +293,7 @@ def run_admissions_research(
     def submit_research(history_receipt: str, plans_receipt: str) -> str:
         """Submit exactly the two returned opaque receipt IDs after delegation."""
         nonlocal submitted
+        guard()
         with lock:
             if (
                 submitted
@@ -311,7 +328,12 @@ def run_admissions_research(
     }
     try:
         tools = [submit_research] if analysis_image_id is None else [submit_research, analyze_history]
-        agent = agent_factory(model_id, tools, subagents)
+        guard()
+        agent = (
+            build_deep_agent(model_id, tools, subagents, lease_guard=lease_guard)
+            if agent_factory is build_deep_agent
+            else agent_factory(model_id, tools, subagents)
+        )
         if agent_factory is build_deep_agent:
             from deepagents.backends.utils import create_file_data
 
@@ -344,6 +366,7 @@ def run_admissions_research(
             },
             config={"configurable": {"thread_id": task_id}, "recursion_limit": 64},
         )
+        guard()
         messages = outcome.get("messages", []) if isinstance(outcome, dict) else []
         usage = [getattr(msg, "usage_metadata", None) for msg in messages if getattr(msg, "type", "") == "ai"]
         report["observed_model_messages"] = len(usage)
@@ -362,6 +385,7 @@ def run_admissions_research(
             return report
         with session_factory() as session:
             fresh = {kind: read_research_rows(session, scope, kind) for kind in kinds}
+        guard()
         if any(fresh[kind] != snapshots[kind] for kind in kinds):
             report["error"] = "source_changed"
             return report
