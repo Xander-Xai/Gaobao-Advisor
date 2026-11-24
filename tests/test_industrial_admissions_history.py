@@ -89,14 +89,23 @@ def test_history_never_crosses_year_or_cohort(history_db):
     assert evidence["rank"] == 1000
     assert evidence["status"] == "HISTORICAL_ROWS"
     assert [row["id"] for row in evidence["rows"]] == [1]
-    assert query_history(history_db, province="广东", score=601, subject="物理", year=2025)["status"] == "NO_UNAMBIGUOUS_RANK"
-    assert query_history(history_db, province="广东", score=600, subject="综合", year=2025)["status"] == "NO_UNAMBIGUOUS_RANK"
+    assert (
+        query_history(history_db, province="广东", score=601, subject="物理", year=2025)["status"]
+        == "NO_UNAMBIGUOUS_RANK"
+    )
+    assert (
+        query_history(history_db, province="广东", score=600, subject="综合", year=2025)["status"]
+        == "NO_UNAMBIGUOUS_RANK"
+    )
 
 
 def test_ambiguous_alias_rows_refuse(history_db):
     history_db.add(YiFenYiDuan(province="广东", year=2025, subject_type="物理", score=600, cumulative_count=1100))
     history_db.commit()
-    assert query_history(history_db, province="广东", score=600, subject="物理", year=2025)["status"] == "NO_UNAMBIGUOUS_RANK"
+    assert (
+        query_history(history_db, province="广东", score=600, subject="物理", year=2025)["status"]
+        == "NO_UNAMBIGUOUS_RANK"
+    )
 
 
 def test_industrial_text_and_card_share_exact_receipts(history_db, monkeypatch):
