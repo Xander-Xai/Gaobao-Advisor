@@ -21,6 +21,20 @@
 
 ---
 
+## 会话上下文管理（独立于跨任务长期记忆）
+
+在线对话的同步、传统流式和公开 SSE 最终候选生成，使用统一的
+`server/agent/chat_context.py` 来限制历史上下文并保留本轮 SQL/RAG 来源。
+默认只保留最近 20 轮并显式标记丢失的旧历史；需要语义压缩时，可在**授权的开发环境**
+开启 `GAOBAO_CHAT_COMPACTION_ENABLED=true`，再由现有 `MemoryManager`
+对旧历史按需摘要、保留最近 10 轮。摘要是**未经核验的用户对话线索**，不构成招生证据或工具审批。
+
+该开关默认关闭，因为启用后每次满足条件的请求可能增加模型调用费用。
+摘要目前不持久化，不具备 Pi/OpenCode 的完整会话分叉与增量恢复机制，
+也没有真实模型 A/B、Token 降本证明或生产个人信息许可。
+操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
+跨任务用户偏好记忆仍在独立 Draft PR #135，不应与会话压缩混同。
+
 ## Agent Harness / Eval 实验
 
 与现有 17 节点业务图**分离**的只读执行层，位于 `server/agent/readonly_harness.py`、`readonly_model_planner.py` 和 `readonly_tools.py`。这里实现的是 **Planner → Tool → Observation → Finish/Abstain** 的受约束循环，不是把业务 LangGraph 节点数当成“工具步长”。
