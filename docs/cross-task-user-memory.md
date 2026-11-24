@@ -26,7 +26,7 @@ export USER_MEMORY_ENABLED=true
 
 # SQLite 演示环境启动时 create_all；MySQL 必须执行迁移
 python -m db.migrate upgrade
-# 预期 Alembic head: 20261120_0006
+# 当前 Draft 独立迁移链 head: 20261124_0007
 ```
 
 HTTP 接口使用独立请求头 `X-User-Memory-Token`，**不是**
@@ -111,4 +111,5 @@ ruff check server/user_memory.py server/routes/user_memory.py tests/test_cross_t
 - 写入、单条删除、整库遗忘和凭证轮换先在同一 SQL 事务内对当前 token 摘要执行条件 UPDATE（值不变），获得数据库写锁，再读取 owner 和条目。SQLite 写事务与 MySQL 行锁使这些操作与轮换串行化；凭证不再匹配则拒绝。普通读取不使用该写锁，因此已开始的读请求/已发送的模型上下文不能被追溯撤回。
 - 过期条目的重建只接受 expected_version=0；清理使用 id、owner、版本、过期时间条件删除，防止过期快照无条件覆盖已更新的条目。
 - 新增真实文件型 SQLite 双连接锁回归、轮换后旧 token 修改/删除/遗忘/轮换拒绝、过期旧版本写入不改变记录的回归。当前提交尚未取得 CI 或 MySQL 并发验收结果。
-- 仍需处理删除重建后版本从 1 开始的 ABA 风险（不可复用的 generation/ETag 契约），并与主分支 session-compaction 的 Alembic 0006 后续迁移串联；本 Draft 仍不得面向真实用户启用。
+- 已引入 vault 持久化单调版本：新增、修改均分配新版本，删除、TTL、物理清理及 token 轮换不重置计数。客户端需使用最新 GET 返回的版本，不得假设新条目版本为 1。计数达到上限拒绝修改。
+- `20261124_0007` 仅适用于此未发布 Draft 链；若旧表存在历史 vault 且缺少计数列，拒绝迁移，避免从现存条目猜测已删除版本。不会自动删除数据。仍需与主分支 session-compaction 的迁移链整合，禁止真实用户启用。
