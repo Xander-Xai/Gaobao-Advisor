@@ -101,3 +101,52 @@ def test_rejects_invalid_public_api_rate_limit_config():
     for rate, capacity in ((0, 1), (1, 0), (-1, 10), (10001, 10), (1, 10001)):
         with pytest.raises(ValueError):
             TokenBucketLimiter(rate=rate, capacity=capacity)
+
+
+def test_idle_bucket_evicted_after_refill(monkeypatch):
+    from server.middleware import ratelimit
+
+    now = [10.0]
+    monkeypatch.setattr(ratelimit.time, "monotonic", lambda: now[0])
+    limiter = TokenBucketLimiter(rate=1, capacity=2)
+    assert limiter.allow("old")
+    now[0] += 3601
+    limiter._evict_idle(now[0])
+    assert "old" not in limiter._buckets
+
+
+def test_industrial_middleware_fails_closed_without_local_fallback(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.admin.limits import SecurityBackendUnavailable
+    from server.middleware.ratelimit import RateLimitMiddleware, RedisTokenBucketLimiter
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")
+    monkeypatch.setenv("SESSION_SECRET", "test-secret")
+    decisions = iter([True, False])
+
+    def admit(self, ip):
+        try:
+            return next(decisions)
+        except StopIteration as exc:
+            raise SecurityBackendUnavailable("test outage") from exc
+
+    monkeypatch.setattr(RedisTokenBucketLimiter, "allow", admit)
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware)
+
+    @app.get("/ping")
+    def ping():
+        return {"ok": True}
+
+    @app.get("/api/v1/health/live")
+    def live():
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        assert client.get("/ping").status_code == 200
+        assert client.get("/ping").status_code == 429
+        assert client.get("/ping").status_code == 503
+        assert client.get("/api/v1/health/live").status_code == 200
