@@ -61,3 +61,8 @@ pytest -q tests/test_portfolio_taskrun_http_e2e.py
 任务通过独立事实与任务评分。持续存在的违规和零成功任务的 Token 节约均不能进入优化审核。
 这只是最低审核门槛，不是质量达标、统计显著性或上线许可；真实模型调用及独立安全评审仍待验收。
 复核：`pytest -q tests/test_harness_optimizer.py`。关联 #104、#147。
+
+
+### 真实只读 Harness Eval 执行前预检
+
+`python -m benchmarks.readonly_model_eval --model <固定模型版本> --reviewed-dataset <人工审定文件> --out /tmp/gb-plan.json --plan-only` 不需密钥或网络，输出计划分母、Holdout 数、冻结选择哈希和预算，不调用 Provider。审定集默认执行全量（当前 20 条，含 5 条 Holdout）；显式截断标记 REVIEW_DECLARED_SUBSET，不进入优化审核。未审定集默认 5 条探索性用例。实际执行移除 --plan-only，并在授权费用后添加 --permit-external-model，使用不同输出路径；原报告不得覆盖。此计划不代表人工审定真实完成、模型质量或账单。
