@@ -3,7 +3,12 @@
 import pytest
 
 from server.agent.admissions_research_taskrun import (
-    ResearchConflict, ResearchJournal, ResearchNotFound, canonical, digest, execute_approved,
+    ResearchConflict,
+    ResearchJournal,
+    ResearchNotFound,
+    canonical,
+    digest,
+    execute_approved,
 )
 
 

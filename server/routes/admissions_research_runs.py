@@ -5,7 +5,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from server.admin.auth import AdminPrincipal, require_role
 from server.agent.admissions_research_taskrun import (
-    ResearchConflict, ResearchNotFound, configured_dataset, open_configured_journal,
+    ResearchConflict,
+    ResearchNotFound,
+    configured_dataset,
+    open_configured_journal,
 )
 
 router = APIRouter(
