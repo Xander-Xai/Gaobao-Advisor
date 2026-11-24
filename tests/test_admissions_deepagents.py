@@ -224,7 +224,16 @@ def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatc
         assert {row["school_id"] for row in rows} == {1, 2}
         assert group_by == ("school_id", "year")
         assert kwargs["authorized"] is True
-        return {"status": "VERIFIED_DESCRIPTIVE_ANALYSIS", "result_sha256": "a" * 64}
+        result = admissions_analysis_sandbox._expected(rows, group_by)
+        encode = admissions_analysis_sandbox._json
+        digest = admissions_analysis_sandbox._digest
+        return {
+            "status": "VERIFIED_DESCRIPTIVE_ANALYSIS",
+            "cleanup_verified": True,
+            "result": result,
+            "result_sha256": digest(encode(result)),
+            "input_sha256": digest(encode({"rows": rows, "group_by": group_by})),
+        }
 
     monkeypatch.setattr(admissions_analysis_sandbox, "execute_admissions_analysis", sandbox)
 
@@ -253,6 +262,10 @@ def test_deepagents_business_task_requires_verified_sandbox(sessions, monkeypatc
     )
     assert receipt["status"] == "VERIFIED_RESEARCH"
     assert receipt["sandbox_analysis"]["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS"
+    assert "独立核验的沙箱描述性统计" in research.render_verified_research(receipt)
+    receipt["sandbox_analysis"]["input_sha256"] = "b" * 64
+    with pytest.raises(ValueError, match="Sandbox evidence mismatch"):
+        research.render_verified_research(receipt)
 
 
 def test_private_report_requires_verified_evidence(sessions):
