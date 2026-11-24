@@ -72,3 +72,32 @@ def test_incomplete_report_cannot_enter_optimizer(monkeypatch):
     report = evaluation.run_model_cases(cases(), object(), max_total_tokens=15, groundtruth_review="REVIEW_DECLARED")
     with pytest.raises(ValueError, match="Incomplete"):
         compare_holdout(report, report)
+
+
+@pytest.mark.parametrize("prompt,completion", [(None, None), (11, 10)])
+def test_last_case_unknown_usage_or_overspend_is_not_complete(monkeypatch, prompt, completion):
+    from benchmarks.harness_optimizer import compare_holdout
+
+    install_runner(monkeypatch, prompt, completion)
+    report = evaluation.run_model_cases(
+        cases()[:1], object(), max_total_tokens=20, groundtruth_review="REVIEW_DECLARED"
+    )
+    assert report["cases"] == report["planned_cases"] == 1
+    assert report["unexecuted_case_ids"] == []
+    assert report["suite_complete"] is False
+    with pytest.raises(ValueError, match="Incomplete"):
+        compare_holdout(report, report)
+
+
+def test_exact_budget_on_final_case_is_complete(monkeypatch):
+    install_runner(monkeypatch, 11, 9)
+    report = evaluation.run_model_cases(cases()[:1], object(), max_total_tokens=20)
+    assert report["suite_complete"] is True
+    assert report["prompt_tokens"] + report["completion_tokens"] == 20
+
+
+def test_empty_suite_is_not_complete(monkeypatch):
+    seen = install_runner(monkeypatch, 6, 4)
+    report = evaluation.run_model_cases([], object())
+    assert seen == []
+    assert report["suite_complete"] is False
