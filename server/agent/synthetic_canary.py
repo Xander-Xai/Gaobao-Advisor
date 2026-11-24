@@ -52,7 +52,9 @@ def choose_synthetic_variant(registry: Any, run_key: str, percentage: int = 10) 
         or proposal.get("report", {}).get("evaluation_gate") != "REVIEW_REQUIRED"
         or len(proposal.get("signoffs", [])) != 2
         or any(item.get("verdict") != "attest_reviewed" for item in proposal["signoffs"])
-        or any(not isinstance(item.get("reviewer"), str) or not item["reviewer"].strip() for item in proposal["signoffs"])
+        or any(
+            not isinstance(item.get("reviewer"), str) or not item["reviewer"].strip() for item in proposal["signoffs"]
+        )
         or len({item["reviewer"] for item in proposal["signoffs"]}) != 2
     ):
         raise ValueError("Canary pointer has no eligible frozen, reviewed synthetic candidate")
