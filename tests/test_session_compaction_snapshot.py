@@ -230,7 +230,6 @@ def test_orphan_or_invalid_session_cannot_publish(db_factory):
         store.load("../cross-owner", history, policy_sha256=POLICY)
 
 
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("app_env", ["", "production", "prod", "staging"])
 async def test_snapshot_integration_refuses_unknown_or_production_env(monkeypatch, app_env):
@@ -265,4 +264,3 @@ async def test_public_async_context_uses_snapshot_only_with_both_explicit_flags(
     builder.assert_awaited_once()
     assert builder.await_args.kwargs["session_id"] == "test-session"
     assert len(builder.await_args.kwargs["policy_sha256"]) == 64
-
