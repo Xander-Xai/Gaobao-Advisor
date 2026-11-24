@@ -17,27 +17,54 @@ ROWS = [
     {"id": 1, "school_id": 5, "major_id": None, "year": 2024, "min_score": 600, "max_score": 620, "min_rank": 8000},
     {"id": 2, "school_id": 6, "major_id": None, "year": 2024, "min_score": 580, "max_score": 600, "min_rank": 10000},
 ]
-RESULT = {"groups": [{
-    "key": [2024], "records": 2, "missing_min_scores": 0, "median_min_score": 590.0,
-    "lowest_min_score": 580, "highest_min_score": 600, "best_min_rank": 8000, "worst_min_rank": 10000,
-}]}
+RESULT = {
+    "groups": [
+        {
+            "key": [2024],
+            "records": 2,
+            "missing_min_scores": 0,
+            "median_min_score": 590.0,
+            "lowest_min_score": 580,
+            "highest_min_score": 600,
+            "best_min_rank": 8000,
+            "worst_min_rank": 10000,
+        }
+    ]
+}
 
 
 def test_queries_actual_admissions_table_and_filters_cohort():
     engine = create_engine("sqlite://")
     AdmissionScore.__table__.create(engine)
     with Session(engine) as session:
-        for i, province, subject, major in ((1, "广东", "物理", None), (2, "广西", "物理", None),
-                                           (3, "广东", "历史", None), (4, "广东", "物理", 9)):
-            session.add(AdmissionScore(id=i, school_id=i, major_id=major, province=province,
-                                       year=2024, subject_type=subject, batch="本科批", min_score=600))
+        for i, province, subject, major in (
+            (1, "广东", "物理", None),
+            (2, "广西", "物理", None),
+            (3, "广东", "历史", None),
+            (4, "广东", "物理", 9),
+        ):
+            session.add(
+                AdmissionScore(
+                    id=i,
+                    school_id=i,
+                    major_id=major,
+                    province=province,
+                    year=2024,
+                    subject_type=subject,
+                    batch="本科批",
+                    min_score=600,
+                )
+            )
         session.commit()
         rows = sandbox.collect_admissions_rows(session, SCOPE)
         assert [row["id"] for row in rows] == [1]
         assert set(rows[0]) == set(sandbox.FIELDS)
-        assert sandbox.collect_admissions_rows(
-            session, sandbox.Scope("广东", "物理", "本科批", 2022, 2025, "major")
-        )[0]["id"] == 4
+        assert (
+            sandbox.collect_admissions_rows(session, sandbox.Scope("广东", "物理", "本科批", 2022, 2025, "major"))[0][
+                "id"
+            ]
+            == 4
+        )
     engine.dispose()
 
 
@@ -49,11 +76,14 @@ def test_requires_authorization_before_execution(monkeypatch):
         )
 
 
-@pytest.mark.parametrize("output,cleanup,success", [
-    (RESULT, True, True),
-    ({"groups": []}, True, False),
-    (RESULT, False, False),
-])
+@pytest.mark.parametrize(
+    "output,cleanup,success",
+    [
+        (RESULT, True, True),
+        ({"groups": []}, True, False),
+        (RESULT, False, False),
+    ],
+)
 def test_bounded_read_only_mount_and_independent_oracle(monkeypatch, output, cleanup, success):
     def run(command, **kwargs):
         assert command[0:2] == ["docker", "run"]
@@ -98,7 +128,8 @@ def test_model_loop_only_sends_schema_and_retries_on_oracle_mismatch(monkeypatch
     def generate(**kwargs):
         prompts.append(kwargs)
         return SimpleNamespace(
-            model="test-model", usage=SimpleNamespace(prompt_tokens=20, completion_tokens=40),
+            model="test-model",
+            usage=SimpleNamespace(prompt_tokens=20, completion_tokens=40),
             choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({"code": "print(1)"})))],
         )
 
@@ -112,8 +143,15 @@ def test_model_loop_only_sends_schema_and_retries_on_oracle_mismatch(monkeypatch
 
     monkeypatch.setattr(sandbox, "execute_admissions_analysis", execute)
     receipt = sandbox.run_analysis_agent(
-        ROWS, SCOPE, ("year",), client=client, model="test-model", image_id=IMAGE,
-        approval_ref="internal-approval", authorized=True, model_authorized=True,
+        ROWS,
+        SCOPE,
+        ("year",),
+        client=client,
+        model="test-model",
+        image_id=IMAGE,
+        approval_ref="internal-approval",
+        authorized=True,
+        model_authorized=True,
     )
     assert receipt["status"] == "VERIFIED_DESCRIPTIVE_ANALYSIS"
     assert len(prompts) == len(calls) == 2
