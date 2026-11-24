@@ -414,3 +414,26 @@ def test_memory_credential_and_conflict_errors_are_not_cacheable(client_db):
         assert response.headers["cache-control"] == "no-store"
         assert response.headers["pragma"] == "no-cache"
         assert token not in response.text
+
+
+def test_ttl_is_checked_after_credential_lock_acquisition(client_db, monkeypatch):
+    client, _ = client_db
+    token = create_token(client)
+    start = _utcnow()
+    clock = [start]
+    monkeypatch.setattr(service, "_utcnow", lambda: clock[0])
+    saved = put(client, token, ttl=1)
+    assert saved.status_code == 200
+    original_owner = service._owner
+
+    def delayed_owner(db, token, *, write=False):
+        owner = original_owner(db, token, write=write)
+        if write:
+            clock[0] = start + timedelta(days=2)
+        return owner
+
+    monkeypatch.setattr(service, "_owner", delayed_owner)
+    # The old value expires while a writer is waiting for its credential lock.
+    response = put(client, token, value="过时", version=saved.json()["version"])
+    assert response.status_code == 409
+    assert client.get("/api/v1/memory/entries", headers=headers(token)).json()["items"] == []
