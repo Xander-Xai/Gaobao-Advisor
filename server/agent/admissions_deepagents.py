@@ -524,6 +524,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--report-out", type=Path, help="Optional private verified research text report")
     args = parser.parse_args(argv)
+    if os.getenv("ADMISSIONS_RESEARCH_ENABLED", "").lower() == "true":
+        parser.error("Managed research requires an approved journal run; use admissions_research_taskrun or dispatch")
     if args.report_out is not None and (args.report_out.exists() or args.report_out.resolve() == args.out.resolve()):
         parser.error("Report output must be a new, separate path")
     if not os.getenv("DATABASE_URL") or not os.getenv("OPENAI_API_KEY"):
