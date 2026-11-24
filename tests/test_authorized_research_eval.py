@@ -103,3 +103,166 @@ def test_split_leakage_and_reused_run_rejected():
     receipts["case-2"]["task_id"] = receipts["case-0"]["task_id"]
     with pytest.raises(ValueError):
         evaluate(manifest, receipts)
+
+
+@pytest.mark.parametrize("error", ["research_failed", "unverified_finish", "source_changed"])
+def test_full_receipt_does_not_credit_unclassified_block(error):
+    manifest, receipts = fixture()
+    case = manifest["cases"][1]
+    case.update(
+        expected_status="BLOCKED",
+        expected_coverage=None,
+        expected_analysis_sha256=None,
+        expected_evidence_sha256=None,
+    )
+    receipt = receipts["case-1"]
+    receipt.update(status="BLOCKED", error=error)
+    for field in ("evidence", "sandbox_analysis", "receipt_ids"):
+        receipt.pop(field, None)
+    result = evaluate(manifest, receipts)
+    assert result["status"] == "FAILED"
+    assert result["splits"]["development"]["passed"] == 1
+    assert "full_receipt_block_reason_not_independently_classified" in result["cases"][1]["reasons"]
+
+
+def managed_fixture(tmp_path):
+    from server.agent.admissions_research_taskrun import ResearchJournal
+
+    manifest, receipts = fixture()
+    tmp_path.chmod(0o700)
+    journal = ResearchJournal(tmp_path / "private-research.sqlite")
+    image = "sha256:" + "a" * 64
+    model = "openai:fixture-model"
+    run_map = {}
+    for case in manifest["cases"]:
+        key = case["case_id"]
+        spec = {
+            "scope": case["scope"],
+            "dataset_ref": manifest["dataset_ref"],
+            "model_id": model,
+            "image_id": image,
+            "approval_ref": "fixture-only",
+        }
+        item = journal.create("operator", "request-" + key, spec)
+        run_id = item["run_id"]
+        journal.approve(run_id, "admin", item["spec_sha256"])
+        _, lease = journal.claim(run_id, manifest["dataset_ref"])
+        receipt = receipts[key]
+        analysis = receipt["sandbox_analysis"]["result"]
+        journal.finish(
+            run_id,
+            lease,
+            {
+                "status": receipt["status"],
+                "coverage": receipt["coverage"],
+                "evidence_sha256": receipt["evidence_sha256"],
+                "analysis": analysis,
+                "analysis_sha256": digest(analysis),
+                "receipt_ids": {"admission-history": "b" * 64, "enrollment-plans": "c" * 64},
+                "provider_usage": None,
+                "admission_recommendation_verified": False,
+                "spec_sha256": item["spec_sha256"],
+            },
+            None,
+        )
+        run_map[key] = run_id
+    return manifest, run_map, journal, model, image
+
+
+def test_managed_eval_uses_existing_journal_without_raw_export(tmp_path):
+    from benchmarks.authorized_research_eval import evaluate_managed
+
+    manifest, run_map, journal, model, image = managed_fixture(tmp_path)
+    original = journal.path.read_bytes()
+    result = evaluate_managed(manifest, run_map, journal.path, model_id=model, image_id=image)
+    assert result["status"] == "REVIEW_REQUIRED"
+    assert result["splits"]["holdout"]["passed"] == 2
+    assert result["evidence_lane"] == "MANAGED_JOURNAL_AGGREGATE"
+    assert result["raw_evidence_independently_recomputed"] is False
+    assert result["provider_transport_verified"] is False
+    assert result["provider_billing_verified"] is False
+    assert result["production_release_authorized"] is False
+    assert journal.path.read_bytes() == original
+    assert "fixture-only" not in str(result)
+    assert "research_" not in str(result["cases"])
+
+
+def test_managed_eval_rejects_policy_mismatch_and_reused_run(tmp_path):
+    from benchmarks.authorized_research_eval import evaluate_managed
+
+    manifest, run_map, journal, model, image = managed_fixture(tmp_path)
+    result = evaluate_managed(manifest, run_map, journal.path, model_id="openai:other-model", image_id=image)
+    assert result["status"] == "FAILED"
+    assert all("dataset_or_model_mismatch" in case["reasons"] for case in result["cases"])
+    run_map["case-2"] = run_map["case-0"]
+    with pytest.raises(ValueError, match="distinct managed run"):
+        evaluate_managed(manifest, run_map, journal.path, model_id=model, image_id=image)
+
+
+def test_managed_eval_does_not_credit_unclassified_failure_as_safe_refusal(tmp_path):
+    from benchmarks.authorized_research_eval import evaluate_managed
+
+    manifest, run_map, journal, model, image = managed_fixture(tmp_path)
+    case = manifest["cases"][1]
+    case.update(
+        expected_status="BLOCKED",
+        expected_coverage=None,
+        expected_analysis_sha256=None,
+        expected_evidence_sha256=None,
+    )
+    with journal.tx() as db:
+        db.execute(
+            "UPDATE authorized_research_runs SET state='FAILED',result=NULL,failure='research_execution_failed' WHERE id=?",
+            (run_map[case["case_id"]],),
+        )
+    result = evaluate_managed(manifest, run_map, journal.path, model_id=model, image_id=image)
+    assert result["status"] == "FAILED"
+    assert result["splits"]["development"]["passed"] == 1
+    assert "managed_block_reason_not_independently_classified" in result["cases"][1]["reasons"]
+
+
+def test_managed_eval_detects_wrong_independent_gold(tmp_path):
+    from benchmarks.authorized_research_eval import evaluate_managed
+
+    manifest, run_map, journal, model, image = managed_fixture(tmp_path)
+    manifest["cases"][2]["expected_evidence_sha256"] = "d" * 64
+    result = evaluate_managed(manifest, run_map, journal.path, model_id=model, image_id=image)
+    assert result["status"] == "FAILED"
+    assert "gold_evidence_mismatch" in result["cases"][2]["reasons"]
+
+
+def test_managed_cli_preserves_journal_and_fails_closed_on_missing_schema(tmp_path):
+    import json
+    import stat
+
+    from benchmarks.authorized_research_eval import main
+
+    manifest, run_map, journal, model, image = managed_fixture(tmp_path)
+    gold = tmp_path / "gold.json"
+    runs = tmp_path / "runs.json"
+    output = tmp_path / "eval.json"
+    gold.write_text(json.dumps(manifest), encoding="utf-8")
+    runs.write_text(json.dumps(run_map), encoding="utf-8")
+    args = [
+        "--gold",
+        str(gold),
+        "--managed-runs",
+        str(runs),
+        "--expected-model",
+        model,
+        "--expected-image",
+        image,
+        "--authorize-private-eval",
+    ]
+    assert main(args + ["--journal", str(journal.path), "--out", str(output)]) == 0
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    assert json.loads(output.read_text(encoding="utf-8"))["status"] == "REVIEW_REQUIRED"
+
+    invalid = tmp_path / "no-schema.sqlite"
+    invalid.touch(mode=0o600)
+    failed = tmp_path / "failed.json"
+    with pytest.raises(SystemExit) as exc:
+        main(args + ["--journal", str(invalid), "--out", str(failed)])
+    assert exc.value.code == 2
+    assert not failed.exists()
+    assert invalid.stat().st_size == 0

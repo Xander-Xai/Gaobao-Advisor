@@ -346,6 +346,40 @@ class ResearchJournal:
         raise ResearchConflict("Lease lost or task cancelled")
 
 
+def read_managed_eval_views(path: Path, run_ids: list[str]) -> dict:
+    """Read existing private journal projections in one snapshot; never create or expire runs."""
+    from contextlib import closing
+
+    if (
+        not 1 <= len(run_ids) <= 50
+        or len(set(run_ids)) != len(run_ids)
+        or any(not isinstance(key, str) or not ID.fullmatch(key) for key in run_ids)
+    ):
+        raise ValueError("Invalid evaluation run IDs")
+    if not path.is_absolute() or path.is_symlink() or path.parent.is_symlink():
+        raise ValueError("Absolute private journal path required")
+    parent, info = path.parent.stat(), path.lstat()
+    if not stat.S_ISDIR(parent.st_mode) or parent.st_mode & 0o077 or parent.st_uid != os.getuid():
+        raise ValueError("Private journal directory required")
+    if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077 or info.st_uid != os.getuid() or info.st_nlink != 1:
+        raise ValueError("Private regular journal file with one link required")
+    views = {}
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=5)) as db:
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA query_only=ON")
+        db.execute("BEGIN")
+        for run_id in run_ids:
+            row = db.execute("SELECT * FROM authorized_research_runs WHERE id=?", (run_id,)).fetchone()
+            if row is None:
+                raise ResearchNotFound("Unknown evaluation run")
+            spec = json.loads(row["spec"])
+            validate_spec(spec)
+            if digest(spec) != row["spec_sha256"]:
+                raise ValueError("Research specification digest mismatch")
+            views[run_id] = ResearchJournal._view(row)
+    return views
+
+
 def open_configured_journal():
     configured_dataset()
     path = os.getenv("ADMISSIONS_RESEARCH_JOURNAL", "")

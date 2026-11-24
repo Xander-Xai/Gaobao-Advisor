@@ -23,7 +23,7 @@
 
 ## 架构收敛后的证据范围
 
-#192/#193 已合入；在线咨询、原生 Harness 基线与复杂研究职责分离，私有 operator journal 是批准研究的单一生命周期。Deep Agents 使用 InMemorySaver；私有任务恢复不等于跨进程图恢复。受限招生 Sandbox 已有业务链路，算术修复仅保留为合成安全夹具。已合入的授权研究 Eval 支持独立金标和私有回执（`benchmarks/authorized_research_eval.py`）；#194 是同一 journal 的聚合评测扩展，交付状态以实时 PR/CI 为准。真实数据许可、独立金标、实际模型/账单及同模型 A/B 均继续保持 OPEN。
+#192/#193 已合入；在线咨询、原生 Harness 基线与复杂研究职责分离，私有 operator journal 是批准研究的单一生命周期。Deep Agents 使用 InMemorySaver；私有任务恢复不等于跨进程图恢复。受限招生 Sandbox 已有业务链路，算术修复仅保留为合成安全夹具。已合入的授权研究 Eval 支持独立金标和私有回执（`benchmarks/authorized_research_eval.py`）；#194 已合并（`9a93b30c35cbf7478e6d342115e34086ef8837ac`），同一 journal 的聚合评测扩展；合并提交 CI 需独立核对。真实数据许可、独立金标、实际模型/账单及同模型 A/B 均继续保持 OPEN。
 
 ## 第一批补全任务
 
@@ -101,3 +101,52 @@ python -m server.agent.taskrun_worker --journal /absolute/path/tasks.sqlite --ru
 取消不能撤销在途请求，丢失租约后禁止新模型调用/新 SQL 操作及发布。
 此为管理端合成任务路径，不改变公开聊天，不声称真实模型/真实招生效果。
 关联 #104、#147；回归 `tests/test_native_taskrun_harness.py` 和 `tests/test_agent_taskrun_api.py`。
+
+
+## 2026-11-25 实证冲刺门禁（#104 / #147）
+
+按顺序执行，不再增加并行 Harness、评测框架或公共 Agent 入口。每次运行记录代码 SHA、数据/金标摘要、执行入口、环境、模型实际版本、预算、完整分母及失败类型；不同证据层不得混算。
+
+| 阶段 | 验收执行 | 通过条件 |
+| --- | --- | --- |
+| E0 无 Key 基线 | 现有 `readonly_harness_eval`、`decision_card_business_eval`、`context_ab_eval --scripted-smoke`、授权研究 Eval fixture 回归 | 冻结合成数据、逐样本独立 SQL 真值、错误输入与缺失数据拒答；仅 SCRIPTED_EVAL |
+| E1 真实模型合成业务 | `benchmarks.decision_card_business_eval` 固定 8 案例，4 development + 4 holdout；先完成预算预检 | 逐案例记录正确事实、工具选择/参数、合理拒答、失败归因、用量和耗时；不能用确定性零 Token 基线证明降本 |
+| E2 Context 单变量 A/B | `benchmarks.context_ab_eval`；同版本模型、相同数据/工具/预算、至少 2 组配对试验 | 每个 holdout 保留硬约束及证据，质量安全不退化；仅在完整真实 usage 存在时报告 Token 差异；样本少不宣称显著性 |
+| E3 授权复杂研究 | operator 创建任务、独立管理员审批、同一私有 journal + Deep Agents + Sandbox；`benchmarks.authorized_research_eval` | 冻结独立 gold、完整任务绑定、可信回执与聚合判分；通用 FAILED/BLOCKED 不计正确拒答；独立原因 oracle 缺失则保持 OPEN |
+| E4 全栈验收 | 已有 Compose E2E、Java Services 与 API/SSE 测试；对照真实启动环境 | Java 只读 Catalog overlay；Python 唯一 chat/SSE 入口；鉴权、限流、断流及依赖不可用保留明确失败状态 |
+
+建议先执行以下不花费 Provider 费用的命令（输出新目录；不得覆盖历史结果）：
+
+```bash
+python -m benchmarks.readonly_harness_eval --out /tmp/gb-readonly-new.json
+python -m benchmarks.decision_card_business_eval --out /tmp/gb-decision-new.json
+python -m benchmarks.context_ab_eval --scripted-smoke --out-dir /tmp/gb-context-new
+pytest -q tests/test_authorized_research_eval.py tests/test_context_ab_eval.py
+```
+
+真实模型合成业务的配对预算预检（默认不执行网络调用）：
+
+```bash
+python -m benchmarks.repeated_model_experiment --model YOUR_VERSIONED_MODEL \
+  --out-dir /tmp/gb-paired-new --trials 2 \
+  --max-provider-calls-per-arm 64 --stop-after-reported-tokens-per-arm 120000
+```
+
+以上数值仅为预检示例，不是授权预算。付费执行需操作员确认 provider、模型版本、总预算、专用凭据和网络许可；响应后 Token stop 不是硬货币上限。真实招生数据另需合法授权与独立审查。具体运行契约见 `docs/model-run-paired-evidence-20261120.md` 和 `docs/validation/authorized-research-eval.md`。
+
+### 面试量化证据口径
+
+- Task Success = 独立业务真值通过任务 / 全部计划任务；另列未执行、基础设施失败、模型失败和安全拒答，不能只按成功返回分母。
+- 正确拒答需独立业务原因和证据，不得将超时/服务不可用算作正确；有独立标注才计算拒答 precision/recall。
+- Tool correctness 同时检查工具名、参数、权限与来源；不可仅用工具调用次数替代正确率。
+- Context A/B 比较同模型两臂的完整配对任务、总 input/output Tokens、逐样本安全/事实差异、耗时；未知 usage 保持 null，未完成试验不能报告改善百分比。
+- 端到端延迟记录计时边界、样本数、失败、P50/P95；SSE TTFT 与研究任务总耗时分开。少量样本仅作探索证据。
+- 成本/成功任务需核对实际价格及独立账单，计入失败请求；零成功或未知成本不计算。无真实值标记 NOT_MEASURED。
+
+### 现阶段三个架构深挖问题
+
+1. **确定性事实 vs 模型推理**：公共咨询 SQL/规则筛选及证据 gate，复杂研究才启用 Deep Agents。展示选科冲突、缺位次、数据版本不符时拒答，而不是给模型编造概率。
+2. **长对话与 Context**：区分当前硬约束、SQL/RAG 证据、短期历史摘要与显式用户偏好；压缩不截断当前证据，偏好可撤回，不把摘要当事实。真实收益仍由 E2 验证。
+3. **跨语言部署**：Java Gateway/Catalog 只读 overlay，Nginx 将 chat/SSE 留在 Python；演示鉴权、429/503、路由归属和数据一致性，不能声称 Java 接管 Agent 或生产 SLA 已验证。
+
+本次新增的是验收执行协议，不是实际模型结果。真实模型、招生数据、独立签署 gold、真实账单和生产部署仍由 #104/#147 跟踪；#190 保留本地独立 smoke 缺口。
