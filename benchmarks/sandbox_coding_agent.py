@@ -12,6 +12,7 @@ import ast
 import hashlib
 import json
 import secrets
+import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -124,6 +125,22 @@ def validate_synthetic_patch(source: str, task_id: str) -> None:
             raise ValueError("Patch has an unapproved constant")
 
 
+def _bounded_regular_bytes(path: Path, max_bytes: int) -> bytes:
+    """Read only bounded, regular, single-link scratch artifacts.
+
+    The private scratch parent and completed Docker invocation are assumed;
+    this is not a concurrent hostile-host filesystem security boundary.
+    """
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or metadata.st_size > max_bytes:
+        raise ValueError("Unsafe scratch artifact")
+    with path.open("rb") as stream:
+        data = stream.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError("Oversized scratch artifact")
+    return data
+
+
 class ScriptedRepairPlanner:
     """Deterministic test fixture. No model is being evaluated."""
 
@@ -162,6 +179,7 @@ def run_repair(
     observations: list[dict[str, Any]] = []
     last_patch_hash = ""
     last_test_pass = False
+    tested_source_sha256: str | None = None
     tool_calls = test_runs = model_steps = 0
     prompt_tokens = completion_tokens = 0
     usage_known = True
@@ -175,7 +193,6 @@ def run_repair(
         (work / ".synthetic_workspace").write_text("SYNTHETIC_ONLY\n", encoding="utf-8")
         solution = work / "solution.py"
         solution.write_text(spec["broken"], encoding="utf-8")
-        (work / "probe.py").write_text(_TEST_RUNNER.format(oracle=spec["oracle"]), encoding="utf-8")
         for index in range(1, max_steps + 1):
             model_steps = index
             try:
@@ -205,7 +222,12 @@ def run_repair(
             if action.kind == "inspect":
                 tool_calls += 1
                 actions.append("inspect")
-                observations.append({"kind": "inspect", "source": solution.read_text(encoding="utf-8")[:2000]})
+                try:
+                    source = _bounded_regular_bytes(solution, 8000).decode("utf-8")
+                except (OSError, ValueError):
+                    reason = "unsafe_workspace_path"
+                    break
+                observations.append({"kind": "inspect", "source": source[:2000]})
                 trace.append({"step": index, "tool": "inspect", "result": "ok"})
             elif action.kind == "edit":
                 if not isinstance(action.content, str) or not 1 <= len(action.content) <= 2000:
@@ -223,12 +245,15 @@ def run_repair(
                 if new_digest == last_patch_hash:
                     reason = "duplicate_patch"
                     break
-                if solution.is_symlink():
+                try:
+                    _bounded_regular_bytes(solution, 8000)
+                except (OSError, ValueError):
                     reason = "unsafe_workspace_path"
                     break
                 solution.write_text(action.content, encoding="utf-8")
                 last_patch_hash = new_digest
                 last_test_pass = False
+                tested_source_sha256 = None
                 (work / "artifact.txt").unlink(missing_ok=True)
                 tool_calls += 1
                 actions.append("edit")
@@ -238,17 +263,41 @@ def run_repair(
                 test_runs += 1
                 tool_calls += 1
                 actions.append("test")
-                result = run_sandbox_probe(image_id, work)
-                last_test_pass = result["passed"] and (work / "artifact.txt").is_file()
+                last_test_pass = False
+                tested_source_sha256 = None
+                artifact = work / "artifact.txt"
+                try:
+                    before = _bounded_regular_bytes(solution, 8000)
+                    validate_synthetic_patch(before.decode("utf-8"), task_id)
+                    artifact.unlink(missing_ok=True)
+                    result = run_sandbox_probe(
+                        image_id,
+                        work,
+                        oracle_source=_TEST_RUNNER.format(oracle=spec["oracle"]),
+                    )
+                    after = _bounded_regular_bytes(solution, 8000)
+                    if result.get("passed") is True and before == after:
+                        last_test_pass = _bounded_regular_bytes(artifact, 256) == b"synthetic tests passed"
+                    if last_test_pass:
+                        tested_source_sha256 = hashlib.sha256(after).hexdigest()
+                except (OSError, ValueError, SyntaxError):
+                    result = {"error": "invalid_sandbox_artifact"}
+                if result.get("passed") is True and not last_test_pass:
+                    result = {"error": "sandbox_evidence_mismatch"}
                 observations.append(
                     {"kind": "test", "passed": last_test_pass, "reason": result.get("error", "completed")}
                 )
                 trace.append({"step": index, "tool": "test", "result": "pass" if last_test_pass else "fail"})
             elif action.kind == "finish":
-                if last_test_pass:
+                try:
+                    current = hashlib.sha256(_bounded_regular_bytes(solution, 8000)).hexdigest()
+                except (OSError, ValueError):
+                    current = None
+                if last_test_pass and tested_source_sha256 is not None and current == tested_source_sha256:
                     status, reason = "completed", "sandbox_tests_passed"
                 else:
                     reason = "unverified_finish"
+                    tested_source_sha256 = None
                 trace.append({"step": index, "tool": "finish", "result": reason})
                 break
             else:
@@ -265,6 +314,7 @@ def run_repair(
         "completion_tokens": completion_tokens if usage_known else None,
         "tool_calls": tool_calls,
         "test_runs": test_runs,
+        "accepted_source_sha256": tested_source_sha256 if status == "completed" else None,
         "tool_sequence": actions,
         "trace": trace,
         "sandbox": "DOCKER_RESTRICTED_SYNTHETIC",

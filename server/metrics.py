@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 from urllib.parse import quote
 
@@ -132,11 +133,18 @@ _TASKRUN_ENGINES = ("deterministic", "portfolio", "deepagents")
 _TASKRUN_STATES = ("PENDING_APPROVAL", "APPROVED", "RUNNING", "SUCCEEDED", "NEEDS_REVIEW", "FAILED", "CANCELLED")
 
 
+AGENT_TASKRUN_SNAPSHOT_AVAILABLE = Gauge(
+    "agent_taskrun_snapshot_available", "Whether the current synthetic journal snapshot was collected"
+)
+
+
 def _refresh_synthetic_taskrun_metrics() -> None:
-    """Read only counts from the opt-in synthetic journal; never read payloads."""
+    """Read only current counts; never expose stale rows on collection failure."""
+    AGENT_TASKRUN_SNAPSHOT_AVAILABLE.set(0)
+    AGENT_TASKRUN_STORED.clear()
     if os.getenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "").lower() != "true":
         return
-    if os.getenv("APP_ENV", "development").lower() == "production":
+    if os.getenv("APP_ENV", "").lower() not in {"development", "dev", "test", "testing", "local"}:
         return
     location = os.getenv("SYNTHETIC_TASKRUN_JOURNAL", "")
     if not location or not Path(location).is_absolute() or Path(location).is_symlink():
@@ -145,7 +153,7 @@ def _refresh_synthetic_taskrun_metrics() -> None:
         return
     try:
         address = "file:" + quote(str(Path(location).resolve()), safe="/") + "?mode=ro"
-        with sqlite3.connect(address, uri=True, timeout=0.2) as conn:
+        with closing(sqlite3.connect(address, uri=True, timeout=0.2)) as conn:
             rows = conn.execute(
                 "SELECT engine, status, COUNT(*) FROM synthetic_task_runs GROUP BY engine, status"
             ).fetchall()
@@ -153,10 +161,12 @@ def _refresh_synthetic_taskrun_metrics() -> None:
         return  # Collector failure must not reveal file paths or break /metrics.
     counts = {(engine, state): 0 for engine in _TASKRUN_ENGINES for state in _TASKRUN_STATES}
     for engine, state, count in rows:
-        if (engine, state) in counts:
-            counts[(engine, state)] = count
+        if (engine, state) not in counts:
+            return  # Unexpected journal schema/state: report unavailable, not partial success.
+        counts[(engine, state)] = count
     for (engine, state), count in counts.items():
         AGENT_TASKRUN_STORED.labels(engine=engine, status=state).set(count)
+    AGENT_TASKRUN_SNAPSHOT_AVAILABLE.set(1)
 
 
 # ── Middleware for Automatic Metrics Collection ────────────
@@ -165,6 +175,7 @@ def _refresh_synthetic_taskrun_metrics() -> None:
 async def metrics_middleware(request: Request, call_next):
     """Middleware to automatically collect HTTP metrics."""
     start_time = time.monotonic()
+    method = request.method if request.method in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"} else "OTHER"
 
     try:
         response = await call_next(request)
@@ -172,9 +183,9 @@ async def metrics_middleware(request: Request, call_next):
         # Record metrics
         duration = time.monotonic() - start_time
         endpoint = _metric_endpoint(request)
-        HTTP_REQUESTS.labels(method=request.method, endpoint=endpoint, status=response.status_code).inc()
+        HTTP_REQUESTS.labels(method=method, endpoint=endpoint, status=response.status_code).inc()
 
-        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=endpoint).observe(duration)
+        HTTP_REQUEST_DURATION.labels(method=method, endpoint=endpoint).observe(duration)
 
         return response
 
@@ -182,9 +193,9 @@ async def metrics_middleware(request: Request, call_next):
         # Record error metrics
         duration = time.monotonic() - start_time
         endpoint = _metric_endpoint(request)
-        HTTP_REQUESTS.labels(method=request.method, endpoint=endpoint, status=500).inc()
+        HTTP_REQUESTS.labels(method=method, endpoint=endpoint, status=500).inc()
 
-        HTTP_REQUEST_DURATION.labels(method=request.method, endpoint=endpoint).observe(duration)
+        HTTP_REQUEST_DURATION.labels(method=method, endpoint=endpoint).observe(duration)
 
         raise
 

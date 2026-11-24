@@ -8,7 +8,12 @@ import pytest
 from starlette.requests import Request
 
 from server.agent import taskrun_worker
-from server.metrics import AGENT_TASKRUN_STORED, _metric_endpoint, _refresh_synthetic_taskrun_metrics
+from server.metrics import (
+    AGENT_TASKRUN_SNAPSHOT_AVAILABLE,
+    AGENT_TASKRUN_STORED,
+    _metric_endpoint,
+    _refresh_synthetic_taskrun_metrics,
+)
 from server.observability.agent_trace import (
     _TASKRUN_ATTEMPTS,
     record_taskrun_outcome,
@@ -124,3 +129,12 @@ def test_durable_taskrun_metrics_read_journal_without_identity(tmp_path, monkeyp
     ]
     assert rows and rows[0].value >= 1
     assert all("operator@" not in str(item.labels) for item in AGENT_TASKRUN_STORED.collect()[0].samples)
+
+
+def test_stale_snapshot_is_removed_when_experiment_is_disabled(monkeypatch):
+    AGENT_TASKRUN_STORED.labels(engine="deterministic", status="RUNNING").set(12)
+    AGENT_TASKRUN_SNAPSHOT_AVAILABLE.set(1)
+    monkeypatch.setenv("ENABLE_SYNTHETIC_AGENT_EXPERIMENT", "false")
+    _refresh_synthetic_taskrun_metrics()
+    assert not AGENT_TASKRUN_STORED.collect()[0].samples
+    assert AGENT_TASKRUN_SNAPSHOT_AVAILABLE.collect()[0].samples[0].value == 0
