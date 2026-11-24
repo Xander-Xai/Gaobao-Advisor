@@ -252,6 +252,7 @@ async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
 
             policy = policy_digest(
                 model_id=str(_get_config().get("model") or ""),
+                provider_identity=str(_get_config().get("base_url") or ""),
                 keep_recent_rounds=options["keep_recent_rounds"],
                 summary_trigger_tokens=manager.max_token_limit,
             )
