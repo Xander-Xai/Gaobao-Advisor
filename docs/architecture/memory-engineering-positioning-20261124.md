@@ -62,3 +62,8 @@ The original #135 and #149 introduced separate `0006` children. #149 and #159 ar
 - OpenCode persistent instructions: https://opencode.ai/docs/instructions/
 - Gaobao session context: `docs/validation/pi-opencode-session-compaction-20261124.md`
 - Gaobao snapshot: `docs/validation/session-compaction-snapshot-20261124.md`
+
+
+## Standard local default update (2026-11-25)
+
+The standard Java/MySQL/Redis Compose stack enables both semantic compaction and SQL session snapshots by default for synthetic local data; raw/lightweight and production defaults remain off; standard local snapshots require AES-GCM and the worker prunes expired entries. Explicit false rolls back. Cross-task preferences remain opt-in. Plaintext snapshots are still forbidden in production; no paid model calls or cost savings are claimed.

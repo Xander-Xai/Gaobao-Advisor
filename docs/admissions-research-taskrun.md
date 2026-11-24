@@ -1,6 +1,6 @@
 # Approved admissions research TaskRun (operator-only)
 
-The synthetic journal is an isolated evaluation fixture, not a second business research runtime. The private business journal is the sole proposed authority for approved business research and accepts an explicitly authorized data reference and immutable model/image/scope. This separation is deliberate: the synthetic read-only recovery policy permits bounded replay, while approved paid research must never automatically replay. Do not merge their storage or expose the synthetic engine as a production fallback. Both stores now reject the other schema under a SQLite write transaction, even if environment variables are missing; a configured private journal path is reserved before synthetic initialization. The proposed business dispatch layer invokes the same journal claim/execute path rather than creating another lifecycle.
+The synthetic journal is an isolated evaluation fixture, not a second business research runtime. The private business journal is the sole managed authority for approved business research and accepts an explicitly authorized data reference and immutable model/image/scope. This separation is deliberate: the synthetic read-only recovery policy permits bounded replay, while approved paid research must never automatically replay. Do not merge their storage or expose the synthetic engine as a production fallback. Both stores now reject the other schema under a SQLite write transaction, even if environment variables are missing; a configured private journal path is reserved before synthetic initialization. The business dispatch layer invokes the same journal claim/execute path rather than creating another lifecycle.
 The operator API creates and inspects the run; a different admin approves its
 exact request digest. Only a separately invoked worker can spend model tokens
 or start a sandbox. No browser click triggers model calls.
@@ -27,11 +27,11 @@ The journal retains coverage, verified aggregate and hashes, not raw SQL rows
 or provider secrets. This is a private local operator workflow, not anonymous
 chat, distributed queue, hard process cancellation or production deployment.
 Admin RBAC and actual source authorization are deployment requirements.
-Fixture tests do not constitute real-data or paid-provider acceptance.
+Fixture tests do not constitute real-data or paid-provider acceptance. The enrollment-plan projection has subject requirements but no explicit subject-stream column; coverage is not proof of selection eligibility.
 
 The worker independently recomputes descriptive statistics from the captured SQL
 history, checks the sandbox input digest, immutable image and cleanup flag, and
-recomputes coverage before publishing. A verified aggregate is available as a
+recomputes coverage before publishing. Before accepting a successful aggregate, the worker also checks the SDK report schema, inner task identity and both delegation receipts against exact scope and rows. An entirely empty history cohort cannot enter the descriptive sandbox: the runner returns a deterministic refusal before model invocation, and the worker repeats the scoped SQL read before persisting `FAILED` / `no_admission_history`. This produces no report, and other failures remain unclassified. Independently labeled gold may credit only that specific refusal in the managed evaluator. A verified aggregate is available as a
 private no-store text response from GET /runs/{id}/report, using the same
 owner/admin access rule as run inspection. Failed, expired or cancelled runs
 cannot produce a report. No raw rows, personal data, or approval reference are

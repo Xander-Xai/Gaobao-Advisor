@@ -16,7 +16,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from server.agent.admissions_deepagents import ResearchScope
+from server.agent.admissions_deepagents import NO_HISTORY_REASON, ResearchScope
 
 SCHEMA = "authorized-admissions-research-gold/v1"
 SHA = re.compile(r"[0-9a-f]{64}")
@@ -87,7 +87,7 @@ def validate_manifest(manifest: Any) -> list[dict]:
     ids = set()
     scopes = set()
     for case in cases:
-        if not isinstance(case, dict) or set(case) != {
+        if not isinstance(case, dict) or set(case) - {"expected_block_reason"} != {
             "case_id",
             "split",
             "scope",
@@ -113,6 +113,10 @@ def validate_manifest(manifest: Any) -> list[dict]:
             raise ValueError("Invalid split or expected status")
         if not isinstance(case["source_ref"], str) or not 1 <= len(case["source_ref"].strip()) <= 200:
             raise ValueError("Independent source reference required")
+        if "expected_block_reason" in case and (
+            case["expected_status"] != "BLOCKED" or case["expected_block_reason"] != NO_HISTORY_REASON
+        ):
+            raise ValueError("Unsupported independent block reason")
         if case["expected_status"] == "BLOCKED":
             if any(
                 case[field] is not None
@@ -126,12 +130,23 @@ def validate_manifest(manifest: Any) -> list[dict]:
             for dim in coverage.values():
                 if not isinstance(dim, dict) or set(dim) != {"missing", "ambiguous", "incomplete"}:
                     raise ValueError("Invalid coverage labels")
+                coordinates = {
+                    (school, year)
+                    for school in case["scope"]["school_ids"]
+                    for year in range(case["scope"]["year_from"], case["scope"]["year_to"] + 1)
+                }
+                seen = set()
                 for values in dim.values():
                     if not isinstance(values, list) or any(
                         not isinstance(pair, list) or len(pair) != 2 or any(type(x) is not int for x in pair)
                         for pair in values
                     ):
                         raise ValueError("Invalid coverage coordinates")
+                    for pair in values:
+                        coordinate = tuple(pair)
+                        if coordinate not in coordinates or coordinate in seen:
+                            raise ValueError("Coverage coordinate outside scope or repeated")
+                        seen.add(coordinate)
             partial = any(values for dim in coverage.values() for values in dim.values())
             if partial != (case["expected_status"] == "VERIFIED_PARTIAL_RESEARCH"):
                 raise ValueError("Gold status and coverage disagree")
@@ -174,6 +189,13 @@ def score_case(case: dict, receipt: Any) -> dict:
             or receipt.get("evidence_sha256") != case["expected_evidence_sha256"]
         ):
             reasons.append("gold_evidence_mismatch")
+        if isinstance(evidence, dict) and set(evidence) == DIMS:
+            expected_receipts = {
+                kind: digest({"task": receipt.get("task_id"), "scope": case["scope"], "kind": kind, "rows": rows})
+                for kind, rows in evidence.items()
+            }
+            if receipt.get("receipt_ids") != expected_receipts:
+                reasons.append("delegation_receipt_binding_mismatch")
         if canonical(receipt.get("coverage")) != canonical(case["expected_coverage"]):
             reasons.append("gold_coverage_mismatch")
         analysis = receipt.get("sandbox_analysis")
@@ -278,9 +300,15 @@ def evaluate_managed(manifest, run_map, journal_path, *, model_id, image_id):
         if not item["approved_by"] or item["approved_by"] == item["owner"]:
             reasons.append("independent_approval_missing")
         if case["expected_status"] == "BLOCKED":
-            # The current managed journal intentionally collapses failure causes.
-            # FAILED can be an outage, not proof of correct business rejection.
-            reasons.append("managed_block_reason_not_independently_classified")
+            # Only the worker-confirmed SQL empty-cohort reason is supported.
+            # Generic failures, cancellation and old labels never earn credit.
+            if (
+                case.get("expected_block_reason") != NO_HISTORY_REASON
+                or item["status"] != "FAILED"
+                or item["failure_code"] != NO_HISTORY_REASON
+                or result is not None
+            ):
+                reasons.append("managed_block_reason_not_independently_classified")
         else:
             expected_state = "SUCCEEDED" if case["expected_status"] == "VERIFIED_RESEARCH" else "NEEDS_REVIEW"
             if item["status"] != expected_state or not isinstance(result, dict):

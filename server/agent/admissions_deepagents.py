@@ -22,6 +22,7 @@ from typing import Any
 
 MAX_ROWS = 100
 MAX_ANALYSIS_ATTEMPTS = 2
+NO_HISTORY_REASON = "no_admission_history"
 RECOVERABLE_ANALYSIS_ERRORS = frozenset({"oracle_mismatch", "invalid_analysis_output", "execution_failed"})
 MODEL_RE = re.compile(r"openai:[A-Za-z0-9_.-]{2,100}")
 _SKILL = """---
@@ -368,6 +369,21 @@ def run_admissions_research(
         "provider_billing_verified": False,
     }
     try:
+        # An empty cohort cannot enter the descriptive sandbox oracle.
+        # Reject before constructing or invoking a paid model.
+        if analysis_image_id is not None:
+            guard()
+            with session_factory() as session:
+                history = read_research_rows(session, scope, "admission-history")
+            guard()
+            if not history:
+                report.update(
+                    engine="deterministic_preflight",
+                    error=NO_HISTORY_REASON,
+                    provider_usage=None,
+                    observed_model_messages=0,
+                )
+                return report
         tools = [submit_research] if analysis_image_id is None else [submit_research, analyze_history]
         guard()
         agent = (

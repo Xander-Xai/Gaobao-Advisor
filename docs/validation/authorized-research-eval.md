@@ -32,6 +32,15 @@ journal is a trusted local input, not a cryptographic attestation of provider
 execution. Unlike the full receipt lane, the aggregate lane cannot recompute
 the raw evidence digest or independently verify provider transport. An
 expected BLOCKED case cannot pass on a generic FAILED or cancelled run:
-the current managed failure projection does not distinguish correct business
-rejection from infrastructure failure. Keep this evidence gap open until
-independent classification is available. The full receipt lane applies the same conservative rule: BLOCKED without an independently labelled and verified rejection reason is not a passing task. A provider outage, unverified finish or changed source can withhold a report safely without completing the expected business task. Use VERIFIED_PARTIAL_RESEARCH with independently frozen coverage for incomplete-data cases; keep true business-rejection acceptance open pending a reason oracle. Neither lane authorizes production release or establishes admission prediction accuracy.
+a generic failure projection does not distinguish correct business rejection
+from infrastructure failure. Only the explicit empty-history reason described below
+may be scored with an independent reason label. The full receipt lane applies the same conservative rule: BLOCKED without an independently labelled and verified rejection reason is not a passing task. A provider outage, unverified finish or changed source can withhold a report safely without completing the expected business task. Use VERIFIED_PARTIAL_RESEARCH with independently frozen coverage for incomplete-data cases; keep true business-rejection acceptance open pending a reason oracle. Neither lane authorizes production release or establishes admission prediction accuracy.
+
+## Delegation receipt and coverage integrity
+
+The managed worker must verify the research schema, SDK engine marker, inner task ID and both delegation receipt digests against the exact returned evidence and approved scope before publishing an aggregate. The full-receipt evaluator recomputes the same task/scope/dimension/rows binding. Empty, substituted or stale receipts are not valid completion evidence. The managed aggregate evaluator still cannot recompute raw rows from a journal alone. Gold coverage coordinates must belong to the approved schools and years, and each coordinate can occur only once per dimension across missing, ambiguous and incomplete. These are structural checks, not an independent data-source or model-transport attestation. Existing stored aggregate records are not retroactively certified; rerun authorized verification before relying on older receipts. Business-rejection reason labels remain an independent open requirement.
+
+
+## Narrow deterministic refusal oracle (managed lane only)
+
+An approved cohort with no historical admission rows cannot enter the descriptive sandbox. The actual research runner now checks that condition before model construction. The managed worker independently re-reads the exact approved SQL scope before recording `FAILED` with `failure_code=no_admission_history` and no report. The independent gold author may add `expected_block_reason: no_admission_history` only to an expected BLOCKED case; the managed evaluator credits that precise, locally trusted journal observation only. A legacy unlabeled BLOCKED case, generic runtime failure, source change, cancellation or unexpected nonempty recheck never earns credit. Full-receipt mode remains conservative because it lacks the worker's second SQL observation. This is one narrowly defined business rejection; independent source labels and real-data validation remain required. All other business rejection reasons remain open.

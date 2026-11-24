@@ -7,14 +7,18 @@ message prefix, a summary policy hash, a short TTL and CAS version.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -22,6 +26,29 @@ from db.models import Conversation, ConversationMessage, SessionCompactionSnapsh
 from server.agent.chat_context import ChatContextError, _validate_history
 
 _SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{4,64}$")
+_ENCRYPTED_PREFIX = "enc:v1:"
+
+
+def snapshot_encryption_key() -> bytes | None:
+    """Read a local secret without logging it; reject invalid key material."""
+    raw = os.getenv("GAOBAO_CHAT_SNAPSHOT_KEY", "").strip()
+    required = os.getenv("GAOBAO_CHAT_SNAPSHOT_REQUIRE_ENCRYPTION", "false").lower() == "true"
+    if not raw:
+        if required:
+            raise RuntimeError("Snapshot encryption key is required")
+        return None
+    if not re.fullmatch(r"[a-fA-F0-9]{64}", raw):
+        raise RuntimeError("Snapshot encryption key must contain 64 hex characters")
+    return bytes.fromhex(raw)
+
+
+def validate_snapshot_startup() -> None:
+    enabled = os.getenv("GAOBAO_CHAT_SNAPSHOT_ENABLED", "false").strip().lower()
+    if enabled not in {"1", "true", "yes", "on"}:
+        return
+    if os.getenv("APP_ENV", "").strip().lower() not in {"development", "test", "testing", "local"}:
+        raise RuntimeError("Snapshot production privacy approval is required")
+    snapshot_encryption_key()
 
 
 @dataclass(frozen=True)
@@ -68,11 +95,44 @@ def policy_digest(
 class SessionCompactionStore:
     """Inject a Session factory to support SQLite and MySQL without global state."""
 
-    def __init__(self, session_factory: Callable[[], Session], *, ttl_hours: int = 24):
+    def __init__(
+        self, session_factory: Callable[[], Session], *, ttl_hours: int = 24, encryption_key: bytes | None = None
+    ):
         if type(ttl_hours) is not int or not 1 <= ttl_hours <= 168:
             raise ValueError("Snapshot TTL must be 1..168 hours")
         self.session_factory = session_factory
         self.ttl_hours = ttl_hours
+        self.cipher = AESGCM(encryption_key) if encryption_key is not None else None
+
+    @staticmethod
+    def _aad(conversation_id: int, covered_count: int, covered_sha256: str, policy_sha256: str) -> bytes:
+        return json.dumps(
+            ["gaobao-session-summary/v1", conversation_id, covered_count, covered_sha256, policy_sha256],
+            separators=(",", ":"),
+        ).encode()
+
+    def _encode_summary(self, summary: str, aad: bytes) -> str:
+        if self.cipher is None:
+            return summary
+        nonce = os.urandom(12)
+        encrypted = self.cipher.encrypt(nonce, summary.encode("utf-8"), aad)
+        return _ENCRYPTED_PREFIX + base64.b64encode(nonce + encrypted).decode("ascii")
+
+    def _decode_summary(self, row: SessionCompactionSnapshot) -> str | None:
+        value = row.summary
+        if not isinstance(value, str):
+            return None
+        if self.cipher is None:
+            return value if not value.startswith(_ENCRYPTED_PREFIX) and 1 <= len(value.strip()) <= 4000 else None
+        if not value.startswith(_ENCRYPTED_PREFIX) or len(value) > 25000:
+            return None
+        try:
+            raw = base64.b64decode(value[len(_ENCRYPTED_PREFIX) :], validate=True)
+            aad = self._aad(row.conversation_id, row.covered_count, row.covered_sha256, row.policy_sha256)
+            summary = self.cipher.decrypt(raw[:12], raw[12:], aad).decode("utf-8")
+        except (InvalidTag, ValueError):
+            return None
+        return summary if 1 <= len(summary.strip()) <= 4000 else None
 
     @staticmethod
     def _check_id(session_id: str) -> None:
@@ -101,8 +161,6 @@ class SessionCompactionStore:
                 or row.policy_sha256 != policy_sha256
                 or row.covered_count > len(safe)
                 or row.covered_count <= 0
-                or len(row.summary) > 4000
-                or not row.summary.strip()
             ):
                 return None
             if history_digest(safe[: row.covered_count]) != row.covered_sha256:
@@ -120,7 +178,8 @@ class SessionCompactionStore:
             current = [{"role": msg.role, "content": msg.content} for msg in db_prefix]
             if len(current) != row.covered_count or history_digest(current) != row.covered_sha256:
                 return None
-            return CompactionSnapshot(row.summary, row.covered_count, row.version)
+            summary = self._decode_summary(row)
+            return CompactionSnapshot(summary, row.covered_count, row.version) if summary is not None else None
 
     def publish(
         self,
@@ -165,7 +224,9 @@ class SessionCompactionStore:
                     "covered_count": covered_count,
                     "covered_sha256": expected_digest,
                     "policy_sha256": policy_sha256,
-                    "summary": summary.strip(),
+                    "summary": self._encode_summary(
+                        summary.strip(), self._aad(conv.id, covered_count, expected_digest, policy_sha256)
+                    ),
                     "expires_at": now + timedelta(hours=self.ttl_hours),
                     "updated_at": now,
                 }
@@ -185,7 +246,7 @@ class SessionCompactionStore:
                             and prior.covered_count > 0
                             and len(prior_prefix) == prior.covered_count
                             and history_digest(prior_prefix) == prior.covered_sha256
-                            and bool(prior.summary.strip())
+                            and self._decode_summary(prior) is not None
                         )
                         if still_valid:
                             return False

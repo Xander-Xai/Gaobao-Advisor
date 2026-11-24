@@ -1,7 +1,11 @@
 """Operator-only approved real-data research submission and inspection."""
 
-from fastapi import APIRouter, Depends, HTTPException
+import sqlite3
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import PlainTextResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field
 
 from server.admin.auth import AdminPrincipal, require_role
@@ -13,9 +17,39 @@ from server.agent.admissions_research_taskrun import (
     render_aggregate_report,
 )
 
+
+class PrivateResearchRoute(APIRoute):
+    """Prevent private run metadata, validation inputs and errors from being cached."""
+
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def private_handler(request: Request) -> Response:
+            headers = {"Cache-Control": "private, no-store", "Pragma": "no-cache"}
+            try:
+                response = await handler(request)
+            except RequestValidationError:
+                raise HTTPException(status_code=422, detail="Invalid research request", headers=headers) from None
+            except HTTPException as exc:
+                raise HTTPException(
+                    status_code=exc.status_code,
+                    detail=exc.detail,
+                    headers={**(exc.headers or {}), **headers},
+                ) from None
+            except (sqlite3.Error, OSError):
+                raise HTTPException(
+                    status_code=503, detail="Approved research journal unavailable", headers=headers
+                ) from None
+            response.headers.update(headers)
+            return response
+
+        return private_handler
+
+
 router = APIRouter(
     prefix="/api/v1/admin/admissions-research",
     tags=["admissions-research"],
+    route_class=PrivateResearchRoute,
     dependencies=[Depends(require_role("operator"))],
 )
 

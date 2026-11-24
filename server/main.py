@@ -43,6 +43,20 @@ async def lifespan(app: FastAPI):
     ensure_secret_ready()
     ensure_admin_ready()
 
+    from server.agent.session_compaction_store import validate_snapshot_startup
+
+    validate_snapshot_startup()
+
+    from server.industrial_runtime import (
+        industrial_enabled,
+        validate_industrial_config,
+        validate_industrial_dependencies,
+    )
+
+    if industrial_enabled():
+        validate_industrial_config(os.environ)
+        validate_industrial_dependencies()
+
     init_sentry()
     initialize_agent_otel()
 

@@ -1,8 +1,8 @@
-> **状态（2026-11-07，合并后更新）：** Java 微服务（PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89)，Squash `7c87686`）已合入 `master`。`master` 默认部署仍为 Python/FastAPI + SQLite，Java 为可选 overlay。公网生产仍为 **NO-GO**。
+> **状态（2026-11-07，合并后更新）：** Java 微服务（PR [#89](https://github.com/Xander-Xai/gaobao-advisor/pull/89)，Squash `7c87686`）已合入 `master`。历史合并状态：Java 原为可选 overlay；现纳入标准本地部署。公网生产仍为 **NO-GO**。
 
 # Java 微服务增量扩展
 
-状态：**已合入 `master` 的可选 overlay**（PR #89，Squash `7c87686`）。Java 单元测试、MySQL/Redis/Python 容器联调、两个网关共享限流、Redis/MySQL 故障恢复已在 GitHub Actions 实测通过；不等于真实数据验证、跨主机高可用或公网生产验收。默认 Python/SQLite 部署不变。
+状态：**标准架构的 Java Gateway/Catalog**（PR #89，Squash `7c87686`）。Java 单元测试、MySQL/Redis/Python 容器联调、两个网关共享限流、Redis/MySQL 故障恢复已在 GitHub Actions 实测通过；不等于真实数据验证、跨主机高可用或公网生产验收。轻量 Python/SQLite 部署仅保留为开发和冒烟兼容。
 
 ## 架构
 
@@ -39,7 +39,7 @@ curl -i 'http://localhost/api/v1/health'
 
 Java 新接口返回 items、total、count、next_cursor、has_more；查询参数为 q、province、level、school_type、limit（1—200）与 cursor。院校条目保留 special_type、data_source_note、is_synthetic，合成数据不得用于真实志愿决策。原 /api/v1/data/*、/api/v1/chat、管理员鉴权等逻辑仍由 Python 提供。
 
-默认 docker compose up 不启用 Java，仍可直接访问宿主机 8000/3080。仅在启用 Java overlay 时，配置通过 Compose `!reset []` 取消 Python API 8000 和静态前端 3080 的宿主机端口，外部 HTTP 入口只保留 Nginx 80。此处仍是无 TLS 演示；生产必须加入 HTTPS、访问控制和网络隔离。停机保留数据卷：
+标准入口 `python scripts/compose_standard.py up --build -d` 启动 Java/MySQL/Redis；轻量 base 单独启动仅供兼容测试。标准部署中，配置通过 Compose `!reset []` 取消 Python API 8000 和静态前端 3080 的宿主机端口，外部 HTTP 入口只保留 Nginx 80。此处仍是无 TLS 演示；生产必须加入 HTTPS、访问控制和网络隔离。停机保留数据卷：
 
 ~~~bash
 docker compose --env-file .env.full -f docker-compose.yml -f docker-compose.full.yml -f docker-compose.java.yml --profile full --profile java down
