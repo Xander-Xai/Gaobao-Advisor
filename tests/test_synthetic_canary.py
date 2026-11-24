@@ -118,3 +118,43 @@ def test_duplicate_reviewer_rejected(monkeypatch):
     monkeypatch.setattr(registry, "get", duplicate)
     with pytest.raises(ValueError, match="eligible"):
         choose_synthetic_variant(registry, IDENTIFIER)
+
+
+@pytest.mark.parametrize("alias", ["journal", "report", "hardlink"])
+def test_canary_preflight_preserves_existing_output(tmp_path, monkeypatch, alias):
+    from benchmarks.decision_card_business_eval import main
+
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("ENABLE_OUTBOUND_FETCH", "false")
+    monkeypatch.setenv("OPENAI_API_KEY", "synthetic-fixture-only")
+    journal = tmp_path / "journal.sqlite"
+    journal.write_bytes(b"fixture journal")
+    output = tmp_path / "report.json"
+    if alias == "journal":
+        output = journal
+    elif alias == "hardlink":
+        try:
+            output.hardlink_to(journal)
+        except (OSError, NotImplementedError):
+            pytest.skip("Hard links unavailable")
+    else:
+        output.write_bytes(b"previous report")
+    before = output.read_bytes()
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--out",
+                str(output),
+                "--mode",
+                "model",
+                "--model",
+                "fixture",
+                "--permit-external-model",
+                "--synthetic-canary-journal",
+                str(journal),
+                "--canary-run-key",
+                IDENTIFIER,
+            ]
+        )
+    assert journal.read_bytes() == b"fixture journal"
+    assert output.read_bytes() == before

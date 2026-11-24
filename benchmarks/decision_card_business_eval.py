@@ -338,8 +338,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("Canary allocation percentage must be 0..100")
         if not args.synthetic_canary_journal.is_file():
             parser.error("Canary journal must already exist")
-        if args.out.resolve() == args.synthetic_canary_journal.resolve():
-            parser.error("Canary output must not replace its journal")
+        if args.out.exists() or args.out.is_symlink():
+            parser.error("Canary output must be a fresh path")
         from server.agent.synthetic_canary import choose_synthetic_variant
         from server.agent.synthetic_optimization_registry import SyntheticOptimizationReviewStore
         from server.agent.taskrun_store import SyntheticTaskRunStore
@@ -420,7 +420,14 @@ def main(argv: list[str] | None = None) -> int:
         and report["provider_completion_tokens"] is not None
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    serialized = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    if canary_assignment is not None:
+        # Preserve the reviewed journal and earlier run artifacts, including
+        # aliases or output paths created after the preflight check.
+        with args.out.open("x", encoding="utf-8") as handle:
+            handle.write(serialized)
+    else:
+        args.out.write_text(serialized, encoding="utf-8")
     print(f"{controller}: verified_business_tasks={report['passed']}/{report['cases']}")
     return 0 if report["passed"] == report["cases"] else 1
 
