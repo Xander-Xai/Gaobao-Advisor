@@ -144,9 +144,9 @@ def llm_node(state: dict[str, Any]) -> dict[str, Any]:
         # Build message list
         messages: list[dict] = [{"role": "system", "content": system_prompt}]
         saved_preferences = prompt_context(state.get("user_memory", []))
-        if saved_preferences:
-            messages.append({"role": "system", "content": saved_preferences})
         messages.extend(memory_messages)
+        if saved_preferences:
+            user_message = saved_preferences + "\n\n当前任务：\n" + user_message
         messages.append({"role": "user", "content": user_message})
 
         # Trim if needed
@@ -258,9 +258,9 @@ def llm_node_stream(state: dict[str, Any]) -> Generator[tuple[str, bool], None, 
 
         messages: list[dict] = [{"role": "system", "content": system_prompt}]
         saved_preferences = prompt_context(state.get("user_memory", []))
-        if saved_preferences:
-            messages.append({"role": "system", "content": saved_preferences})
         messages.extend(memory_messages)
+        if saved_preferences:
+            user_message = saved_preferences + "\n\n当前任务：\n" + user_message
         messages.append({"role": "user", "content": user_message})
         messages = _maybe_trim(messages)
 
