@@ -15,9 +15,9 @@ from server.report.storage import ReportStorage
 def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str, Any]:
     """Stage report files, commit related SQL deletes, then delete hidden files.
 
-    Staged files are restored on SQL failure. If final file cleanup fails after
-    SQL commit, the API reports an explicit incomplete status; the staging
-    directory remains inaccessible to ordinary report lookup for recovery.
+    Staged files are restored only after a confirmed pre-commit rollback.
+    If commit is attempted but its outcome is unknown, or final file cleanup
+    fails, retain the hidden stage for operator reconciliation.
     """
     from db.database import get_session
     from db.models import (
@@ -37,6 +37,7 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
             reports.restore_staged_session(session_id, staged[0])
         raise
     removed: dict[str, int] = {}
+    commit_attempted = False
     try:
         removed["quality_scores"] = (
             db.query(QualityScore).filter(QualityScore.conversation_id == session_id).delete(synchronize_session=False)
@@ -68,10 +69,13 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
             removed["conversations"] = (
                 db.query(Conversation).filter(Conversation.id == session_row.id).delete(synchronize_session=False)
             )
+        commit_attempted = True
         db.commit()
     except Exception:
         db.rollback()
-        if staged is not None:
+        # A connection loss during COMMIT may occur after the database has
+        # committed. Never restore private reports based solely on an error.
+        if staged is not None and not commit_attempted:
             reports.restore_staged_session(session_id, staged[0])
         raise
     finally:

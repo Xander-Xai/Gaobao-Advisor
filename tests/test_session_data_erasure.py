@@ -280,3 +280,30 @@ def test_staged_hardlink_blocks_finalization(isolated, tmp_path):
         storage.finalize_staged_session(staged)
     assert (staged / "report.json").exists()
     assert external.read_text(encoding="utf-8") == "{}"
+
+
+@pytest.mark.parametrize("committed", [False, True])
+def test_ambiguous_commit_keeps_private_reports_hidden(isolated, monkeypatch, committed):
+    session_factory, storage = isolated
+    original = seed(session_factory, storage)
+    db = session_factory()
+    real_commit = db.commit
+
+    def ambiguous_commit():
+        if committed:
+            real_commit()
+        raise OSError("synthetic lost commit acknowledgement")
+
+    monkeypatch.setattr(db, "commit", ambiguous_commit)
+    monkeypatch.setattr("db.database.get_session", lambda: db)
+    with pytest.raises(OSError, match="lost commit acknowledgement"):
+        erase_live_session_data("synthetic-session-privacy", storage)
+    assert not original.exists()
+    assert storage.load("synthetic-report") is None
+    stages = list((storage._base / ".purge-staging").iterdir())
+    assert len(stages) == 1
+    assert (stages[0] / "synthetic-report.json").is_file()
+    with session_factory() as check:
+        assert check.query(Conversation).count() == (0 if committed else 1)
+    with pytest.raises(RuntimeError, match="operator reconciliation"):
+        erase_live_session_data("synthetic-session-privacy", storage)
