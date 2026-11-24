@@ -80,10 +80,12 @@ flags = (
 env = {key: val for key, val in os.environ.items() if key not in flags + ("APP_ENV", "SYNTHETIC_TASKRUN_JOURNAL")}
 env["COMPOSE_DISABLE_ENV_FILE"] = "1"
 
-def render(files, env_file, overrides=None):
+def render(files, env_file, overrides=None, *, profile=None):
     cmd = ["docker", "compose", "--env-file", env_file]
     for file in files:
         cmd.extend(("-f", file))
+    if profile is not None:
+        cmd.extend(("--profile", profile))
     cmd.extend(("config", "--format", "json"))
     return json.loads(subprocess.check_output(cmd, env={**env, **(overrides or {})}))
 
@@ -100,9 +102,10 @@ disabled = render(["docker-compose.yml"], "/dev/null", {key: "false" for key in 
 assert all(disabled["services"]["api"]["environment"][key] == "false" for key in flags[:3])
 
 full_files = ["docker-compose.yml", "docker-compose.full.yml"]
-full = render(full_files, ".env.full")
+full = render(full_files, ".env.full", profile="full")
+assert {"mysql", "redis", "worker"} <= set(full["services"])
 assert all(full["services"]["api"]["environment"][key] == "false" for key in flags)
-opt_in = render(full_files, ".env.full", {"ENABLE_SYNTHETIC_AGENT_EXPERIMENT": "true"})
+opt_in = render(full_files, ".env.full", {"ENABLE_SYNTHETIC_AGENT_EXPERIMENT": "true"}, profile="full")
 assert opt_in["services"]["api"]["environment"]["ENABLE_SYNTHETIC_AGENT_EXPERIMENT"] == "true"
 print("Compose Agent profile contract PASS (local defaults, rollback, full isolation and explicit opt-in)")
 PY
