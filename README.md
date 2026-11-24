@@ -1,5 +1,7 @@
 # Gaobao Advisor｜可核验的高考志愿辅助决策系统
 
+> **Memory 专项定位（2026-11-24）**：统一对话上下文、可选语义压缩、版本化 Session Snapshot 和独立的用户偏好机制；后两者受开关、隐私与 CI 门禁约束，不能用历史摘要代替招生 SQL 证据。见 [Memory 专项工程定位](docs/architecture/memory-engineering-positioning-20261124.md)。
+
 **AI 应用全栈交付 + 可信数据查询 + Agent 运行时可靠性实验**
 
 围绕“考生如何在信息不完整时获得可追溯、可解释的志愿咨询结果”，实现 **画像追问 → 结构化 SQL 查询 → 合成知识检索 → 来源/风险检查 → SSE 交互** 的端到端业务链路。工程上包含 Vue 3、FastAPI、受约束的 LangGraph 工作流，以及可选的 Java Gateway、MySQL、Redis、Docker Compose 和 CI 集成验证。
@@ -34,6 +36,8 @@
 也没有真实模型 A/B、Token 降本证明或生产个人信息许可。
 操作及负控制验收见 [Pi/OpenCode-inspired Session Compaction](docs/validation/pi-opencode-session-compaction-20261124.md)。
 跨任务用户偏好记忆仍在独立 Draft PR #135，不应与会话压缩混同。
+
+进一步的**可复用会话摘要快照**已在独立堆叠 Draft 中实现：将摘要按会话主键、历史前缀 SHA、策略版本和 TTL 存储，增量变化先保留原文，再触发更新。仍需单独授权开关 `GAOBAO_CHAT_SNAPSHOT_ENABLED=true`，且当前明确禁止生产环境启用；具体限制与 Alembic 迁移冲突见 [Session Compaction Snapshot](docs/validation/session-compaction-snapshot-20261124.md)。
 
 ## Agent Harness / Eval 实验
 
