@@ -5,6 +5,7 @@ import json
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from db.models import AdmissionScore, EnrollmentPlan
 from server.agent import admissions_deepagents as research
@@ -14,7 +15,7 @@ SCOPE = research.ResearchScope((1, 2), 3, "广东", "物理", "本科批", 2024,
 
 @pytest.fixture
 def sessions():
-    engine = create_engine("sqlite://")
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     AdmissionScore.__table__.create(engine)
     EnrollmentPlan.__table__.create(engine)
     with Session(engine) as session:
@@ -119,6 +120,7 @@ def test_actual_sdk_builds_specialized_delegation_graph(monkeypatch):
     pytest.importorskip("deepagents")
     pytest.importorskip("langchain_openai")
     monkeypatch.setenv("OPENAI_API_KEY", "sdk-construction-test-only")
+
     def submit_research(history_receipt: str, plans_receipt: str) -> str:
         """Submit research receipts."""
         return "ok"
