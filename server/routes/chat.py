@@ -126,6 +126,7 @@ async def _sse_generator(
     scene: str,
     message: str,
     existing_slots: dict | None,
+    user_memory: list[dict] | None = None,
 ):
     """Prepare graph state, generate a candidate and validate/persist before SSE.
 
@@ -140,6 +141,7 @@ async def _sse_generator(
         "input_text": message,
         "scene": scene,
         "slots": persisted_slots,
+        "user_memory": user_memory or [],
         "messages": [],
         "trace": [],
     }
@@ -220,7 +222,11 @@ async def _sse_generator(
 
 
 @router.post("/chat")
-async def chat(request: ChatRequest, authorization: str | None = Header(None)):
+async def chat(
+    request: ChatRequest,
+    authorization: str | None = Header(None),
+    x_user_memory_token: str | None = Header(None),
+):
     """Anonymous clients get a *new server-owned* session; existing sessions need proof.
 
     Never mint a bearer credential for an unauthenticated, caller-selected ID:
@@ -237,12 +243,28 @@ async def chat(request: ChatRequest, authorization: str | None = Header(None)):
             raise HTTPException(status_code=401, detail="Invalid session token")
         session_id = request.session_id
 
+    # Validate the independent vault credential before any SSE response.
+    memory_items: list[dict] = []
+    if x_user_memory_token is not None:
+        from server.user_memory import MemoryDisabled, MemoryUnauthorized, list_memories
+
+        try:
+            memory_items = await asyncio.to_thread(list_memories, x_user_memory_token)
+        except MemoryDisabled as exc:
+            raise HTTPException(status_code=503, detail="User memory is not enabled") from exc
+        except MemoryUnauthorized as exc:
+            raise HTTPException(status_code=401, detail="Invalid memory credential") from exc
+        except Exception as exc:
+            logger.error("Memory read failed (error type: %s)", type(exc).__name__)
+            raise HTTPException(status_code=503, detail="User memory storage unavailable") from exc
+
     return StreamingResponse(
         _sse_generator(
             session_id,
             request.scene,
             request.message,
             request.slots,
+            memory_items,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
