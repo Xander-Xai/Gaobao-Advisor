@@ -39,6 +39,8 @@ def validate_industrial_config(env: Mapping[str, str]) -> None:
         raise RuntimeError("Industrial profile requires explicit REDIS_URL")
     if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", env.get("GAOBAO_DATA_APPROVAL_REF", "")):
         raise RuntimeError("Industrial profile requires a data authorization reference")
+    if not re.fullmatch(r"20[0-9]{2}", env.get("GAOBAO_ADMISSIONS_YEAR", "")):
+        raise RuntimeError("Industrial profile requires explicit approved admissions year")
 
 
 def redis_ready() -> bool:
@@ -55,9 +57,11 @@ def validate_industrial_dependencies() -> None:
     from alembic.runtime.migration import MigrationContext
     from alembic.script import ScriptDirectory
 
-    from db.database import engine
+    from db.database import engine, get_session
     from db.migrate import alembic_config
+    from db.models import AdmissionScore, YiFenYiDuan
     from server.services.data_profile import current_data_profile
+    from server.services.industrial_admissions import approved_year
 
     expected = set(ScriptDirectory.from_config(alembic_config()).get_heads())
     with engine.connect() as connection:
@@ -66,5 +70,14 @@ def validate_industrial_dependencies() -> None:
         raise RuntimeError("Industrial schema is not at the unique Alembic head")
     if current_data_profile() != "CUSTOM":
         raise RuntimeError("Industrial database must contain non-synthetic data")
+    year = approved_year()
+    db = get_session()
+    try:
+        if not db.query(YiFenYiDuan.id).filter(YiFenYiDuan.year == year).first():
+            raise RuntimeError("Approved year has no rank records")
+        if not db.query(AdmissionScore.id).filter(AdmissionScore.year == year, AdmissionScore.major_id.is_(None)).first():
+            raise RuntimeError("Approved year has no school-level admission records")
+    finally:
+        db.close()
     if not redis_ready():
         raise RuntimeError("Industrial Redis unavailable")

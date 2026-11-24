@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from db.models import AdmissionScore, School, YiFenYiDuan
 from server.domain.schemas import StructuredPlanningCard
@@ -55,6 +55,7 @@ def query_history(db, *, province: str, score: int, subject: str, year: int) -> 
             AdmissionScore.year == year,
             AdmissionScore.subject_type == rank.subject_type,
             AdmissionScore.major_id.is_(None),
+            or_(School.special_type.is_(None), School.special_type != "SYNTHETIC_DEMO_DATA"),
             AdmissionScore.min_rank >= max(1, rank.cumulative_count * 95 // 100),
             AdmissionScore.min_rank <= rank.cumulative_count * 105 // 100,
             AdmissionScore.min_score.between(0, 750),
@@ -103,6 +104,7 @@ def build_history_reply(state: dict) -> tuple[str, dict]:
         summary = f"{cohort}，同年同科类历史记录；不代表当年或未来录取资格。"
         facts.append(f"{evidence['score']}分对应历史累计位次{evidence['rank']}（一分一段记录 #{evidence['rank_id']}）")
         sources.append(f"yi_fen_yi_duan:{evidence['rank_id']}")
+        sources.append(f"dataset_authorization_ref:{os.environ.get('GAOBAO_DATA_APPROVAL_REF', 'unavailable')}")
         for row in evidence["rows"]:
             facts.append(
                 f"{row['school']}｜{row['batch']}｜历史最低分{row['min_score']}分｜"

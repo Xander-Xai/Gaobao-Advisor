@@ -24,6 +24,7 @@ def config():
         "DATABASE_URL": "mysql+pymysql://user@mysql/gaobao",
         "REDIS_URL": "redis://redis:6379/0",
         "GAOBAO_DATA_APPROVAL_REF": "internal-review-1",
+        "GAOBAO_ADMISSIONS_YEAR": "2025",
     }
 
 
@@ -37,6 +38,7 @@ def test_explicit_config(config):
         ("DATABASE_URL", "sqlite:///demo.db"),
         ("REDIS_URL", ""),
         ("GAOBAO_DATA_APPROVAL_REF", ""),
+        ("GAOBAO_ADMISSIONS_YEAR", ""),
         ("ENABLE_RAG_KB", "true"),
         ("AUTO_SEED_DEMO", "true"),
         ("AUTO_MIGRATE", "true"),
