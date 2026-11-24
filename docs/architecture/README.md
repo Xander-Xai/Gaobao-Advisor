@@ -1,5 +1,7 @@
 # Architecture
 
+**增量核查**：#198 已合入 master `2c27d020`，标准 Java/MySQL/Redis 部署、加密快照与独立启动门禁属于主线。[工业招生证据治理](industrial-admissions-evidence.md) 为本分支候选增量。公共工业咨询仅提供指定年份的历史 SQL 数据；演示和私有复杂研究独立。
+
 This document is the authoritative architecture reference for
 `gaobao-advisor`. It describes the code that ships in this repository, not a
 future design. The ADRs under [`docs/superpowers/adr/`](../superpowers/adr/)
