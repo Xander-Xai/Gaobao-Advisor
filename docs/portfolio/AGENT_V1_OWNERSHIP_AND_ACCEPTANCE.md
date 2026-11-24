@@ -52,3 +52,12 @@ pytest -q tests/test_portfolio_taskrun_http_e2e.py
 - 该项目负责 **Harness + Eval + 全栈交付**；客服负责企业级 Runtime 和真实业务写操作；化妆品 RAG 负责检索算法深度。
 
 参考：`README.md`、`docs/model-run-paired-evidence-20261120.md`、`docs/agent-readonly-harness-evidence-20261120.md`、`THIRD_PARTY_NOTICES.md`。
+
+
+### Harness 优化审核绝对护栏（2026-11-24 增量）
+
+`benchmarks/harness_optimizer.py::compare_holdout` 除逐案例非回退和成本改善外，
+要求候选在整个已执行的冻结配对集上没有已报告的安全违规，并且至少有一个 holdout
+任务通过独立事实与任务评分。持续存在的违规和零成功任务的 Token 节约均不能进入优化审核。
+这只是最低审核门槛，不是质量达标、统计显著性或上线许可；真实模型调用及独立安全评审仍待验收。
+复核：`pytest -q tests/test_harness_optimizer.py`。关联 #104、#147。
