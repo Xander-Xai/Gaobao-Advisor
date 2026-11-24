@@ -239,7 +239,10 @@ def _system_prompt_with_skill(state: dict[str, Any], system_prompt: str) -> str:
 def _build_chat_context_sync(state: dict[str, Any], system_prompt: str):
     history = _load_memory_for_session(state.get("session_id", ""))
     return build_chat_context(
-        history, _system_prompt_with_skill(state, system_prompt), _current_prompt_with_preferences(state), **_chat_context_options()
+        history,
+        _system_prompt_with_skill(state, system_prompt),
+        _current_prompt_with_preferences(state),
+        **_chat_context_options(),
     )
 
 
