@@ -139,7 +139,8 @@ def test_vault_revision_migration_does_not_guess_deleted_history(tmp_path, legac
                     with pytest.raises(RuntimeError, match="explicit migration review"):
                         migration.upgrade()
                     assert connection.execute(text("SELECT COUNT(*) FROM user_memory_vaults")).scalar_one() == 1
-                    assert "last_version" not in {c["name"] for c in inspect(connection).get_columns("user_memory_vaults")}
+                    columns = {c["name"] for c in inspect(connection).get_columns("user_memory_vaults")}
+                    assert "last_version" not in columns
                 else:
                     migration.upgrade()
                     migration.upgrade()
