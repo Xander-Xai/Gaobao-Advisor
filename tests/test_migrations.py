@@ -117,3 +117,33 @@ def test_adopt_existing_rejects_incomplete_schema(tmp_path):
     result = _run(db, "adopt-existing")
     assert result.returncode != 0
     assert "cannot be adopted" in result.stderr or "missing table" in result.stderr
+
+
+@pytest.mark.parametrize("legacy_vault", [False, True])
+def test_vault_revision_migration_does_not_guess_deleted_history(tmp_path, legacy_vault):
+    from importlib import import_module
+
+    pytest.importorskip("alembic")
+    from alembic.operations import Operations
+    from alembic.runtime.migration import MigrationContext
+
+    migration = import_module("migrations.versions.20261124_0007_user_memory_revision")
+    engine = create_engine(f"sqlite:///{tmp_path / 'old-vault.db'}")
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("CREATE TABLE user_memory_vaults (id VARCHAR(32) PRIMARY KEY)"))
+            if legacy_vault:
+                connection.execute(text("INSERT INTO user_memory_vaults (id) VALUES ('legacy')"))
+            with Operations.context(MigrationContext.configure(connection)):
+                if legacy_vault:
+                    with pytest.raises(RuntimeError, match="explicit migration review"):
+                        migration.upgrade()
+                    assert connection.execute(text("SELECT COUNT(*) FROM user_memory_vaults")).scalar_one() == 1
+                    assert "last_version" not in {c["name"] for c in inspect(connection).get_columns("user_memory_vaults")}
+                else:
+                    migration.upgrade()
+                    migration.upgrade()
+                    connection.execute(text("INSERT INTO user_memory_vaults (id) VALUES ('new')"))
+                    assert connection.execute(text("SELECT last_version FROM user_memory_vaults")).scalar_one() == 0
+    finally:
+        engine.dispose()
