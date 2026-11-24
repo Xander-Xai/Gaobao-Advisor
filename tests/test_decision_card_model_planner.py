@@ -70,13 +70,30 @@ def test_valid_model_step_preserves_provider_usage_and_fixed_exact_arguments():
         {"kind": "finish", "evidence_ids": []},
         {"kind": "finish", "evidence_ids": [], "answer": "I approve everything"},
         {"kind": "python", "code": "print('bypass')"},
+        {"kind": "tool", "tool": [], "arguments": {}},
+        {"kind": "tool", "tool": "major_lookup", "arguments": {"major_name": []}},
+        {"kind": "abstain", "answer": "unverified"},
+        {
+            "kind": "tool",
+            "tool": "plan_lookup",
+            "arguments": {
+                "school_name": PROFILE.school_b,
+                "major_name": PROFILE.major,
+                "province": PROFILE.province,
+                "year": float(PROFILE.year),
+            },
+        },
     ],
 )
 def test_hostile_model_cannot_choose_shell_arbitrary_sql_or_early_finish(bad_action):
     client, _ = fake_client(bad_action)
     planner = DecisionCardModelPlanner(client, "fake", PROFILE)
-    with pytest.raises(ValueError, match="action|arguments|Finish|fields|tool"):
-        planner.decide("fictional", [], SCHEMAS)
+    decision = planner.decide("fictional", [], SCHEMAS)
+    assert decision.kind == "invalid"
+    assert decision.prompt_tokens == 11
+    assert decision.completion_tokens == 5
+    assert decision.tool == ""
+    assert not decision.arguments
 
 
 def test_frozen_task_cannot_reexecute_an_observed_tool():
@@ -96,8 +113,12 @@ def test_frozen_task_cannot_reexecute_an_observed_tool():
             ),
         }
     ]
-    with pytest.raises(ValueError, match="Unapproved|repeated"):
-        planner.decide("fictional", observation, SCHEMAS)
+    decision = planner.decide("fictional", observation, SCHEMAS)
+    assert decision.kind == "invalid"
+    assert decision.prompt_tokens == 11
+    assert decision.completion_tokens == 5
+    assert decision.tool == ""
+    assert not decision.arguments
 
 
 def test_model_cannot_continue_execution_after_observed_missing_record():
@@ -127,8 +148,12 @@ def test_model_cannot_continue_execution_after_observed_missing_record():
             ),
         }
     ]
-    with pytest.raises(ValueError, match="Unapproved|unsafe"):
-        planner.decide("fictional", history, SCHEMAS)
+    decision = planner.decide("fictional", history, SCHEMAS)
+    assert decision.kind == "invalid"
+    assert decision.prompt_tokens == 11
+    assert decision.completion_tokens == 5
+    assert decision.tool == ""
+    assert not decision.arguments
 
 
 _SCRIPT = r"""
@@ -202,30 +227,35 @@ assert negative_card["observed_negative_evidence_count"] >= 1
 assert negative_card["schools"] == []
 assert negative_assessment["passed"], negative_assessment
 class MalformedResponse:
+    def __init__(self, content):
+        self.content = content
+
     def create(self, **kwargs):
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="{invalid-json"))],
+            choices=[SimpleNamespace(message=SimpleNamespace(content=self.content))],
             usage=SimpleNamespace(prompt_tokens=18, completion_tokens=7),
         )
 
-bad_client = SimpleNamespace(chat=SimpleNamespace(completions=MalformedResponse()))
-bad_card = build_synthetic_decision_card(
-    profile, planner=DecisionCardModelPlanner(bad_client, "fake-model-not-llm", profile),
-    require_provider_usage=True,
-)
-bad_execution = bad_card["execution"]
-assert bad_card["status"] == "needs_review"
-assert bad_card["schools"] == []
-assert bad_execution["reason"] == "planner_response_invalid"
-assert bad_execution["tool_calls"] == 0
-assert bad_execution["model_steps"] == 1
-assert bad_execution["prompt_tokens"] == 18
-assert bad_execution["completion_tokens"] == 7
-bad_trace = grade_step_trace(bad_execution)
-assert bad_trace["provider_prompt_tokens"] == 18
-assert bad_trace["provider_completion_tokens"] == 7
-assert bad_trace["step_events"][0]["kind"] == "planner_error"
-assert "invalid-json" not in json.dumps(bad_trace)
+for content in ("{invalid-json", json.dumps({"kind": "tool", "tool": "forbidden-tool", "arguments": {}})):
+    bad_client = SimpleNamespace(chat=SimpleNamespace(completions=MalformedResponse(content)))
+    bad_card = build_synthetic_decision_card(
+        profile, planner=DecisionCardModelPlanner(bad_client, "fake-model-not-llm", profile),
+        require_provider_usage=True,
+    )
+    bad_execution = bad_card["execution"]
+    assert bad_card["status"] == "needs_review"
+    assert bad_card["schools"] == []
+    assert bad_execution["reason"] == "planner_response_invalid"
+    assert bad_execution["tool_calls"] == 0
+    assert bad_execution["model_steps"] == 1
+    assert bad_execution["prompt_tokens"] == 18
+    assert bad_execution["completion_tokens"] == 7
+    bad_trace = grade_step_trace(bad_execution)
+    assert bad_trace["provider_prompt_tokens"] == 18
+    assert bad_trace["provider_completion_tokens"] == 7
+    assert bad_trace["step_events"][0]["kind"] == "planner_error"
+    assert "invalid-json" not in json.dumps(bad_trace)
+    assert "forbidden-tool" not in json.dumps(bad_trace)
 
 print(json.dumps({"status": "PASS", "fake_model": True, "source_count": len(card["evidence_ids"])}))
 """
