@@ -26,6 +26,32 @@ def approved_year() -> int:
     return int(raw)
 
 
+def exact_score(slots: dict) -> int | None:
+    """Do not reinterpret rank, score deltas or truncated numbers as a score."""
+    scores = []
+    for key in ("score", "score_rank"):
+        value = slots.get(key)
+        if value is None or value == "":
+            continue
+        if key == "score" and type(value) is int:
+            score = value
+        elif isinstance(value, str):
+            if key == "score":
+                pattern = r"([0-9]{2,3})\s*分?"
+            else:
+                pattern = r"([0-9]{2,3})\s*分(?:\s*/\s*位次[0-9,]+)?"
+            match = re.fullmatch(pattern, value.strip())
+            if not match:
+                return None
+            score = int(match.group(1))
+        else:
+            return None
+        if not 100 <= score <= 750:
+            return None
+        scores.append(score)
+    return scores[0] if scores and len(set(scores)) == 1 else None
+
+
 def query_history(db, *, province: str, score: int, subject: str, year: int) -> dict:
     """Use no nearest-score, other-year, other-subject or inferred-rank fallback."""
     base = {"year": year, "province": province, "score": score, "subject": subject}
