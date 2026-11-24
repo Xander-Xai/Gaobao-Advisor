@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -353,7 +354,7 @@ def main(argv=None) -> int:
             )
         else:
             result = evaluate(manifest, read_private_json(args.receipts))
-    except (ValueError, TypeError, OSError, LookupError):
+    except (ValueError, TypeError, OSError, LookupError, sqlite3.Error):
         parser.error("Invalid or unavailable approved evaluation input")
     fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:

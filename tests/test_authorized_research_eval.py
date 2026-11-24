@@ -209,3 +209,40 @@ def test_managed_eval_detects_wrong_independent_gold(tmp_path):
     result = evaluate_managed(manifest, run_map, journal.path, model_id=model, image_id=image)
     assert result["status"] == "FAILED"
     assert "gold_evidence_mismatch" in result["cases"][2]["reasons"]
+
+
+def test_managed_cli_preserves_journal_and_fails_closed_on_missing_schema(tmp_path):
+    import json
+    import stat
+
+    from benchmarks.authorized_research_eval import main
+
+    manifest, run_map, journal, model, image = managed_fixture(tmp_path)
+    gold = tmp_path / "gold.json"
+    runs = tmp_path / "runs.json"
+    output = tmp_path / "eval.json"
+    gold.write_text(json.dumps(manifest), encoding="utf-8")
+    runs.write_text(json.dumps(run_map), encoding="utf-8")
+    args = [
+        "--gold",
+        str(gold),
+        "--managed-runs",
+        str(runs),
+        "--expected-model",
+        model,
+        "--expected-image",
+        image,
+        "--authorize-private-eval",
+    ]
+    assert main(args + ["--journal", str(journal.path), "--out", str(output)]) == 0
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    assert json.loads(output.read_text(encoding="utf-8"))["status"] == "REVIEW_REQUIRED"
+
+    invalid = tmp_path / "no-schema.sqlite"
+    invalid.touch(mode=0o600)
+    failed = tmp_path / "failed.json"
+    with pytest.raises(SystemExit) as exc:
+        main(args + ["--journal", str(invalid), "--out", str(failed)])
+    assert exc.value.code == 2
+    assert not failed.exists()
+    assert invalid.stat().st_size == 0
