@@ -135,7 +135,10 @@ def test_delete_rotate_and_vault_erasure_revoke_credentials(client_db):
     assert put(client, token).status_code == 200
     deleted = client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token))
     assert deleted.json()["deleted"] is True
-    assert client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token)).status_code == 404
+    assert (
+        client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token)).status_code
+        == 404
+    )
     assert put(client, token).status_code == 200
     rotate = client.post("/api/v1/memory/vault/rotate", headers=headers(token))
     assert rotate.status_code == 200
@@ -321,7 +324,10 @@ def test_rotated_credential_cannot_delete_or_erase_vault(client_db):
     token = create_token(client)
     assert put(client, token).status_code == 200
     current = service.rotate_token(token)["memory_token"]
-    assert client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token)).status_code == 401
+    assert (
+        client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token)).status_code
+        == 401
+    )
     assert client.delete("/api/v1/memory/vault", headers=headers(token)).status_code == 401
     assert client.post("/api/v1/memory/vault/rotate", headers=headers(token)).status_code == 401
     assert client.get("/api/v1/memory/entries", headers=headers(current)).json()["count"] == 1
@@ -347,7 +353,12 @@ def test_recreated_entry_never_reuses_a_prior_revision(client_db, remove):
     token = create_token(client)
     old = put(client, token).json()["version"]
     if remove == "delete":
-        assert client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token)).status_code == 200
+        assert (
+            client.delete(
+                "/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token)
+            ).status_code
+            == 200
+        )
     else:
         with factory() as db:
             db.query(UserMemoryEntry).one().expires_at = _utcnow() - timedelta(seconds=1)
