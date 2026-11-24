@@ -4,8 +4,8 @@ import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.routing import APIRoute
 from fastapi.responses import PlainTextResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field
 
 from server.admin.auth import AdminPrincipal, require_role
@@ -16,6 +16,7 @@ from server.agent.admissions_research_taskrun import (
     open_configured_journal,
     render_aggregate_report,
 )
+
 
 class PrivateResearchRoute(APIRoute):
     """Prevent private run metadata, validation inputs and errors from being cached."""

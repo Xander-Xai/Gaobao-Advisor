@@ -94,7 +94,7 @@ def register_admin_error_handlers(app: FastAPI) -> None:
             return JSONResponse(
                 status_code=exc.status_code,
                 content=_envelope(_http_code(exc.status_code), str(exc.detail)),
-                headers={"X-Request-ID": get_request_id()},
+                headers={"X-Request-ID": get_request_id(), **(exc.headers or {})},
             )
         return JSONResponse(
             status_code=exc.status_code,

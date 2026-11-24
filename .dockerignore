@@ -16,6 +16,8 @@ data/
 backups/
 backup/
 logs/
+certs/
+**/*.key
 .streamlit/secrets.toml
 *.db
 node_modules
