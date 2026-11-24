@@ -125,13 +125,9 @@ def _coverage(rows: list[dict[str, Any]], scope: ResearchScope, kind: str) -> di
                 missing.append([school, year])
             elif len(group) != 1:
                 ambiguous.append([school, year])
-            elif kind == "admission-history" and (
-                group[0]["min_score"] is None or group[0]["min_rank"] is None
-            ):
+            elif kind == "admission-history" and (group[0]["min_score"] is None or group[0]["min_rank"] is None):
                 incomplete.append([school, year])
-            elif kind == "enrollment-plans" and (
-                group[0]["plan_count"] is None or not group[0]["subject_requirement"]
-            ):
+            elif kind == "enrollment-plans" and (group[0]["plan_count"] is None or not group[0]["subject_requirement"]):
                 incomplete.append([school, year])
     return {"missing": missing, "ambiguous": ambiguous, "incomplete": incomplete}
 
@@ -249,8 +245,10 @@ def run_admissions_research(
         """Submit exactly the two returned opaque receipt IDs after delegation."""
         nonlocal submitted
         with lock:
-            if submitted or set(receipts) != set(kinds) or (
-                history_receipt != receipts[kinds[0]] or plans_receipt != receipts[kinds[1]]
+            if (
+                submitted
+                or set(receipts) != set(kinds)
+                or (history_receipt != receipts[kinds[0]] or plans_receipt != receipts[kinds[1]])
             ):
                 raise ValueError("Research evidence incomplete or invalid")
             submitted = True
