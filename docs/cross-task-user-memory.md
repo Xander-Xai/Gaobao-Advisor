@@ -105,3 +105,10 @@ ruff check server/user_memory.py server/routes/user_memory.py tests/test_cross_t
 
 `USER_MEMORY_ENABLED=false` 是回滚开关：关闭后记忆 API 拒绝读写，
 聊天不自动读取记忆，不删除已存在的保险箱数据。
+
+## 7. 并发凭证与过期清理（2026-11-24 增量）
+
+- 写入、单条删除、整库遗忘和凭证轮换先在同一 SQL 事务内对当前 token 摘要执行条件 UPDATE（值不变），获得数据库写锁，再读取 owner 和条目。SQLite 写事务与 MySQL 行锁使这些操作与轮换串行化；凭证不再匹配则拒绝。普通读取不使用该写锁，因此已开始的读请求/已发送的模型上下文不能被追溯撤回。
+- 过期条目的重建只接受 expected_version=0；清理使用 id、owner、版本、过期时间条件删除，防止过期快照无条件覆盖已更新的条目。
+- 新增真实文件型 SQLite 双连接锁回归、轮换后旧 token 修改/删除/遗忘/轮换拒绝、过期旧版本写入不改变记录的回归。当前提交尚未取得 CI 或 MySQL 并发验收结果。
+- 仍需处理删除重建后版本从 1 开始的 ABA 风险（不可复用的 generation/ETag 契约），并与主分支 session-compaction 的 Alembic 0006 后续迁移串联；本 Draft 仍不得面向真实用户启用。
