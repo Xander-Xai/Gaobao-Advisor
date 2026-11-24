@@ -56,7 +56,7 @@ def test_docker_isolated_command_has_no_host_shell_or_network(workspace, oracle)
 @pytest.mark.parametrize("image", ["python:3.11", "latest", "sha256:bad", ""])
 def test_mutable_or_invalid_image_is_rejected(workspace, oracle, image):
     with pytest.raises(ValueError, match="sha256"):
-        sandbox_command(image, workspace, FAKE_NAME)
+        sandbox_command(image, workspace, FAKE_NAME, oracle_dir=oracle)
 
 
 def test_missing_synthetic_marker_refuses_host_directory(tmp_path, oracle):
