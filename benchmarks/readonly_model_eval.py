@@ -101,6 +101,7 @@ def run_model_cases(
                 "case_id": row["case_id"],
                 "split": row["split"],
                 "fact_passed": row["answer_facts"]["passed"],
+                "verified_task_passed": row["verified_task_passed"],
                 "tool_calls": row["observed"]["tool_calls"],
                 "total_tokens": (
                     row["observed"]["prompt_tokens"] + row["observed"]["completion_tokens"]
