@@ -61,9 +61,9 @@ synthetic-only bind mount. Container is force-removed on timeout.
 pytest -q tests/test_sandbox_workspace.py \
   tests/test_sandbox_workspace_governance.py \
   tests/test_sandbox_coding_agent.py --no-cov -o addopts=''
-docker build -t gb-advisor:ci .
-IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
-python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/gaobao-sandbox.json
+docker build -f Dockerfile.sandbox -t gb-advisor:sandbox-ci .
+IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
+python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/gaobao-sandbox.json --failure-probes
 python -m benchmarks.sandbox_coding_agent --image "$IMAGE_ID" --out /tmp/gaobao-repair.json
 ```
 
@@ -85,3 +85,7 @@ from an older run.
   controls and an explicit rollout plan.
 - Synthetic scripted repair success is **not** LLM autonomy, admission
   recommendation quality or production usage evidence.
+
+### Real-Docker negative acceptance
+
+The optional `--failure-probes` switch is required by the existing No-Key Container Smoke Test. It checks a nonzero exit despite a valid marker, a zero exit with only a substring marker, a bounded output flood, and an execution timeout. Each must fail with its specific expected result: a missing daemon/image cannot pass the negative suite. Only booleans are added to the sandbox receipt; no raw output. The trusted fixed oracles are not model-controlled. These checks do not prove container teardown or multi-tenant isolation; review the actual CI result before claiming execution.

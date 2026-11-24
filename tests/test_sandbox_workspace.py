@@ -9,6 +9,7 @@ import pytest
 from benchmarks.sandbox_workspace import (
     SandboxOutputExceeded,
     _bounded_docker_run,
+    run_sandbox_failure_probes,
     run_sandbox_probe,
     sandbox_command,
 )
@@ -155,3 +156,27 @@ def test_bounded_host_pipe_preserves_short_success_output():
     )
     assert done.returncode == 0
     assert done.stdout.splitlines() == ["SYNTHETIC_WORKSPACE_PASS"]
+
+
+@pytest.mark.parametrize("wrong_case", [None, 0, 1, 2, 3])
+def test_failure_probe_receipt_requires_each_specific_failure(workspace, monkeypatch, wrong_case):
+    results = [
+        {"passed": False, "exit_code": 7},
+        {"passed": False, "exit_code": 0},
+        {"passed": False, "error": "sandbox_output_limit"},
+        {"passed": False, "error": "sandbox_timeout"},
+    ]
+    if wrong_case is not None:
+        results[wrong_case] = {"passed": False, "error": "docker_unavailable"}
+    calls = []
+
+    def probe(image, work, *, oracle_source, timeout_seconds):
+        assert image == FAKE_IMAGE and work == workspace
+        calls.append((oracle_source, timeout_seconds))
+        return results[len(calls) - 1]
+
+    monkeypatch.setattr("benchmarks.sandbox_workspace.run_sandbox_probe", probe)
+    receipt = run_sandbox_failure_probes(FAKE_IMAGE, workspace)
+    assert receipt["passed"] is (wrong_case is None)
+    assert len(calls) == 4
+    assert sum(receipt["checks"].values()) == (4 if wrong_case is None else 3)
