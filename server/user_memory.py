@@ -29,6 +29,7 @@ _TOKEN_PATTERN = re.compile(r"^mem1_[A-Za-z0-9_-]{64}$")
 _ALLOWED_STYLES = frozenset({"concise", "detailed", "comparison"})
 DEFAULT_TTL_DAYS = 180
 MAX_TTL_DAYS = 365
+MAX_MEMORY_VERSION = 2_147_483_646
 
 
 class MemoryDisabled(Exception):
@@ -158,6 +159,15 @@ def _validate_value(key: str, value: str, ttl_days: int) -> str:
     return cleaned
 
 
+def _next_version(owner: UserMemoryVault) -> int:
+    """Allocate under the credential write lock, in the same transaction as the entry."""
+    current = owner.last_version
+    if type(current) is not int or not 0 <= current < MAX_MEMORY_VERSION:
+        raise MemoryConflict("Memory revision unavailable or exhausted")
+    owner.last_version = current + 1
+    return owner.last_version
+
+
 def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_days: int = DEFAULT_TTL_DAYS):
     """Optimistic concurrency: 0 creates; an exact nonzero version updates.
 
@@ -166,7 +176,7 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
     """
     _require_enabled()
     value = _validate_value(key, value, ttl_days)
-    if type(expected_version) is not int or not 0 <= expected_version <= 2_147_483_646:
+    if type(expected_version) is not int or not 0 <= expected_version <= MAX_MEMORY_VERSION:
         raise MemoryInvalid("Invalid expected version")
     now = _utcnow()
     db = get_session()
@@ -189,7 +199,7 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
                     UserMemoryEntry.version == row.version,
                     UserMemoryEntry.expires_at <= now,
                 )
-                .delete(synchronize_session=False)
+                .delete(synchronize_session="fetch")
             )
             if removed != 1:
                 raise MemoryConflict("Memory version conflict")
@@ -201,17 +211,20 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
                 vault_id=owner.id,
                 memory_key=key,
                 value=value,
-                version=1,
+                version=_next_version(owner),
                 expires_at=now + timedelta(days=ttl_days),
                 created_at=now,
                 updated_at=now,
             )
             db.add(row)
+            db.flush()
+            result = _serialize(row)
             db.commit()
-            return _serialize(row)
+            return result
         if expected_version != row.version:
             raise MemoryConflict("Memory version conflict")
-        # A concurrent update must not overwrite a newer revision.
+        # The vault-wide revision never repeats, even after deletion/pruning.
+        new_version = _next_version(owner)
         changed = db.execute(
             update(UserMemoryEntry)
             .where(
@@ -222,7 +235,7 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
             )
             .values(
                 value=value,
-                version=expected_version + 1,
+                version=new_version,
                 updated_at=now,
                 expires_at=now + timedelta(days=ttl_days),
             )
@@ -230,9 +243,10 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
         )
         if changed.rowcount != 1:
             raise MemoryConflict("Memory version conflict")
-        db.commit()
         db.refresh(row)
-        return _serialize(row)
+        result = _serialize(row)
+        db.commit()
+        return result
     except IntegrityError as exc:
         db.rollback()
         raise MemoryConflict("Memory version conflict") from exc
