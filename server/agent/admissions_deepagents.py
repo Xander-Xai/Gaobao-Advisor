@@ -409,6 +409,61 @@ def run_admissions_research(
     return report
 
 
+def render_verified_research(report: dict[str, Any]) -> str:
+    """Render the in-process receipt, not arbitrary model prose or a public recommendation."""
+    if report.get("schema") != "admissions-research/v1" or report.get("status") not in {
+        "VERIFIED_RESEARCH",
+        "VERIFIED_PARTIAL_RESEARCH",
+    }:
+        raise ValueError("Only verified research can be rendered")
+    evidence = report["evidence"]
+    kinds = ("admission-history", "enrollment-plans")
+    if set(evidence) != set(kinds) or _digest(evidence) != report.get("evidence_sha256"):
+        raise ValueError("Research evidence digest mismatch")
+    scope = ResearchScope(**report["scope"])
+    coverage = {kind: _coverage(evidence[kind], scope, kind) for kind in kinds}
+    if coverage != report["coverage"]:
+        raise ValueError("Research coverage mismatch")
+    partial = any(gaps for dimension in coverage.values() for gaps in dimension.values())
+    if partial != (report["status"] == "VERIFIED_PARTIAL_RESEARCH"):
+        raise ValueError("Research status mismatch")
+
+    def row_text(row: Any) -> str:
+        # JSON encoding keeps embedded newlines and terminal controls in data escaped.
+        return _canonical(row).replace("\u001b", "\\u001b")
+
+    lines = [
+        "高考志愿历史数据研究报告（内部，非录取预测）",
+        "任务状态: " + report["status"],
+        "任务 ID: " + row_text(report["task_id"]),
+        "研究范围: " + row_text(report["scope"]),
+        "证据 SHA256: " + report["evidence_sha256"],
+        "数据仅为授权数据库中的历史记录；未独立证明来源真实性或当前有效性。",
+        "招生计划表没有科类字段；选科要求原文保留，不代表已验证考生符合条件。",
+    ]
+    for kind, title in (("admission-history", "历史录取分数与位次"), ("enrollment-plans", "招生计划")):
+        lines.extend(["", title, "覆盖缺口: " + row_text(coverage[kind])])
+        lines.extend(row_text(row) for row in evidence[kind])
+    analysis = report.get("sandbox_analysis")
+    if analysis is not None:
+        from server.agent.admissions_analysis_sandbox import _digest as analysis_digest
+        from server.agent.admissions_analysis_sandbox import _json as analysis_json
+
+        if (
+            analysis.get("status") != "VERIFIED_DESCRIPTIVE_ANALYSIS"
+            or analysis.get("cleanup_verified") is not True
+            or analysis_digest(analysis_json(analysis["result"])) != analysis.get("result_sha256")
+            or analysis_digest(
+                analysis_json({"rows": evidence["admission-history"], "group_by": ("school_id", "year")})
+            )
+            != analysis.get("input_sha256")
+        ):
+            raise ValueError("Sandbox evidence mismatch")
+        lines.extend(["", "独立核验的沙箱描述性统计", row_text(analysis["result"])])
+    lines.extend(["", "不得将缺失数据、历史分数或统计结果解释为录取概率、志愿推荐或资格认证。"])
+    return "\n".join(lines) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--authorized-data", action="store_true", required=True)
@@ -424,7 +479,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", required=True)
     parser.add_argument("--sandbox-image", help="Opt-in immutable local image for verified analysis")
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--report-out", type=Path, help="Optional private verified research text report")
     args = parser.parse_args(argv)
+    if args.report_out is not None and (args.report_out.exists() or args.report_out.resolve() == args.out.resolve()):
+        parser.error("Report output must be a new, separate path")
     if not os.getenv("DATABASE_URL") or not os.getenv("OPENAI_API_KEY"):
         parser.error("Explicit authorized database and model credentials required")
     scope = ResearchScope(
@@ -450,7 +508,14 @@ def main(argv: list[str] | None = None) -> int:
             analysis_image_id=args.sandbox_image,
         )
         handle.write(_canonical(report) + "\n")
-    return 0 if report["status"].startswith("VERIFIED_") else 1
+    if report["status"].startswith("VERIFIED_"):
+        if args.report_out is not None:
+            rendered = render_verified_research(report)
+            fd = os.open(args.report_out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(rendered)
+        return 0
+    return 1
 
 
 if __name__ == "__main__":
