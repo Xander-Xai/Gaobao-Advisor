@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
@@ -104,9 +104,14 @@ def write_memory_entry(key: str, body: MemoryWrite, response: Response, x_user_m
 
 
 @router.delete("/entries/{key}")
-def delete_memory_entry(key: str, response: Response, x_user_memory_token: str | None = Header(None)):
+def delete_memory_entry(
+    key: str,
+    response: Response,
+    expected_version: int = Query(..., ge=1, le=2_147_483_646),
+    x_user_memory_token: str | None = Header(None),
+):
     _no_store(response)
-    _call(memory.delete_memory, _require_token(x_user_memory_token), key)
+    _call(memory.delete_memory, _require_token(x_user_memory_token), key, expected_version=expected_version)
     return {"deleted": True, "key": key}
 
 

@@ -133,9 +133,9 @@ def test_delete_rotate_and_vault_erasure_revoke_credentials(client_db):
     client, factory = client_db
     token = create_token(client)
     assert put(client, token).status_code == 200
-    deleted = client.delete("/api/v1/memory/entries/preferred_regions", headers=headers(token))
+    deleted = client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token))
     assert deleted.json()["deleted"] is True
-    assert client.delete("/api/v1/memory/entries/preferred_regions", headers=headers(token)).status_code == 404
+    assert client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token)).status_code == 404
     assert put(client, token).status_code == 200
     rotate = client.post("/api/v1/memory/vault/rotate", headers=headers(token))
     assert rotate.status_code == 200
@@ -321,7 +321,7 @@ def test_rotated_credential_cannot_delete_or_erase_vault(client_db):
     token = create_token(client)
     assert put(client, token).status_code == 200
     current = service.rotate_token(token)["memory_token"]
-    assert client.delete("/api/v1/memory/entries/preferred_regions", headers=headers(token)).status_code == 401
+    assert client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token)).status_code == 401
     assert client.delete("/api/v1/memory/vault", headers=headers(token)).status_code == 401
     assert client.post("/api/v1/memory/vault/rotate", headers=headers(token)).status_code == 401
     assert client.get("/api/v1/memory/entries", headers=headers(current)).json()["count"] == 1
@@ -347,7 +347,7 @@ def test_recreated_entry_never_reuses_a_prior_revision(client_db, remove):
     token = create_token(client)
     old = put(client, token).json()["version"]
     if remove == "delete":
-        assert client.delete("/api/v1/memory/entries/preferred_regions", headers=headers(token)).status_code == 200
+        assert client.delete("/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token)).status_code == 200
     else:
         with factory() as db:
             db.query(UserMemoryEntry).one().expires_at = _utcnow() - timedelta(seconds=1)
@@ -457,3 +457,33 @@ def test_expiry_rechecked_after_credential_lock_wait(client_db, monkeypatch, exp
         with factory() as db:
             row = db.query(UserMemoryEntry).one()
             assert row.expires_at == clock[0] + timedelta(days=1)
+
+
+def test_stale_delete_cannot_remove_updated_or_recreated_preference(client_db):
+    client, _ = client_db
+    token = create_token(client)
+    endpoint = "/api/v1/memory/entries/preferred_regions"
+    old = put(client, token).json()["version"]
+    latest = put(client, token, value="华北", version=old).json()["version"]
+    assert client.delete(endpoint, headers=headers(token)).status_code == 422
+    assert client.delete(f"{endpoint}?expected_version={old}", headers=headers(token)).status_code == 409
+    assert client.get("/api/v1/memory/entries", headers=headers(token)).json()["items"][0]["value"] == "华北"
+    assert client.delete(f"{endpoint}?expected_version={latest}", headers=headers(token)).status_code == 200
+    recreated = put(client, token, value="西南").json()["version"]
+    assert recreated > latest
+    assert client.delete(f"{endpoint}?expected_version={latest}", headers=headers(token)).status_code == 409
+    assert client.get("/api/v1/memory/entries", headers=headers(token)).json()["items"][0]["value"] == "西南"
+
+
+def test_expired_preference_not_deleted_by_stale_client(client_db):
+    client, factory = client_db
+    token = create_token(client)
+    version = put(client, token).json()["version"]
+    with factory() as db:
+        db.query(UserMemoryEntry).one().expires_at = _utcnow() - timedelta(seconds=1)
+        db.commit()
+    endpoint = f"/api/v1/memory/entries/preferred_regions?expected_version={version}"
+    assert client.delete(endpoint, headers=headers(token)).status_code == 404
+    with factory() as db:
+        assert db.query(UserMemoryEntry).count() == 1
+    assert service.prune_expired()["expired_entries_deleted"] == 1
