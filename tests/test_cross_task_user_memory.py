@@ -110,7 +110,10 @@ def test_compare_and_swap_blocks_stale_update_and_expired_resurrection(client_db
         db.commit()
     assert client.get("/api/v1/memory/entries", headers=headers(token)).json()["items"] == []
     assert put(client, token, value="过期覆盖", version=2).status_code == 409
-    assert put(client, token, value="重新确认", version=0).json()["version"] == 1
+    recreated = put(client, token, value="重新确认", version=0)
+    assert recreated.json()["version"] == 3
+    assert put(client, token, version=1).status_code == 409
+    assert put(client, token, version=2).status_code == 409
 
 
 def test_validation_ttl_and_enum_are_restricted(client_db):
@@ -327,3 +330,42 @@ def test_expired_stale_update_leaves_row_untouched(client_db):
     with factory() as db:
         assert db.query(UserMemoryEntry).one().value == "华南"
     assert put(client, token, value="重新确认", version=0).status_code == 200
+
+
+@pytest.mark.parametrize("remove", ["delete", "prune"])
+def test_recreated_entry_never_reuses_a_prior_revision(client_db, remove):
+    client, factory = client_db
+    token = create_token(client)
+    old = put(client, token).json()["version"]
+    if remove == "delete":
+        assert client.delete("/api/v1/memory/entries/preferred_regions", headers=headers(token)).status_code == 200
+    else:
+        with factory() as db:
+            db.query(UserMemoryEntry).one().expires_at = _utcnow() - timedelta(seconds=1)
+            db.commit()
+        assert service.prune_expired()["expired_entries_deleted"] == 1
+    new = put(client, token, value="华北").json()["version"]
+    assert new > old
+    assert put(client, token, value="过时写入", version=old).status_code == 409
+    assert client.get("/api/v1/memory/entries", headers=headers(token)).json()["items"][0]["value"] == "华北"
+
+
+def test_revision_survives_rotation_and_is_shared_across_keys(client_db):
+    client, _ = client_db
+    token = create_token(client)
+    first = put(client, token).json()["version"]
+    second = put(client, token, key="study_goal", value="数学").json()["version"]
+    current = service.rotate_token(token)["memory_token"]
+    third = put(client, current, version=first).json()["version"]
+    assert (first, second, third) == (1, 2, 3)
+
+
+def test_revision_exhaustion_fails_closed(client_db):
+    client, factory = client_db
+    token = create_token(client)
+    first = put(client, token).json()["version"]
+    with factory() as db:
+        db.query(UserMemoryVault).one().last_version = service.MAX_MEMORY_VERSION
+        db.commit()
+    assert put(client, token, version=first, value="不应保存").status_code == 409
+    assert client.get("/api/v1/memory/entries", headers=headers(token)).json()["items"][0]["value"] == "华南"
