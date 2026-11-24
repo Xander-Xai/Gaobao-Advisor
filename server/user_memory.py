@@ -218,6 +218,9 @@ def put_memory(token: str, key: str, value: str, *, expected_version: int, ttl_d
             )
             db.add(row)
             db.flush()
+            # Return the persisted representation, including database-specific
+            # DATETIME precision (MySQL may discard or round microseconds).
+            db.refresh(row)
             result = _serialize(row)
             db.commit()
             return result
