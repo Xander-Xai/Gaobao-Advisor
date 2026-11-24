@@ -281,3 +281,49 @@ def test_memory_opt_in_cannot_enable_plaintext_vault_outside_explicit_dev(monkey
     assert service.enabled() is False
     with pytest.raises(service.MemoryDisabled):
         service.create_vault()
+
+
+def test_mutation_holds_credential_write_lock_in_sqlite(client_db):
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    client, factory = client_db
+    token = create_token(client)
+    with factory() as first, factory() as second:
+        owner = service._owner(first, token, write=True)
+        second.execute(text("PRAGMA busy_timeout=0"))
+        with pytest.raises(OperationalError, match="locked"):
+            second.execute(
+                text("UPDATE user_memory_vaults SET token_hash=token_hash WHERE id=:id"),
+                {"id": owner.id},
+            )
+        second.rollback()
+        first.rollback()
+    rotated = service.rotate_token(token)["memory_token"]
+    assert put(client, token).status_code == 401
+    assert put(client, rotated).status_code == 200
+
+
+def test_rotated_credential_cannot_delete_or_erase_vault(client_db):
+    client, _ = client_db
+    token = create_token(client)
+    assert put(client, token).status_code == 200
+    current = service.rotate_token(token)["memory_token"]
+    assert client.delete("/api/v1/memory/entries/preferred_regions", headers=headers(token)).status_code == 401
+    assert client.delete("/api/v1/memory/vault", headers=headers(token)).status_code == 401
+    assert client.post("/api/v1/memory/vault/rotate", headers=headers(token)).status_code == 401
+    assert client.get("/api/v1/memory/entries", headers=headers(current)).json()["count"] == 1
+
+
+def test_expired_stale_update_leaves_row_untouched(client_db):
+    client, factory = client_db
+    token = create_token(client)
+    assert put(client, token).status_code == 200
+    with factory() as db:
+        row = db.query(UserMemoryEntry).one()
+        row.expires_at = _utcnow() - timedelta(seconds=1)
+        db.commit()
+    assert put(client, token, version=1).status_code == 409
+    with factory() as db:
+        assert db.query(UserMemoryEntry).one().value == "华南"
+    assert put(client, token, value="重新确认", version=0).status_code == 200
