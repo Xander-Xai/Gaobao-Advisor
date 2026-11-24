@@ -4,24 +4,51 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Header, HTTPException, Response
+from fastapi import APIRouter, Header, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.routing import APIRoute
 from pydantic import BaseModel, Field
 
 from server import user_memory as memory
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/memory", tags=["user-memory"])
+_PRIVATE_HEADERS = {"Cache-Control": "no-store", "Pragma": "no-cache"}
+
+
+class PrivateMemoryRoute(APIRoute):
+    """Do not echo invalid preference input or cache credential-related errors."""
+
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def private_handler(request: Request) -> Response:
+            try:
+                return await handler(request)
+            except RequestValidationError:
+                raise HTTPException(
+                    status_code=422, detail="Invalid memory request", headers=_PRIVATE_HEADERS
+                ) from None
+            except HTTPException as exc:
+                raise HTTPException(
+                    status_code=exc.status_code,
+                    detail=exc.detail,
+                    headers={**(exc.headers or {}), **_PRIVATE_HEADERS},
+                ) from None
+
+        return private_handler
+
+
+router = APIRouter(prefix="/api/v1/memory", tags=["user-memory"], route_class=PrivateMemoryRoute)
 
 
 class MemoryWrite(BaseModel):
-    value: str = Field(..., min_length=1, max_length=120)
-    expected_version: int = Field(..., ge=0, le=2_147_483_646)
-    ttl_days: int = Field(default=180, ge=1, le=365)
+    value: str = Field(..., strict=True, min_length=1, max_length=120)
+    expected_version: int = Field(..., strict=True, ge=0, le=2_147_483_646)
+    ttl_days: int = Field(default=180, strict=True, ge=1, le=365)
 
 
 def _no_store(response: Response) -> None:
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Pragma"] = "no-cache"
+    response.headers.update(_PRIVATE_HEADERS)
 
 
 def _call(func, *args, **kwargs):
