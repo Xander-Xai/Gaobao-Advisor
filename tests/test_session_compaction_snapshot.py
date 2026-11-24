@@ -201,6 +201,27 @@ def test_modified_history_invalidates_cache_and_allows_versioned_replacement(db_
     assert (updated.summary, updated.version) == ("corrected summary", 2)
 
 
+def test_snapshot_read_rejects_stale_caller_after_database_history_edit(db_factory):
+    _seed(db_factory)
+    store = SessionCompactionStore(db_factory)
+    stale_history = _history(db_factory)
+    assert store.publish(
+        "session-alpha",
+        stale_history,
+        covered_count=6,
+        summary="old snapshot",
+        policy_sha256=POLICY,
+    )
+    with db_factory() as db:
+        conv = db.query(Conversation).filter(Conversation.session_id == "session-alpha").one()
+        conv.messages[0].content = "revised in DB after caller loaded stale history"
+        db.commit()
+
+    # The old request copy still matches the snapshot hash but must NOT
+    # override the newer committed conversation state.
+    assert store.load("session-alpha", stale_history, policy_sha256=POLICY) is None
+
+
 def test_ttl_expiration_physical_prune_and_conversation_deletion(db_factory):
     _seed(db_factory)
     store = SessionCompactionStore(db_factory)
