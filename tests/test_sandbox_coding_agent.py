@@ -20,7 +20,9 @@ class Actions:
 def fake_docker(monkeypatch):
     """Only unit tests use this mock; GitHub's container job uses actual Docker."""
 
-    def run(_image, workspace):
+    def run(_image, workspace, *, oracle_source):
+        assert "import importlib.util" in oracle_source
+        assert "SYNTHETIC_WORKSPACE_PASS" in oracle_source
         source = (workspace / "solution.py").read_text(encoding="utf-8")
         correct = "return a + b" in source or "return max(low, min(high, value))" in source
         if correct:

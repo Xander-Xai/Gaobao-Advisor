@@ -65,6 +65,7 @@ jobs:
           python -m benchmarks.readonly_harness_eval --out /tmp/gaobao-agent-evidence/readonly-policy-30cases.json
           python -m benchmarks.groundtruth_pipeline --out /tmp/gaobao-agent-evidence/groundtruth-pending-review.json
           python -m benchmarks.decision_card_business_eval --out /tmp/gaobao-agent-evidence/business-8case-deterministic-baseline.json
+          python -m benchmarks.synthetic_replanning_eval --inject-transient --out /tmp/gaobao-agent-evidence/replanning-8case-scripted.json
           python -m benchmarks.sql_rag_pair_eval --repeat 12 --warmup 2 --out /tmp/gaobao-agent-evidence/sql-rag-paired-synthetic.json
           python -m benchmarks.taskrun_lifecycle_eval --max-cases 8 --out /tmp/gaobao-agent-evidence/taskrun-lifecycle-8case-baseline.json
           python -m benchmarks.synthetic_portfolio_eval --out /tmp/gaobao-agent-evidence/multicandidate-synthetic-evidence.json
@@ -254,9 +255,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t gb-advisor:ci .
+      - name: Build separate execution image with no application code
+        run: |
+          docker build -f Dockerfile.sandbox -t gb-advisor:sandbox-ci .
+          docker run --rm --network none --entrypoint python gb-advisor:sandbox-ci -c "from pathlib import Path; assert not Path('/app').exists(); assert not Path('/workspace/solution.py').exists()"
       - name: Verify synthetic workspace Docker sandbox
         run: |
-          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
           python -m benchmarks.sandbox_workspace --image "$IMAGE_ID" --out /tmp/gaobao-harness-sandbox.json
           python - <<'PY'
           import json
@@ -267,7 +272,7 @@ jobs:
           PY
       - name: Execute two synthetic code repairs inside Docker workspace
         run: |
-          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:ci)
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' gb-advisor:sandbox-ci)
           python -m benchmarks.sandbox_coding_agent --image "$IMAGE_ID" --out /tmp/gaobao-coding-agent.json
           python - <<'PY'
           import json
