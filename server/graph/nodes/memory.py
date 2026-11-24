@@ -10,7 +10,10 @@ persistence side and flagging whether summarization is needed.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import secrets
 from typing import Any
 
 from db.crud import get_or_create_conversation, load_conversation_slots, save_message, save_slots
@@ -55,6 +58,7 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
         trace.append({"node": "memory_update", "event": "skipped_no_session_id"})
         return {"trace": trace}
 
+    ticket_id = None
     db = get_session()
     try:
         conv = get_or_create_conversation(db, session_id)
@@ -77,6 +81,59 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
             canonical["_query_state"] = query_state
         if atomic:
             save_slots(db, session_id, canonical, commit=False)
+            if state.get("quality_scored") and reply:
+                # Persist only the quality measurement for the *delivered*
+                # reply, in the same transaction as conversation + slots.
+                # Stable content digest; do not persist raw model critique or
+                # discarded candidate text in the review record.
+                from db.models import QualityScore
+
+                scores = state.get("quality_scores") or {}
+                flags = [str(flag).split(":", 1)[0][:48] for flag in (state.get("hallucination_flags") or [])[:20]]
+                db.add(
+                    QualityScore(
+                        conversation_id=session_id,
+                        message_id=hashlib.sha256(reply.encode("utf-8")).hexdigest()[:32],
+                        factual_score=scores.get("factual"),
+                        relevance_score=scores.get("relevance"),
+                        helpfulness_score=scores.get("helpfulness"),
+                        style_score=scores.get("style"),
+                        aggregate_score=float(state.get("aggregate_score") or 0),
+                        hallucination_flags=json.dumps(flags),
+                        judge_model=str(state.get("judge_model") or "unknown")[:64],
+                        judge_latency_ms=state.get("judge_latency_ms"),
+                    )
+                )
+            if state.get("review_required") and reply:
+                # Privacy-safe, append-only operator-triage ticket. Raw user
+                # text, profile, discarded LLM draft and session ID never enter
+                # the audit ticket. Review acknowledgement is NOT factual
+                # certification or approval to reuse a rejected answer.
+                from db.models import OperationAuditLog
+
+                ticket_id = secrets.token_hex(16)
+                db.add(
+                    OperationAuditLog(
+                        actor="chat-finalizer",
+                        role="service",
+                        action="chat.review_required",
+                        resource_type="chat_review",
+                        resource_id=ticket_id,
+                        outcome="PENDING",
+                        detail_json=json.dumps(
+                            {
+                                "reason_codes": [
+                                    str(code)[:48] for code in (state.get("review_reason_codes") or [])[:10]
+                                ],
+                                "delivered_reply_sha256": hashlib.sha256(reply.encode("utf-8")).hexdigest(),
+                                "rewrite_attempts": min(int(state.get("rewrite_attempts") or 0), 1),
+                                "data_profile": "SYNTHETIC_DEMO",
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ),
+                    )
+                )
             db.commit()
         else:
             save_slots(db, session_id, canonical)
@@ -109,4 +166,7 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
     finally:
         db.close()
 
-    return {"trace": trace}
+    result = {"trace": trace}
+    if ticket_id and trace and trace[-1].get("event") == "persisted":
+        result["review_ticket_id"] = ticket_id
+    return result
