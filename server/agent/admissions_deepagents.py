@@ -180,6 +180,7 @@ def build_deep_agent(model_id: str, tools: list, subagents: list, *, lease_guard
         timeout=20,
         max_retries=0,
     )
+
     class LeaseMiddleware(AgentMiddleware):
         def before_model(self, state, runtime):
             if lease_guard is not None:
@@ -296,7 +297,9 @@ def run_admissions_research(
             analysis_running = True
             rows = [dict(row) for row in snapshots[kinds[0]]]
         try:
-            sandbox_scope = Scope(scope.province, scope.subject_type, scope.batch, scope.year_from, scope.year_to, "major")
+            sandbox_scope = Scope(
+                scope.province, scope.subject_type, scope.batch, scope.year_from, scope.year_to, "major"
+            )
             result = execute_admissions_analysis(
                 rows,
                 sandbox_scope,
