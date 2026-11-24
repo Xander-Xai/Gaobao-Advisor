@@ -92,14 +92,16 @@ def render(files, env_file, overrides=None, *, profile=None):
 local = render(["docker-compose.yml"], "/dev/null")
 api = local["services"]["api"]["environment"]
 assert api["APP_ENV"] == "development"
-assert all(api[key] == "true" for key in flags[:3])
-assert all(api[key] == "false" for key in flags[3:])
+assert api[flags[0]] == "true"
+assert all(api[key] == "false" for key in flags[1:])
 assert api["SYNTHETIC_TASKRUN_JOURNAL"] == "/app/data/synthetic-taskruns.sqlite"
 for service in ("api", "frontend", "nginx"):
     assert all(port["host_ip"] == "127.0.0.1" for port in local["services"][service]["ports"])
 
 disabled = render(["docker-compose.yml"], "/dev/null", {key: "false" for key in flags[:3]})
 assert all(disabled["services"]["api"]["environment"][key] == "false" for key in flags[:3])
+local_opt_in = render(["docker-compose.yml"], "/dev/null", {key: "true" for key in flags[1:3]})
+assert all(local_opt_in["services"]["api"]["environment"][key] == "true" for key in flags[1:3])
 
 full_files = ["docker-compose.yml", "docker-compose.full.yml"]
 full = render(full_files, ".env.full", profile="full")

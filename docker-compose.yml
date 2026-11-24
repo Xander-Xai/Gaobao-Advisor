@@ -15,10 +15,10 @@ services:
       ENABLE_SYNTHETIC_AGENT_EXPERIMENT: ${ENABLE_SYNTHETIC_AGENT_EXPERIMENT:-true}
       ENABLE_OUTBOUND_FETCH: ${ENABLE_OUTBOUND_FETCH:-false}
       SYNTHETIC_TASKRUN_JOURNAL: ${SYNTHETIC_TASKRUN_JOURNAL:-/app/data/synthetic-taskruns.sqlite}
-      # Explicit preference writes only; production still rejects this experimental API.
-      USER_MEMORY_ENABLED: ${USER_MEMORY_ENABLED:-true}
-      # Summary may use a configured provider; plaintext snapshots remain explicit opt-in.
-      GAOBAO_CHAT_COMPACTION_ENABLED: ${GAOBAO_CHAT_COMPACTION_ENABLED:-true}
+      # Explicit opt-in for preference writes; production still rejects this experimental API.
+      USER_MEMORY_ENABLED: ${USER_MEMORY_ENABLED:-false}
+      # Summary may use a configured provider; keep it and plaintext snapshots opt-in.
+      GAOBAO_CHAT_COMPACTION_ENABLED: ${GAOBAO_CHAT_COMPACTION_ENABLED:-false}
       GAOBAO_CHAT_SNAPSHOT_ENABLED: ${GAOBAO_CHAT_SNAPSHOT_ENABLED:-false}
     volumes:
       # Named volume avoids host-UID/bind-mount permission failures while
