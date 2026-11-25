@@ -17,6 +17,8 @@ services:
       REDIS_URL: ${REDIS_URL:?explicit managed Redis required}
       GAOBAO_DATA_APPROVAL_REF: ${GAOBAO_DATA_APPROVAL_REF:?data authorization reference required}
       GAOBAO_ADMISSIONS_YEAR: ${GAOBAO_ADMISSIONS_YEAR:?approved historical data year required}
+      GAOBAO_ADMISSIONS_MANIFEST_PATH: /run/admissions/manifest.json
+      GAOBAO_ADMISSIONS_MANIFEST_SHA256: ${GAOBAO_ADMISSIONS_MANIFEST_SHA256:?reviewed manifest hash required}
       AUTO_MIGRATE: "false"
       AUTO_SEED_DEMO: "false"
       DB_AUTO_CREATE: "false"
@@ -31,6 +33,7 @@ services:
       ADMISSIONS_RESEARCH_ENABLED: "false"
     volumes:
       - industrial_api_data:/app/data
+      - ${GAOBAO_ADMISSIONS_MANIFEST_HOST_PATH:?reviewed manifest path required}:/run/admissions/manifest.json:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/ready"]
       interval: 15s
@@ -49,6 +52,8 @@ services:
       REDIS_URL: ${REDIS_URL:?explicit managed Redis required}
       GAOBAO_DATA_APPROVAL_REF: ${GAOBAO_DATA_APPROVAL_REF:?data authorization reference required}
       GAOBAO_ADMISSIONS_YEAR: ${GAOBAO_ADMISSIONS_YEAR:?approved historical data year required}
+      GAOBAO_ADMISSIONS_MANIFEST_PATH: /run/admissions/manifest.json
+      GAOBAO_ADMISSIONS_MANIFEST_SHA256: ${GAOBAO_ADMISSIONS_MANIFEST_SHA256:?reviewed manifest hash required}
       AUTO_MIGRATE: "false"
       AUTO_SEED_DEMO: "false"
       DB_AUTO_CREATE: "false"
@@ -62,6 +67,8 @@ services:
       GAOBAO_CHAT_SNAPSHOT_ENABLED: "false"
       ADMISSIONS_RESEARCH_ENABLED: "false"
       GAOBAO_CHAT_SNAPSHOT_MAINTENANCE_ENABLED: "true"
+    volumes:
+      - ${GAOBAO_ADMISSIONS_MANIFEST_HOST_PATH:?reviewed manifest path required}:/run/admissions/manifest.json:ro
     depends_on:
       api:
         condition: service_healthy

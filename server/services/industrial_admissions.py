@@ -11,6 +11,7 @@ from sqlalchemy import func, or_
 
 from db.models import AdmissionScore, School, YiFenYiDuan
 from server.domain.schemas import StructuredPlanningCard
+from server.services.admissions_lineage import ManifestError, approved_manifest, verified_lineage
 
 _COHORTS = (
     ("物理", "物理类"),
@@ -82,7 +83,7 @@ def evidence_digest(evidence: dict) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def query_history(db, *, province: str, score: int, subject: str, year: int) -> dict:
+def query_history(db, *, province: str, score: int, subject: str, year: int, manifest=None) -> dict:
     """Use no nearest-score, other-year, other-subject or inferred-rank fallback."""
     base = {"year": year, "province": province, "score": score, "subject": subject}
     if not 100 <= score <= 750 or not province.strip():
@@ -141,8 +142,24 @@ def query_history(db, *, province: str, score: int, subject: str, year: int) -> 
             for row, name in rows
         ],
     }
+    if manifest is not None:
+        try:
+            evidence["lineage"] = verified_lineage(evidence, manifest)
+        except ManifestError:
+            return {**base, "status": "UNAPPROVED_LINEAGE"}
     evidence["evidence_sha256"] = evidence_digest(evidence)
     return evidence
+
+
+def _lineage_valid(evidence: dict, year: int) -> bool:
+    from server.industrial_runtime import industrial_enabled
+
+    if not industrial_enabled() and "lineage" not in evidence:
+        return True  # Reference SQL helper tests, not the industrial route.
+    try:
+        return evidence.get("lineage") == verified_lineage(evidence, approved_manifest(year))
+    except (ManifestError, KeyError, TypeError, ValueError):
+        return False
 
 
 def build_history_reply(state: dict) -> tuple[str, dict]:
@@ -162,8 +179,12 @@ def build_history_reply(state: dict) -> tuple[str, dict]:
         summary = f"当前发布只支持{year}年历史数据，不能回答其他年份。"
     elif state.get("missing_fields") or evidence.get("status") == "UNSUPPORTED_COHORT":
         summary = "请补充省份、明确分数和招生科类（物理类、历史类、理科、文科或综合）。"
+    elif evidence.get("status") == "UNAPPROVED_LINEAGE":
+        summary = "历史招生数据缺少已审核的来源或发生变化，已停止发布。"
     elif evidence.get("status") in {"HISTORICAL_ROWS", "NO_SCHOOL_ROWS"} and (
-        evidence.get("year") != year or evidence.get("evidence_sha256") != evidence_digest(evidence)
+        evidence.get("year") != year
+        or evidence.get("evidence_sha256") != evidence_digest(evidence)
+        or not _lineage_valid(evidence, year)
     ):
         summary = "历史数据证据不一致，已停止发布，请稍后重试。"
     elif evidence.get("status") in {"HISTORICAL_ROWS", "NO_SCHOOL_ROWS"}:
@@ -174,6 +195,15 @@ def build_history_reply(state: dict) -> tuple[str, dict]:
         digest = evidence["evidence_sha256"]
         sources.append(f"historical_sql_sha256:{digest}")
         facts.append(f"查询结果指纹：{digest}（仅标识本次数据库事实，不证明官方来源）")
+        lineage = evidence.get("lineage")
+        if lineage:
+            facts.append(f"审核数据版本：{lineage['dataset_version']}；清单指纹：{lineage['manifest_sha256']}")
+            sources.append(f"admissions_manifest_sha256:{lineage['manifest_sha256']}")
+            for record in lineage["records"]:
+                # Public reviewed URL and row locator, not internal approval identifiers.
+                citation = f"{record['row']}｜{record['url']}｜{record['locator']}｜源文件SHA-256:{record['file_sha256']}"
+                sources.append(citation)
+                facts.append(f"来源登记：{citation}")
         for row in evidence["rows"]:
             facts.append(
                 f"{row['school']}｜{row['batch']}｜历史最低分{row['min_score']}分｜"
@@ -181,7 +211,7 @@ def build_history_reply(state: dict) -> tuple[str, dict]:
             )
             sources.append(f"admission_scores:{row['id']}")
         if not evidence["rows"]:
-            summary += " 未找到位次邻域内的院校级记录。"
+            summary += " 本次数据库检索未找到位次邻域内的院校级记录，不代表官方不存在记录。"
     else:
         summary = "没有唯一、同年同省同科类的精确位次依据，无法提供匹配结果。"
     risks = ["历史记录不是录取预测；专业、选科组合、批次资格及当年计划须以官方公告核实。"]

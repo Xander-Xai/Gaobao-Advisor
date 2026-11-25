@@ -59,6 +59,7 @@ python scripts/compose_standard.py up --build -d
 - REDIS_URL：已配置认证与网络隔离的 Redis。
 - GAOBAO_DATA_APPROVAL_REF：内部授权标识，不等于独立核验许可证。
 - GAOBAO_ADMISSIONS_YEAR：候选配置必须明确审批历史年度；API/worker 检查该年度位次及院校级录取记录存在。
+- GAOBAO_ADMISSIONS_MANIFEST_HOST_PATH、GAOBAO_ADMISSIONS_MANIFEST_SHA256：独立审核清单的私有宿主机路径与 SHA-256 pin，API/worker 只读挂载同一文件。详见 [行级来源合同](industrial-admissions-evidence.md)。没有审核清单不启动。
 - CATALOG_JDBC_URL、CATALOG_DB_USER、CATALOG_DB_PASSWORD：同一数据集的独立只读账号。
 - INDUSTRIAL_HTTP_PORT：可选本地反代端口，默认 8088。
 

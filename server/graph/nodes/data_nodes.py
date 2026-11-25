@@ -48,6 +48,7 @@ def data_query_node(state: dict[str, Any]) -> dict[str, Any]:
     slots = state.get("slots", {})
     if industrial_enabled():
         from db.database import get_session
+        from server.services.admissions_lineage import ManifestError, approved_manifest
         from server.services.industrial_admissions import approved_year, exact_score, query_history
 
         year = approved_year()
@@ -59,11 +60,18 @@ def data_query_node(state: dict[str, Any]) -> dict[str, Any]:
             score = exact_score(slots)
             province, subject = slots.get("province"), slots.get("subject")
             if score is not None and isinstance(province, str) and isinstance(subject, str):
-                db = get_session()
                 try:
-                    history = query_history(db, province=province, score=score, subject=subject, year=year)
-                finally:
-                    db.close()
+                    manifest = approved_manifest(year)
+                except ManifestError:
+                    history = {"status": "UNAPPROVED_LINEAGE"}
+                else:
+                    db = get_session()
+                    try:
+                        history = query_history(
+                            db, province=province, score=score, subject=subject, year=year, manifest=manifest
+                        )
+                    finally:
+                        db.close()
         return {
             "data_query_results": {"industrial_history": history},
             "trace": list(state.get("trace", [])) + [{"node": "data_query", "event": "industrial_exact_history"}],
