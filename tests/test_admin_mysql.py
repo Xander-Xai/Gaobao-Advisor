@@ -325,10 +325,7 @@ def test_mysql_admissions_release_read_only_snapshot(mysql_factory, tmp_path):
             "dataset_version": "mysql-fixture",
             "year": 2099,
             "sources": {"fixture": {"file_sha256": digest}},
-            "rows": {
-                key: {"row_sha256": canonical_digest(values)}
-                for key, values in row_values(evidence).items()
-            },
+            "rows": {key: {"row_sha256": canonical_digest(values)} for key, values in row_values(evidence).items()},
         },
     )
     result = audit_mysql_snapshot(engine, manifest, tmp_path)
