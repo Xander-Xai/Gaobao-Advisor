@@ -84,7 +84,7 @@ def _record_value(value: Any) -> Any:
     return raw
 
 
-def flatten_slots(stored: dict[str, Any] | None) -> dict[str, Any]:
+def flatten_slots(stored: dict[str, Any] | None, *, derive_score: bool = True) -> dict[str, Any]:
     """Convert stored slot records (or legacy flat values) into graph slots.
 
     Metadata such as ``_query_state`` is intentionally excluded; chat callers
@@ -99,6 +99,9 @@ def flatten_slots(stored: dict[str, Any] | None) -> dict[str, Any]:
         raw = _record_value(value)
         if raw is not None:
             flat[key] = raw
+
+    if not derive_score:
+        return flat
 
     # A stored score_rank is the user-facing source of truth. Re-derive the
     # numeric score so a corrected score cannot keep a stale sibling value.
