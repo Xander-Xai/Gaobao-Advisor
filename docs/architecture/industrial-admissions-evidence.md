@@ -42,3 +42,7 @@ GAOBAO_ADMISSIONS_YEAR 必填。±5% 位次邻域仅为历史数据展示，最�
 ### 已认证续轮请求幂等（独立候选 PR，2026-11-25）
 
 工业 POST /api/v1/chat 可选 Idempotency-Key（16–128 ASCII 字母数字、下划线、连字符），仅有效 session bearer 且无跨任务记忆凭证。调用方必须重试相同 key、scene、message、slots；同会话同键异请求 SSE error IDEMPOTENCY_CONFLICT（无 done），不重算已完成的请求。新表 chat_turn_receipts（唯一迁移 20261125_0009）按 conversation PK + key SHA-256 主键绑定请求摘要与已交付文本、结构化卡片、槽位、稳定消息 ID；与消息/槽位同一事务提交。重复并发允许重复准备图，但只允许一个 durable 写入，失败者可查回执。已提交回执与会话同生命周期，删除显式清除；备份、保留政策、已取出响应和真实隐私验收仍有边界。重放是原轮历史快照而非当前 profile，不能在后续轮次之后用其旧槽位覆盖最新状态。无 key 保持旧契约，匿名首轮不支持 keyed retry；前端 API 可传 idempotencyKey，未实现 UI 自动重试。安全拒绝不写回执，不签发成功 done。此实现不承诺 exactly-once 执行、无穷期重放或客户端持久化 key；同 key 未提交失败仍可重试。新迁移和真实 MySQL 回归必须通过 exact-head CI 才可合并。
+
+### 浏览器断线恢复（2026-11-25 独立候选）
+
+#200/#201 已合并；旧候选描述为历史记录。成功工业 SSE done 声明 idempotency_supported=true，前端按已认证会话缓存能力（仅内存）。仅该能力存在且无独立记忆凭证时为新轮生成 128-bit 随机 key，冻结原始请求槽位和凭证；传输异常/无 done EOF 最多重试一次，复用同一 key 和完整 body，不重复添加 user bubble，重放前清除本轮部分回复和元数据，槽位只在有效 done 后应用。显式 SSE error、HTTP 错误、匿名首轮、普通模式、视图切换、无安全随机源不自动重试。普通模式收到 key 明确 409 而非忽略；所有副本必须同版本同工业 profile（旧版本可能忽略 key），禁止混合滚动期间宣称端到端幂等。未覆盖页面刷新、跨标签页、手动重试、匿名首轮、无限期回执保留或生产代理真实断线。

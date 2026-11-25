@@ -237,6 +237,7 @@ def _receipt_events(session_id: str, receipt: dict):
         "type": "done",
         "session_id": session_id,
         "message_id": receipt["message_id"],
+        "idempotency_supported": True,
         "session_token": create_session_token(session_id),
     }
 
@@ -422,7 +423,15 @@ async def _sse_generator(
     for i in range(0, len(final_reply), 20):
         yield f"data: {json.dumps({'type': 'token', 'content': final_reply[i : i + 20]})}\n\n"
 
-    yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': f'{session_id}-response', 'session_token': create_session_token(session_id)})}\n\n"
+    done = {
+        "type": "done",
+        "session_id": session_id,
+        "message_id": f"{session_id}-response",
+        "session_token": create_session_token(session_id),
+    }
+    if industrial_enabled():
+        done["idempotency_supported"] = True
+    yield f"data: {json.dumps(done)}\n\n"
 
 
 @router.post("/chat")
@@ -451,7 +460,9 @@ async def chat(
     from server.industrial_runtime import industrial_enabled
 
     turn_key = None
-    if industrial_enabled() and idempotency_key is not None:
+    if idempotency_key is not None and not industrial_enabled():
+        raise HTTPException(status_code=409, detail="Idempotent chat is not enabled")
+    if idempotency_key is not None:
         from server.services.industrial_chat_receipt import make_turn_key
 
         if authorization is None or x_user_memory_token is not None:
