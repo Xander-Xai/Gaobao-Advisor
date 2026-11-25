@@ -37,6 +37,30 @@ def slot_extract_node(state: dict[str, Any]) -> dict[str, Any]:
         if slot and slot.get("filled"):
             merged[key] = slot["value"]
 
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        from server.services.industrial_admissions import exact_score, explicit_turn_score
+
+        mentioned, score = explicit_turn_score(text)
+        extracted = new_slots_dict.get("score_rank", {}).get("filled")
+        invalid = (mentioned and score is None) or (not mentioned and bool(extracted))
+        # Never preserve a lossy extraction or silently use an old score in
+        # a turn containing a malformed score. A new exact score wins.
+        merged.pop("score", None)
+        merged.pop("score_rank", None)
+        if not invalid and not mentioned:
+            score = exact_score(existing)
+            invalid = score is None and any(existing.get(k) is not None for k in ("score", "score_rank"))
+        if score is not None and not invalid:
+            merged["score"] = score
+            merged["score_rank"] = f"{score}分"
+        return {
+            "slots": merged,
+            "industrial_score_invalid": invalid,
+            "trace": list(state.get("trace", [])) + [{"node": "slot_extract", "event": "industrial_exact_score"}],
+        }
+
     # Downstream nodes (data query, render, structured card) need a numeric
     # score, while the extractor stores the user-facing "600分" in score_rank.
     # Recompute it after an override; otherwise a corrected score would keep
