@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 import secrets
 
@@ -81,6 +82,44 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
 
 _ASSERTED_NUMBER = re.compile(r"(?<![0-9])(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d{4,7})\s*(?:分|位次|%|元/月|元/年|万元|万人)")
 _EVIDENCE_NUMBER = re.compile(r"(?<![0-9])\d+(?:\.\d+)?(?![0-9])")
+_MANAGED_RESEARCH_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"(?:比较|对比).{0,36}(?:院校|学校|大学|专业|志愿|选校)",
+        r"(?:院校|学校|大学|专业).{0,24}(?:比较|对比|筛选|排序|规划|方案)",
+        r"(?:多校|多院校|多专业).{0,30}(?:研究|分析|比较|筛选|规划)",
+        r"(?:志愿|选校|选专业).{0,16}(?:方案|规划|组合|约束|冲稳保)",
+        r"\bcompare\b.{0,36}\b(?:schools?|universities|colleges|majors)\b",
+    )
+)
+
+
+def requires_managed_admissions_research(message: str) -> bool:
+    """Conservatively identify explicit multi-school/constraint requests.
+
+    This is a routing hint only: it does not infer a task scope or authorize a
+    provider call. False positives are preferable to an unverified model answer.
+    """
+    return any(pattern.search(message) for pattern in _MANAGED_RESEARCH_PATTERNS)
+
+
+def _managed_research_request_enabled() -> bool:
+    return (
+        os.getenv("APP_ENV", "development").strip().lower() != "production"
+        and os.getenv("GAOBAO_RUNTIME_PROFILE", "").strip().lower() != "industrial"
+        and os.getenv("ADMISSIONS_RESEARCH_ENABLED", "").strip().lower() == "true"
+        and os.getenv("ADMISSIONS_RESEARCH_USER_REQUESTS_ENABLED", "").strip().lower() == "true"
+        and all(
+            os.getenv(name, "").strip()
+            for name in (
+                "ADMISSIONS_RESEARCH_DATASET_REF",
+                "ADMISSIONS_RESEARCH_JOURNAL",
+                "ADMISSIONS_RESEARCH_MODEL_ID",
+                "ADMISSIONS_RESEARCH_IMAGE_ID",
+                "ADMISSIONS_RESEARCH_APPROVAL_REF",
+            )
+        )
+    )
 
 
 def _unsupported_numbers(state: dict, candidate: str) -> bool:
@@ -162,7 +201,11 @@ def _finalize_chat_answer(
 
     def check(text: str) -> dict:
         draft = dict(final)
-        draft["reply"] = text if "声明：以上分析基于" in text else text + _DISCLAIMER
+        if final.get("research_request_intent"):
+            notice = "声明：这只是受控研究入口提示，不是录取建议；提交后仍需审批和独立证据核验。"
+            draft["reply"] = text if "声明：" in text else text + "\n\n" + notice
+        else:
+            draft["reply"] = text if "声明：以上分析基于" in text else text + _DISCLAIMER
         draft.update(source_attribution_node(draft))
         draft.update(quality_post_check_node(draft))
         return draft
@@ -178,30 +221,39 @@ def _finalize_chat_answer(
             degraded = True
 
     try:
-        # Scoring is computed on the proposed final answer, without writing a
-        # quality row before its owning conversation message exists.
-        checked.update(quality_judge_node({**checked, "defer_quality_persistence": True}))
-        if (
-            model_generated
-            and not degraded
-            and (
-                checked.get("quality_grade") in {"fail", "unscored"}
-                or checked.get("hallucination_flags")
-                or checked.get("judge_needs_rewrite")
-            )
-        ):
-            review_reasons.append(
-                "JUDGE_UNAVAILABLE" if checked.get("quality_grade") == "unscored" else "JUDGE_REJECTED"
-            )
-            checked = check(fallback)
-            degraded = True
-            # The rejected model score must not be reported as the delivered
-            # fallback's quality score; it has not been independently graded.
+        if final.get("research_request_intent"):
+            # This turn only routes the user to the approval form. Avoid even a
+            # separate paid Judge request; the response is a deterministic notice.
             checked["quality_grade"] = "unscored"
             checked["quality_scored"] = False
             checked["quality_scores"] = {}
             checked["hallucination_flags"] = []
             checked["aggregate_score"] = None
+        else:
+            # Scoring is computed on the proposed final answer, without writing a
+            # quality row before its owning conversation message exists.
+            checked.update(quality_judge_node({**checked, "defer_quality_persistence": True}))
+            if (
+                model_generated
+                and not degraded
+                and (
+                    checked.get("quality_grade") in {"fail", "unscored"}
+                    or checked.get("hallucination_flags")
+                    or checked.get("judge_needs_rewrite")
+                )
+            ):
+                review_reasons.append(
+                    "JUDGE_UNAVAILABLE" if checked.get("quality_grade") == "unscored" else "JUDGE_REJECTED"
+                )
+                checked = check(fallback)
+                degraded = True
+                # The rejected model score must not be reported as the delivered
+                # fallback's quality score; it has not been independently graded.
+                checked["quality_grade"] = "unscored"
+                checked["quality_scored"] = False
+                checked["quality_scores"] = {}
+                checked["hallucination_flags"] = []
+                checked["aggregate_score"] = None
     except Exception:
         logger.exception("Final-answer quality evaluation failed")
         if model_generated and not degraded:
@@ -276,7 +328,6 @@ async def _sse_generator(
                 yield f"data: {json.dumps(event)}\n\n"
             return
 
-    graph = get_advisor_graph()
     turn_version = None
     try:
         if industrial_enabled():
@@ -302,10 +353,21 @@ async def _sse_generator(
     if query_state:
         initial_state["_query_state"] = query_state
 
+    research_intent = not industrial_enabled() and requires_managed_admissions_research(message)
     try:
-        result = await asyncio.to_thread(graph.invoke, initial_state)
+        if research_intent:
+            # Reuse the existing security gate, then go directly to the
+            # approval-form prompt. Do not run SQL/RAG preparation, a provider
+            # model, or the paid quality judge on this routing turn.
+            from server.graph.nodes.security_scan import security_scan_node
+
+            result = dict(initial_state)
+            result.update(await asyncio.to_thread(security_scan_node, initial_state))
+        else:
+            graph = get_advisor_graph()
+            result = await asyncio.to_thread(graph.invoke, initial_state)
     except Exception:
-        logger.exception("Chat preparation graph failed")
+        logger.exception("Chat preparation failed")
         yield f"data: {json.dumps({'type': 'error', 'code': 'GRAPH_FAILED', 'message': '服务暂时不可用，请稍后重试'})}\n\n"
         return
 
@@ -320,6 +382,30 @@ async def _sse_generator(
             yield f"data: {json.dumps({'type': 'token', 'content': refusal[i : i + 20]})}\n\n"
         yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': f'{session_id}-response', 'session_token': create_session_token(session_id)})}\n\n"
         return
+
+    if research_intent:
+        enabled = _managed_research_request_enabled()
+        result = dict(result)
+        result.update(
+            {
+                "reply": (
+                    "这类多院校或多条件请求需要结构化招生研究和独立证据核验。"
+                    "请使用下方结构化研究表单指定两所院校、专业与数据范围；提交后先等待运营人员审核。"
+                    "该流程不会生成录取概率。"
+                    if enabled
+                    else "这类多院校或多条件请求需要结构化招生研究和独立证据核验，"
+                    "但当前环境未启用该功能，因此不会生成未经核验的志愿建议。"
+                    "请改为询问一个范围明确、可核验的事实问题。"
+                ),
+                "template_reply": "",
+                "reply_source": "research_request",
+                "structured_result": None,
+                "rag_sources": [],
+                "rag_state": None,
+                "research_request_intent": True,
+                "research_request_enabled": enabled,
+            }
+        )
 
     reply = result.get("reply") or ""
     is_template = result.get("reply_source") == "template"
@@ -397,6 +483,9 @@ async def _sse_generator(
         for event in _receipt_events(session_id, final["industrial_receipt"]):
             yield f"data: {json.dumps(event)}\n\n"
         return
+
+    if final.get("research_request_intent"):
+        yield f"data: {json.dumps({'type': 'research_intent', 'enabled': final['research_request_enabled']})}\n\n"
 
     if quality_degraded:
         degraded = True

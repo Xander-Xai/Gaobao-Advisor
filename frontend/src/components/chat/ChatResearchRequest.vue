@@ -1,5 +1,5 @@
 <template>
-  <details class="border-t border-amber-200 bg-amber-50 px-4 py-3" data-testid="chat-research">
+  <details ref="panel" class="border-t border-amber-200 bg-amber-50 px-4 py-3" data-testid="chat-research">
     <summary class="mx-auto max-w-4xl cursor-pointer text-sm font-medium text-slate-800">
       发起复杂院校研究
     </summary>
@@ -86,11 +86,12 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { chatResearchAPI } from '../../api/client'
 import { useChatStore } from '../../stores/chat'
 
 const chat = useChatStore()
+const panel = ref(null)
 const schoolA = ref('')
 const schoolB = ref('')
 const majorId = ref('')
@@ -116,6 +117,7 @@ const terminal = ['SUCCEEDED', 'NEEDS_REVIEW', 'FAILED', 'CANCELLED', 'EXPIRED']
 const active = computed(() => runId.value && !terminal.includes(status.value))
 const hasReport = computed(() => ['SUCCEEDED', 'NEEDS_REVIEW'].includes(status.value))
 const canSubmit = computed(() => Boolean(chat.currentSessionId && chat.sessionToken))
+const latestAssistant = computed(() => [...chat.messages].reverse().find(message => message.role === 'assistant'))
 const statusLabel = computed(() => ({
   PENDING_APPROVAL: '待运营人员审批',
   APPROVED: '已审批，等待授权 Worker',
@@ -147,6 +149,12 @@ watch(() => chat.currentSessionId, () => {
   report.value = ''
   error.value = ''
 })
+
+watch(() => latestAssistant.value?.researchIntent, async intent => {
+  if (!intent?.enabled) return
+  await nextTick()
+  if (panel.value) panel.value.open = true
+}, { immediate: true })
 
 onBeforeUnmount(() => streamController?.abort())
 

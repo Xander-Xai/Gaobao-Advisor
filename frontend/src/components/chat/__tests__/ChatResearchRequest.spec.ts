@@ -60,6 +60,14 @@ describe('ChatResearchRequest', () => {
     expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
   })
 
+  it('opens the structured request form for a detected, enabled research intent', async () => {
+    const chat = useChatStore()
+    chat.messages.push({ role: 'assistant', content: '请选择范围。', researchIntent: { enabled: true } })
+    const wrapper = mount(ChatResearchRequest)
+    await flushPromises()
+    expect((wrapper.find('[data-testid="chat-research"]').element as HTMLDetailsElement).open).toBe(true)
+  })
+
   it('makes a failed retry a new request that returns to operator approval', async () => {
     const chat = useChatStore()
     chat.currentSessionId = 'session-user-1234'

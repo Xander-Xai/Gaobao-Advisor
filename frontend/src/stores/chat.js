@@ -69,6 +69,7 @@ export const useChatStore = defineStore('chat', () => {
       degraded: false,
       qualityGrade: null,
       rewritten: false,
+      researchIntent: null,
     }
 
     const findAssistant = () => messages.value[messages.value.length - 1]
@@ -80,6 +81,7 @@ export const useChatStore = defineStore('chat', () => {
       if (pending.degraded) msg.degraded = true
       if (pending.qualityGrade !== null) msg.qualityGrade = pending.qualityGrade
       if (pending.rewritten) msg.rewritten = true
+      if (pending.researchIntent !== null) msg.researchIntent = pending.researchIntent
     }
 
     const applyEvent = event => {
@@ -147,6 +149,9 @@ export const useChatStore = defineStore('chat', () => {
       } else if (event.type === 'degraded') {
         pending.degraded = true
         applyPendingMeta(findAssistant())
+      } else if (event.type === 'research_intent') {
+        pending.researchIntent = { enabled: event.enabled === true }
+        applyPendingMeta(findAssistant())
       } else if (event.type === 'error') {
         serverError = true
         // A server-declared failure is never a successful turn.
@@ -195,7 +200,10 @@ export const useChatStore = defineStore('chat', () => {
         messages.value.splice(assistantIndex)
         assistantContent = ''
         nextSlots = null
-        Object.assign(pending, { sources: null, ragStatus: null, structured: null, degraded: false, qualityGrade: null, rewritten: false })
+        Object.assign(pending, {
+          sources: null, ragStatus: null, structured: null, degraded: false,
+          qualityGrade: null, rewritten: false, researchIntent: null,
+        })
       }
 
       // The backend always terminates a stream with an explicit `done`. If it

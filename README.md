@@ -1,6 +1,6 @@
 # Gaobao Advisor｜可核验的高考志愿辅助决策系统
 
-> **当前架构核查（2026-11-25）**：#203 已合并 master（merge `94a8568`），工业 SQL 咨询要求指定审批年度、同省同科类同年精确位次、已登记来源与行级摘要；未注册或变更的 SQL 行失败关闭。#205 随后合入 master（`1a1f373`），Chat 可显式提交结构化复杂研究请求，仍由同一私有 TaskRun 做人工审批与 Worker 执行。公共模型解释、旧语音及历史对话报告不进入工业发布范围。详见 [工业招生证据治理](docs/architecture/industrial-admissions-evidence.md)、[发布合同](docs/architecture/industrial-release-contract.md)与[授权研究 TaskRun](docs/admissions-research-taskrun.md)。代码合并不代表真实数据验收或生产上线。
+> **当前架构核查（2026-11-25）**：#203 已合并 master（merge `94a8568`），工业 SQL 咨询要求指定审批年度、同省同科类同年精确位次、已登记来源与行级摘要；未注册或变更的 SQL 行失败关闭。#205/#206/#207 后续合入 master（当前 `c2bda8c`）：Chat 的确定性短语规则会将有限的多校/多约束请求引向结构化研究表单；命中后保留安全扫描但绕过咨询图、SQL/RAG、自由文本模型与付费 Judge。研究任务仍经同一私有 TaskRun 独立审批，Worker 排除合成学校。自由文本不直接创建任务或触发运行时。公共模型解释、旧语音及历史对话报告不进入工业发布范围。详见 [工业招生证据治理](docs/architecture/industrial-admissions-evidence.md)、[发布合同](docs/architecture/industrial-release-contract.md)与[授权研究 TaskRun](docs/admissions-research-taskrun.md)。代码合并不代表真实数据验收或生产上线。
 
 > **架构治理（2026-11-25）**：确定性 LangGraph 咨询为默认主线；Deep Agents 是经批准的复杂招生研究候选，原生只读 Harness 作为参考和 Eval 基线，沙箱只面向受控招生分析。Java Gateway/Catalog、MySQL、Redis 与 Worker 为标准部署的正式组件。见 [架构裁决与裁剪门禁](docs/architecture/README.md#architecture-decision-freeze--2026-11-25)。
 
@@ -13,7 +13,7 @@
 
 **复杂研究业务链路**采用独立审批 TaskRun → Deep Agents → 只读 SQL/招生分析沙箱 → 独立核验 → 私有报告。原生 Harness 是独立回归与评测基线：用真正的只读业务工具检验模型/Planner 的多步工具执行、预算控制、Fail-Closed 和离线 Eval，不将使用框架或通过单测等同于业务成功。
 
-**Chat 业务接入状态（#204 增量）**：正式 Chat 页面可显式提交两个院校、一个专业及省份/科类/批次/年份范围；同一 session Bearer 绑定任务所有权，使用既有私有 journal、管理员审批、Deep Agents Worker 与证据校验，并通过 SSE 展示真实 TaskRun 状态。提交本身不触发模型或沙箱，也不会自动把自由文本转成研究规格。入口默认关闭，只在显式配置的非生产环境可用；生产与工业运行配置仍关闭。该路径当前没有真实招生数据、付费模型执行或生产隐私验收证据。
+**Chat 业务接入状态（#204 增量）**：正式 Chat API 用保守的确定性短语规则识别一部分多院校/约束咨询；命中时执行安全扫描后绕过咨询图、SQL/RAG、自由文本模型答案及付费 Judge 调用，并在启用环境提示用户打开表单，填写两所院校、一个专业、省份/科类/批次/年份范围。它不会抽取完整规格或自动建任务。后续使用同一 session Bearer 绑定任务所有权、既有私有 journal、独立管理员审批、Deep Agents Worker 与证据核验，并通过 SSE 展示真实 TaskRun 状态。提交本身不触发模型或沙箱。入口默认关闭，只在显式配置的非生产环境可用；生产与工业运行配置仍关闭。该路径当前没有真实招生数据、付费模型执行或生产隐私验收证据。
 
 > **代码归属：** 基于上游早期 MIT 许可代码继续二次开发与工程加固，保留原始许可声明；具体见 [第三方归属说明](THIRD_PARTY_NOTICES.md)。
 

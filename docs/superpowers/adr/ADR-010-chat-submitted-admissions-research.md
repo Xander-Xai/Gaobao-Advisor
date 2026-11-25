@@ -18,10 +18,17 @@ the caller cannot choose those privileges. The existing independent operator
 approval, worker, Deep Agents engine, SQL evidence checks, sandbox policy,
 receipt verifier, cancellation and report lifecycle remain authoritative.
 
-This is an explicit form in the Chat experience, not automatic
-natural-language complexity routing. Public `POST /api/v1/chat` continues its
-deterministic consultation/SSE contract and never starts research. Submitting a
-request does not call a provider; an operator must approve the exact immutable
+Public `POST /api/v1/chat` uses a narrow deterministic phrase detector for
+explicit multi-school / multi-constraint requests. A match suppresses
+the consultation graph, SQL/RAG business lookups, free-form model response
+generation and the separate paid quality-judge call for that turn, after the
+existing security scan. It emits a `research_intent` SSE event with a
+conservative instruction. When the non-production request feature is enabled,
+the Chat UI opens the structured form. The detector does not extract
+school/major scope, create a TaskRun, or authorize a provider call; users must
+confirm a bounded scope through the form. Simple factual questions
+retain the existing deterministic consultation/SSE path. Submitting a request
+does not call a provider; an operator must approve the exact immutable
 specification and an authorized worker must separately execute it. Status SSE
 reports journal states without fabricated percentages. Reports remain session
 owner-bound and contain verified aggregates, not model-authored advice or raw
@@ -39,14 +46,21 @@ queue, journal, task state machine, or persistence lifecycle is introduced.
 - A Chat user can request a bounded two-school/one-major historical comparison
   and observe the existing TaskRun's real approval/execution/terminal state.
 - Operators can discover pending requests in the existing workbench queue.
-- Ambiguous free-text requests are not converted to task specifications; the
-  caller must provide the explicit supported scope.
+- Intent detection is deliberately conservative and phrase-based, not an LLM
+  classifier. Ambiguous free-text requests are never converted into task
+  specifications; the caller must provide the explicit supported scope.
 - Real-data authorization, provider budget approval, privacy review, and
   production deployment remain separate release gates.
 
 ## Verification
 
+`tests/test_chat_sse.py` covers the deterministic intent boundary and verifies
+that a detected complex request bypasses free-form generation and the separate
+quality-judge model call. Frontend tests cover attaching the intent event to the
+right assistant turn and opening the request form.
 `tests/test_chat_research_runs.py` exercises session ownership, idempotency,
-disabled-by-default behavior, operator queue visibility, and terminal SSE using
-the existing journal. Frontend tests exercise the Chat form and operator queue.
-These tests do not call a real model or establish real-data accuracy.
+disabled-by-default behavior, operator queue visibility, and the
+submission-to-approval-to-worker-to-private-report lifecycle against the
+existing journal with a deterministic injected controller. Frontend tests
+exercise the Chat form, intent-event expansion, and operator queue. These tests
+do not call a real model or establish real-data accuracy.
