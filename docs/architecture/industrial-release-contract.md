@@ -59,12 +59,13 @@ python scripts/compose_standard.py up --build -d
 - REDIS_URL：已配置认证与网络隔离的 Redis。
 - GAOBAO_DATA_APPROVAL_REF：内部授权标识，不等于独立核验许可证。
 - GAOBAO_ADMISSIONS_YEAR：候选配置必须明确审批历史年度；API/worker 检查该年度位次及院校级录取记录存在。
+- GAOBAO_ADMISSIONS_MANIFEST_HOST_PATH、GAOBAO_ADMISSIONS_MANIFEST_SHA256：独立审核清单的私有宿主机路径与 SHA-256 pin，API/worker 只读挂载同一文件。详见 [行级来源合同](industrial-admissions-evidence.md)。没有审核清单不启动。
 - CATALOG_JDBC_URL、CATALOG_DB_USER、CATALOG_DB_PASSWORD：同一数据集的独立只读账号。
 - INDUSTRIAL_HTTP_PORT：可选本地反代端口，默认 8088。
 
 单独的私有 `.env.industrial-api` 仅提供 SESSION_SECRET、管理员身份及 token secret、批准的 CORS 和模型配置；不要存放 Catalog root 或不相关服务凭据。镜像构建上下文排除 .env 和 .env.* 文件；应轮换可能曾进入旧镜像的任何凭据并审计旧镜像，而不是认为修改 ignore 即已删除旧层。
 
-先使用独立 DBA 账号运行 `python -m db.migrate upgrade`，检查唯一 head、备份和可恢复性；再以应用运行账号启动。数据库必须为 CUSTOM（非空、无合成学校标记），这只是数据形态门禁，不证明数据权利或质量。应用 API/worker 跳过旧 demo entrypoint，不自动建表、迁移或 seed。两者独立执行同一工业配置、唯一 schema head、CUSTOM 数据及 Redis 启动门禁，不能仅依赖 Compose 的 API 启动顺序；失败时 worker 不消费队列（包括 --once）。此门禁是启动时检查，不证明运行中依赖始终健康。
+先使用独立 DBA 账号运行 `python -m db.migrate upgrade`，检查唯一 head、备份和可恢复性；再以应用运行账号启动。数据库必须为 CUSTOM（非空、无合成学校标记），这只是数据形态门禁，不证明数据权利或质量。应用 API/worker 跳过旧 demo entrypoint，不自动建表、迁移或 seed。两者独立执行同一工业配置、唯一 schema head、CUSTOM 数据及 Redis 启动门禁，不能仅依赖 Compose 的 API 启动顺序；失败时 worker 不消费队列（包括 --once）。此门禁是启动时检查，不证明运行中依赖始终健康。发布前还须独立运行 `python -m scripts.audit_admissions_release --sources-dir /private/reviewed-sources`，保留与部署清单 pin 一致的审计回执；审计工具不是自动发布审批，Java Catalog/公共目录尚未通过同版本门禁。
 
 ```bash
 docker compose --env-file .env.industrial -f docker-compose.industrial.yml config --quiet

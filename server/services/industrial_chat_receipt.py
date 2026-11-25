@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
 from dataclasses import dataclass
 
@@ -23,7 +24,12 @@ class TurnKey:
 
 def make_turn_key(key: str, scene: str, message: str, slots: dict | None) -> TurnKey:
     encoded = json.dumps(
-        {"scene": scene, "message": message, "slots": slots or {}},
+        {
+            "scene": scene,
+            "message": message,
+            "slots": slots or {},
+            "manifest_sha256": os.getenv("GAOBAO_ADMISSIONS_MANIFEST_SHA256", ""),
+        },
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),

@@ -34,3 +34,17 @@ def test_industrial_worker_and_api_share_admission_profile():
     assert api["GAOBAO_RUNTIME_PROFILE"] == "industrial"
     assert all(worker.get(key) == value for key, value in api.items())
     assert "env_file" not in services["worker"]
+
+
+def test_industrial_manifest_is_shared_read_only():
+    import yaml
+
+    services = yaml.safe_load((ROOT / "docker-compose.industrial.yml").read_text())["services"]
+    for name in ("api", "worker"):
+        service = services[name]
+        assert service["environment"]["GAOBAO_ADMISSIONS_MANIFEST_PATH"] == "/run/admissions/manifest.json"
+        assert "GAOBAO_ADMISSIONS_MANIFEST_SHA256" in service["environment"]
+        assert any(
+            "GAOBAO_ADMISSIONS_MANIFEST_HOST_PATH" in volume and volume.endswith(":/run/admissions/manifest.json:ro")
+            for volume in service["volumes"]
+        )

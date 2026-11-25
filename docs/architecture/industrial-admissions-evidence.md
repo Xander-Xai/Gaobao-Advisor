@@ -46,3 +46,22 @@ GAOBAO_ADMISSIONS_YEAR 必填。±5% 位次邻域仅为历史数据展示，最�
 ### 浏览器断线恢复（2026-11-25 独立候选）
 
 #200/#201 已合并；旧候选描述为历史记录。成功工业 SSE done 声明 idempotency_supported=true，前端按已认证会话缓存能力（仅内存）。仅该能力存在且无独立记忆凭证时为新轮生成 128-bit 随机 key，冻结原始请求槽位和凭证；传输异常/无 done EOF 最多重试一次，复用同一 key 和完整 body，不重复添加 user bubble，重放前清除本轮部分回复和元数据，槽位只在有效 done 后应用。显式 SSE error、HTTP 错误、匿名首轮、普通模式、视图切换、无安全随机源不自动重试。普通模式收到 key 明确 409 而非忽略；所有副本必须同版本同工业 profile（旧版本可能忽略 key），禁止混合滚动期间宣称端到端幂等。未覆盖页面刷新、跨标签页、手动重试、匿名首轮、无限期回执保留或生产代理真实断线。
+
+### 行级来源与批准版本（2026-11-25 独立候选）
+
+#200–#202 已合并，前文候选文字是历史记录。工业 API/worker 启动必须解析独立审批的只读 JSON 清单（最大 32MiB，SHA-256 pin、审批引用及年度匹配，schema admissions-lineage/v1）；实际咨询节点按 rank/院校行 ID 与规范化当前值逐项核验，未登记、内容漂移、重复院校/批次或清单不一致停止发布；渲染前复核来源登记及查询摘要。公开文本/卡片记录数据版本、清单 pin、公开 URL、源文件 SHA-256、行定位；不公开内部审批编号。旧请求回执摘要绑定清单 pin，切换版本不接受原 key 重放。清单在进程按 pin 缓存，发布需原子替换私有文件、统一配置并重启/排空全部副本；不支持混合发布或热更新。清单是运营者独立审核的输入，hash 不证明官方真实性、授权、源文件到行的解析正确性或完整覆盖。禁止从合成数据自动签发 approval；真实源文件/审核流程、Java Catalog/公开目录/私有研究同版本绑定、全库覆盖验证和大规模数据集分片仍未完成。
+
+
+#### 审批清单的操作合同
+
+运营者首先独立核对公开发布机构、源文件下载日期、合法授权及提取结果；保留原始文件，计算文件 SHA-256，记录精确页码/行/表号。禁止仅对现有未知来源数据库做 hash 后称为已审查。私有清单格式为：
+
+- schema 固定 admissions-lineage/v1，dataset_version 为 1–128 位 ASCII 标识，year 为整数，approval_ref 与私有配置匹配。
+- sources 是 source_id 到 {url, file_sha256} 的映射，URL 必须为审核过的公开 HTTPS 链接，不允许凭证或私有地址。
+- rows 是 yi_fen_yi_duan:<id> 或 admission_scores:<id> 到 {source_id, locator, row_sha256} 的映射；rank 与院校行均需登记。
+- 规范化行值：rank 为 year/province/subject（实际 SQL 科类）/score/rank；院校行为 year/province/subject/id/school/school_id/batch/min_score/min_rank。使用 admissions_lineage.canonical_digest（排序 JSON key、UTF-8、紧凑分隔、不允许 NaN）；同值/不同编码的规范化规则不得随意改变。
+- 用独立审核流程批准清单后计算完整文件的 SHA-256，配置 pin 与私有只读挂载。源文件与清单不提交公开仓库，不由程序自动颁发授权；测试中 example.invalid 仅合成夹具。当前加载器校验元数据与 pin，不下载 URL 或重新计算未挂载的原始源文件摘要。完整覆盖/审批真实性及数据摄入/版本切换/回滚需要独立验收。
+
+#### 离线发布审计（候选增量）
+
+运行 `python -m scripts.audit_admissions_release --sources-dir /private/reviewed-sources`，使用独立 SELECT-only MySQL 账号与已审批 pin。原始文件按其 64 位 SHA-256 文件名存放，不进行网络下载。逐个流式重算文件摘要，在单一 MySQL InnoDB REPEATABLE READ / READ ONLY consistent snapshot 中核查批准年度内当前受支持的位次（100–750、正位次、非空省份、已支持科类）及院校级录取行（0–750、正位次、非空省份、已支持科类、batch 非 NULL），不只核查在线 top-10。结果区分缺失、额外、变值、歧义、孤立/合成学校、缺失/变更文件及范围外计数；退出码 0=全匹配、1=发现差异、2=执行失败。审计不创建表/迁移/写入数据或颁发授权，输出聚合计数与版本 pin，不输出源数据或内部审批引用。必须在排空导入并冻结招生表后执行、保留回执，并在上线/换版前复核；一致快照只代表本次审计时刻，未接入自动发布门禁。范围外记录不宣称已验证（含海南超750等）、不证明官方覆盖完整或原始文件至 SQL 的人工审核正确。Java Catalog 与 Python 公共目录仍未受同一行级发布合同保护；工业公开上线仍 NO-GO。

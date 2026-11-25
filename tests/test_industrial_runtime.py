@@ -25,6 +25,8 @@ def config():
         "REDIS_URL": "redis://redis:6379/0",
         "GAOBAO_DATA_APPROVAL_REF": "internal-review-1",
         "GAOBAO_ADMISSIONS_YEAR": "2025",
+        "GAOBAO_ADMISSIONS_MANIFEST_PATH": "/fixture/manifest.json",
+        "GAOBAO_ADMISSIONS_MANIFEST_SHA256": "a" * 64,
     }
 
 
@@ -39,6 +41,8 @@ def test_explicit_config(config):
         ("REDIS_URL", ""),
         ("GAOBAO_DATA_APPROVAL_REF", ""),
         ("GAOBAO_ADMISSIONS_YEAR", ""),
+        ("GAOBAO_ADMISSIONS_MANIFEST_PATH", ""),
+        ("GAOBAO_ADMISSIONS_MANIFEST_SHA256", "invalid"),
         ("ENABLE_RAG_KB", "true"),
         ("AUTO_SEED_DEMO", "true"),
         ("AUTO_MIGRATE", "true"),

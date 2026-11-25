@@ -41,6 +41,10 @@ def validate_industrial_config(env: Mapping[str, str]) -> None:
         raise RuntimeError("Industrial profile requires a data authorization reference")
     if not re.fullmatch(r"20[0-9]{2}", env.get("GAOBAO_ADMISSIONS_YEAR", "")):
         raise RuntimeError("Industrial profile requires explicit approved admissions year")
+    if not env.get("GAOBAO_ADMISSIONS_MANIFEST_PATH", "").strip() or not re.fullmatch(
+        r"[a-f0-9]{64}", env.get("GAOBAO_ADMISSIONS_MANIFEST_SHA256", "")
+    ):
+        raise RuntimeError("Industrial profile requires a pinned admissions manifest")
 
 
 def redis_ready() -> bool:
@@ -60,6 +64,7 @@ def validate_industrial_dependencies() -> None:
     from db.database import engine, get_session
     from db.migrate import alembic_config
     from db.models import AdmissionScore, YiFenYiDuan
+    from server.services.admissions_lineage import approved_manifest
     from server.services.data_profile import current_data_profile
     from server.services.industrial_admissions import approved_year
 
@@ -71,6 +76,7 @@ def validate_industrial_dependencies() -> None:
     if current_data_profile() != "CUSTOM":
         raise RuntimeError("Industrial database must contain non-synthetic data")
     year = approved_year()
+    approved_manifest(year)
     db = get_session()
     try:
         if not db.query(YiFenYiDuan.id).filter(YiFenYiDuan.year == year).first():
