@@ -88,6 +88,7 @@ async def test_chat_sse_reports_no_evidence_distinctly(monkeypatch):
         "请比较北京大学和清华大学，结合专业约束制定志愿方案",
         "帮我分析多所院校并筛选符合选科的专业",
         "给我一个冲稳保选校规划",
+        "Compare two schools and evaluate major constraints",
     ],
 )
 def test_managed_research_intent_detector_is_narrow(message):

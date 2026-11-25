@@ -100,8 +100,7 @@ def requires_managed_admissions_research(message: str) -> bool:
     This is a routing hint only: it does not infer a task scope or authorize a
     provider call. False positives are preferable to an unverified model answer.
     """
-    normalized = re.sub(r"\s+", "", message)
-    return any(pattern.search(normalized) for pattern in _MANAGED_RESEARCH_PATTERNS)
+    return any(pattern.search(message) for pattern in _MANAGED_RESEARCH_PATTERNS)
 
 
 def _managed_research_request_enabled() -> bool:
