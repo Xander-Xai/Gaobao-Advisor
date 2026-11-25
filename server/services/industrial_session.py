@@ -51,7 +51,11 @@ def load_turn(session_id: str, provided: dict | None, *, fresh: bool) -> tuple[d
             raise ValueError("Invalid stored session slots")
     slots = flatten_slots(stored, derive_score=False)
     for key, value in (provided or {}).items():
-        if key in {"province", "score", "score_rank", "subject"} and key not in slots and value not in (None, "", False):
+        if (
+            key in {"province", "score", "score_rank", "subject"}
+            and key not in slots
+            and value not in (None, "", False)
+        ):
             slots[key] = value
     return slots, extract_query_state(stored), version
 
