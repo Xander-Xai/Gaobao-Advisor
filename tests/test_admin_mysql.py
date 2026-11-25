@@ -292,3 +292,51 @@ def test_mysql_keyed_receipt_race_commits_one_pair(mysql_factory, monkeypatch):
     with mysql_factory() as db:
         assert db.query(ChatTurnReceipt).count() == 1
         assert db.query(ConversationMessage).count() == 4
+
+
+def test_mysql_admissions_release_read_only_snapshot(mysql_factory, tmp_path):
+    import hashlib
+
+    from db.models import AdmissionScore, School, YiFenYiDuan
+    from server.services.admissions_lineage import canonical_digest, row_values
+    from server.services.admissions_release_audit import audit_mysql_snapshot
+    from server.services.industrial_admissions import query_history
+
+    with mysql_factory() as db:
+        school = School(name="synthetic audit fixture", province="广东")
+        db.add(school)
+        db.flush()
+        db.add(YiFenYiDuan(province="广东", year=2099, subject_type="物理类", score=600, cumulative_count=1000))
+        db.add(
+            AdmissionScore(
+                school_id=school.id, province="广东", year=2099, subject_type="物理类", min_score=599, min_rank=1020
+            )
+        )
+        db.commit()
+        evidence = query_history(db, province="广东", score=600, subject="物理", year=2099)
+        engine = db.get_bind()
+        row_id = evidence["rows"][0]["id"]
+    raw = b"synthetic mysql fixture"
+    digest = hashlib.sha256(raw).hexdigest()
+    (tmp_path / digest).write_bytes(raw)
+    manifest = (
+        "a" * 64,
+        {
+            "dataset_version": "mysql-fixture",
+            "year": 2099,
+            "sources": {"fixture": {"file_sha256": digest}},
+            "rows": {
+                key: {"row_sha256": canonical_digest(values)}
+                for key, values in row_values(evidence).items()
+            },
+        },
+    )
+    result = audit_mysql_snapshot(engine, manifest, tmp_path)
+    assert result["passed"]
+    assert result["counts"]["rank"] == result["counts"]["school"] == 1
+    with mysql_factory() as db:
+        db.get(AdmissionScore, row_id).min_score = 601
+        db.commit()
+    result = audit_mysql_snapshot(engine, manifest, tmp_path)
+    assert not result["passed"]
+    assert result["issues"]["changed_rows"] == 1

@@ -358,3 +358,81 @@ def test_keyed_chat_receipt_digest_changes_with_release_pin(monkeypatch):
     second = make_turn_key("fixture-key-00000001", "gaokao", "600分", {})
     assert first.key_digest == second.key_digest
     assert first.request_digest != second.request_digest
+
+
+@pytest.fixture
+def audited_release(history_db, reviewed_manifest, tmp_path):
+    import hashlib
+
+    from server.services.admissions_lineage import approved_manifest, canonical_digest, row_values
+
+    doc, install = reviewed_manifest
+    # Synthetic fixture deliberately uses two cohorts; the live audit must
+    # detect missing rows even if a single chat query would not select them.
+    history = query_history(history_db, province="广东", score=600, subject="历史", year=2025)
+    doc["rows"].update(
+        {
+            key: {"source_id": "fixture", "locator": "fixture row", "row_sha256": canonical_digest(values)}
+            for key, values in row_values(history).items()
+        }
+    )
+    raw = b"synthetic source fixture, not official data"
+    digest = hashlib.sha256(raw).hexdigest()
+    (tmp_path / digest).write_bytes(raw)
+    doc["sources"]["fixture"]["file_sha256"] = digest
+    install(doc)
+    return approved_manifest(2025), tmp_path
+
+
+def test_release_audit_full_supported_inventory(history_db, audited_release):
+    from server.services.admissions_release_audit import audit_release
+
+    manifest, path = audited_release
+    result = audit_release(history_db, manifest, path)
+    assert result["passed"]
+    assert result["counts"] == {"rank": 2, "school": 2, "rank_out_of_scope": 0, "school_out_of_scope": 0}
+    assert not any(result["issues"].values())
+    assert "internal-fixture-approval" not in str(result)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "issue"),
+    [
+        ("file_changed", "source_missing_or_changed"),
+        ("file_missing", "source_missing_or_changed"),
+        ("row_changed", "changed_rows"),
+        ("row_missing", "missing_rows"),
+        ("row_added", "unregistered_rows"),
+        ("alias_added", "ambiguous_rows"),
+    ],
+)
+def test_release_audit_detects_drift(history_db, audited_release, mutation, issue):
+    from server.services.admissions_release_audit import audit_release
+
+    manifest, path = audited_release
+    digest = manifest[1]["sources"]["fixture"]["file_sha256"]
+    if mutation == "file_changed":
+        (path / digest).write_bytes(b"changed")
+    elif mutation == "file_missing":
+        (path / digest).unlink()
+    elif mutation == "row_changed":
+        history_db.get(AdmissionScore, 2).min_score = 601
+    elif mutation == "row_missing":
+        history_db.delete(history_db.get(AdmissionScore, 2))
+    elif mutation == "row_added":
+        history_db.add(YiFenYiDuan(province="广东", year=2025, subject_type="物理类", score=601, cumulative_count=900))
+    else:
+        history_db.add(YiFenYiDuan(province="广东", year=2025, subject_type="物理", score=600, cumulative_count=1000))
+    history_db.commit()
+    result = audit_release(history_db, manifest, path)
+    assert not result["passed"]
+    assert result["issues"][issue] == 1
+
+
+def test_release_audit_mysql_entry_rejects_sqlite(history_db, audited_release):
+    from server.services.admissions_lineage import ManifestError
+    from server.services.admissions_release_audit import audit_mysql_snapshot
+
+    manifest, path = audited_release
+    with pytest.raises(ManifestError, match="requires MySQL"):
+        audit_mysql_snapshot(history_db.get_bind(), manifest, path)
