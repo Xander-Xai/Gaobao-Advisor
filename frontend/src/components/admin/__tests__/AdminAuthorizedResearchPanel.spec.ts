@@ -24,6 +24,18 @@ beforeEach(() => {
 })
 
 describe('authorized research workbench', () => {
+  it('lists user-submitted approval requests for operators to review', async () => {
+    const list = vi.spyOn(adminApi, 'listAuthorizedResearch').mockResolvedValue([task])
+    const wrapper = mount(AdminAuthorizedResearchPanel)
+    await wrapper.find('[data-testid="research-queue-refresh"]').trigger('click')
+    await flushPromises()
+
+    expect(list).toHaveBeenCalledWith('PENDING_APPROVAL', 'test-token')
+    expect(wrapper.find('[data-testid="research-queue"]').text()).toContain(task.run_id)
+    await wrapper.find('[data-testid="research-queue"] button').trigger('click')
+    expect(wrapper.find('[data-testid="research-detail"]').text()).toContain(task.spec_sha256)
+  })
+
   it('creates an immutable business task with no automatic execution', async () => {
     const create = vi.spyOn(adminApi, 'createAuthorizedResearch').mockResolvedValue(task)
     const wrapper = mount(AdminAuthorizedResearchPanel)

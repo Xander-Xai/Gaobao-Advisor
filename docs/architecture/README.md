@@ -24,6 +24,8 @@ record why the larger decisions were made.
 
 **目标边界（非已上线）**：简单咨询 → 确定性业务图；复杂研究 → 经批准的 Deep Agents 执行 → 只读 SQL/分析沙箱 → 独立证据核验 → 报告。Deep Agents 的 InMemorySaver 不等于持久图恢复；受控研究 journal 持久化任务生命周期、身份/审批和执行回执，过期任务不自动重放，不建立平行生产队列。原生 Harness、合成实验、旧 benchmark 保留用于对照或回归，不为每条路径重复增设功能。
 
+**Chat 请求接入（ADR-010）**：Chat 页面提供显式结构化研究请求表单，`POST /api/v1/chat/research-runs` 以当前 session capability 建立同一私有 TaskRun。它不从自由文本自动路由、不改变 `POST /api/v1/chat` 的确定性回答、不调用第二套运行时；严格需要独立运营审批和现有 Worker。默认关闭，production/industrial profile 不开放。SSE 是 TaskRun journal 状态的流式投影，不表示未记录的百分比或模型内部步骤。生产及真实数据验收仍未完成。
+
 **架构裁剪门禁**：先确认默认路由、operator 入口、实验入口的调用关系和兼容合同；再做等价状态/失败回归和简单基线对比。没有证据不删除安全检查，不自动开启模型、沙箱、真实数据或付费调用。未完成架构裁剪前暂停新增技术栈和能力缺口扩展。
 
 ### Entry-point and state ownership decision (#190)
@@ -39,6 +41,7 @@ The integrated research lifecycle entered master in #192/#193/#194; #196 subsequ
 | `server/agent/admissions_deepagents.py` | Shared Deep Agents research engine with InMemorySaver | Sole complex-research engine; standalone CLI is disabled when managed research is enabled. Process restart is not graph-resume support. |
 | `server/agent/admissions_analysis_sandbox.py` / `sandbox_runtime.py` | Restricted admissions analysis / synthetic security fixtures | Use deterministic SQL/functions first; no arbitrary shell from public chat. |
 | `server/routes/admissions_research_runs.py` → `admissions_research_taskrun.py` | Operator-only API, private SQLite journal, exact-spec approval and CAS state transitions | Single managed research lifecycle; no HTTP model execution. |
+| `server/routes/chat_research_runs.py` | Explicit session-owned request/status/cancel/report surface backed by the same journal | Non-production opt-in; creates PENDING_APPROVAL and never starts a model. |
 | `server/agent/admissions_research_dispatch.py` | Bounded operator dispatch of approved runs | Calls the same execution slot and journal claim; not a separate queue. |
 
 A physically separate synthetic journal is a trust boundary, not a second production engine. The private research path must have exactly one authoritative owner/approval/lease/receipt/state transition contract. Do not expose a second queue, allow synthetic approvals to authorize real work, or interpret a persisted job row as a persisted graph checkpoint. If recovery of a paid or externally uncertain action is not proven, park the run for reconciliation rather than replaying it.
@@ -414,6 +417,7 @@ Python application.
 | [ADR-007](../superpowers/adr/ADR-007-admin-workbench-rbac.md) | Admin workbench RBAC and audit |
 | [ADR-008](../superpowers/adr/ADR-008-mysql-redis-worker.md) | Optional MySQL/Redis/worker profile |
 | [ADR-009](../superpowers/adr/ADR-009-redis-delivery-selection.md) | Keep Redis List + Outbox as delivery mechanism |
+| [ADR-010](../superpowers/adr/ADR-010-chat-submitted-admissions-research.md) | Chat may submit an explicit scope to the existing operator-approved research lifecycle |
 
 ## 11. Boundaries
 

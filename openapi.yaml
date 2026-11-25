@@ -29,6 +29,8 @@ components:
         token_type:
           const: bearer
           default: bearer
+          enum:
+          - bearer
           title: Token Type
           type: string
         user:
@@ -117,6 +119,17 @@ components:
       - plan_count
       title: AdmissionScoreOut
       type: object
+    Approval:
+      additionalProperties: false
+      properties:
+        spec_sha256:
+          pattern: ^[0-9a-f]{64}$
+          title: Spec Sha256
+          type: string
+      required:
+      - spec_sha256
+      title: Approval
+      type: object
     AuditLogOut:
       properties:
         action:
@@ -130,7 +143,6 @@ components:
           title: Created At
           type: string
         detail:
-          additionalProperties: true
           title: Detail
           type: object
         id:
@@ -211,8 +223,7 @@ components:
           type: string
         slots:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Slots
       required:
@@ -589,6 +600,120 @@ components:
       - query
       title: KnowledgeSearchRequest
       type: object
+    MemoryWrite:
+      properties:
+        expected_version:
+          maximum: 2147483646.0
+          minimum: 0.0
+          title: Expected Version
+          type: integer
+        ttl_days:
+          default: 180
+          maximum: 365.0
+          minimum: 1.0
+          title: Ttl Days
+          type: integer
+        value:
+          maxLength: 120
+          minLength: 1
+          title: Value
+          type: string
+      required:
+      - value
+      - expected_version
+      title: MemoryWrite
+      type: object
+    NewChatResearch:
+      additionalProperties: false
+      properties:
+        idempotency_key:
+          pattern: ^[A-Za-z0-9_.:-]{8,96}$
+          title: Idempotency Key
+          type: string
+        scope:
+          $ref: '#/components/schemas/ScopeRequest'
+        session_id:
+          maxLength: 64
+          minLength: 4
+          pattern: ^[a-zA-Z0-9_\-]+$
+          title: Session Id
+          type: string
+      required:
+      - session_id
+      - idempotency_key
+      - scope
+      title: NewChatResearch
+      type: object
+    NewResearch:
+      additionalProperties: false
+      properties:
+        approval_ref:
+          maxLength: 200
+          minLength: 1
+          title: Approval Ref
+          type: string
+        idempotency_key:
+          pattern: ^[A-Za-z0-9_.:-]{8,96}$
+          title: Idempotency Key
+          type: string
+        image_id:
+          pattern: ^sha256:[0-9a-f]{64}$
+          title: Image Id
+          type: string
+        model_id:
+          pattern: ^openai:[A-Za-z0-9_.-]{2,100}$
+          title: Model Id
+          type: string
+        scope:
+          $ref: '#/components/schemas/ScopeRequest'
+      required:
+      - scope
+      - model_id
+      - image_id
+      - approval_ref
+      - idempotency_key
+      title: NewResearch
+      type: object
+    NewSyntheticPortfolioTaskRun:
+      additionalProperties: false
+      description: Explicitly non-model, operator-approved multi-candidate research.
+      properties:
+        idempotency_key:
+          maxLength: 96
+          minLength: 8
+          pattern: ^[A-Za-z0-9_.:-]+$
+          title: Idempotency Key
+          type: string
+        portfolio:
+          $ref: '#/components/schemas/SyntheticPortfolioRequest'
+      required:
+      - portfolio
+      - idempotency_key
+      title: NewSyntheticPortfolioTaskRun
+      type: object
+    NewSyntheticTaskRun:
+      properties:
+        engine:
+          default: deterministic
+          enum:
+          - deterministic
+          - deepagents
+          - native_harness
+          title: Engine
+          type: string
+        idempotency_key:
+          maxLength: 96
+          minLength: 8
+          pattern: ^[A-Za-z0-9_.:-]+$
+          title: Idempotency Key
+          type: string
+        profile:
+          $ref: '#/components/schemas/SyntheticDecisionCardRequest'
+      required:
+      - profile
+      - idempotency_key
+      title: NewSyntheticTaskRun
+      type: object
     NextQuestionResponse:
       properties:
         is_complete:
@@ -615,7 +740,6 @@ components:
     OnboardingRequest:
       properties:
         data:
-          additionalProperties: true
           title: Data
           type: object
         step:
@@ -673,6 +797,26 @@ components:
       - year
       title: PlanRowOut
       type: object
+    PortfolioReviewSignoff:
+      additionalProperties: false
+      description: A signed-in administrator reviews a frozen *fictional* receipt
+        hash.
+      properties:
+        receipt_sha256:
+          pattern: ^[0-9a-f]{64}$
+          title: Receipt Sha256
+          type: string
+        verdict:
+          enum:
+          - verified_historical_only
+          - reject
+          title: Verdict
+          type: string
+      required:
+      - verdict
+      - receipt_sha256
+      title: PortfolioReviewSignoff
+      type: object
     ProfileResponse:
       properties:
         is_complete:
@@ -684,7 +828,6 @@ components:
           title: Missing Fields
           type: array
         profile:
-          additionalProperties: true
           title: Profile
           type: object
         session_id:
@@ -713,6 +856,19 @@ components:
       - field
       - value
       title: ProfileUpdateRequest
+      type: object
+    PublishSyntheticEvidenceMemory:
+      additionalProperties: false
+      description: Explicit opt-in for indexing independently rechecked fictional
+        receipts.
+      properties:
+        ttl_seconds:
+          default: 86400
+          maximum: 2592000.0
+          minimum: 60.0
+          title: Ttl Seconds
+          type: integer
+      title: PublishSyntheticEvidenceMemory
       type: object
     QualityIssueOut:
       properties:
@@ -866,7 +1022,6 @@ components:
           title: Execution Mode
           type: string
         filters:
-          additionalProperties: true
           title: Filters
           type: object
         finished_at:
@@ -1122,6 +1277,51 @@ components:
       - pages
       title: SchoolPageOut
       type: object
+    ScopeRequest:
+      additionalProperties: false
+      properties:
+        batch:
+          maxLength: 20
+          minLength: 1
+          title: Batch
+          type: string
+        major_id:
+          exclusiveMinimum: 0.0
+          title: Major Id
+          type: integer
+        province:
+          maxLength: 20
+          minLength: 1
+          title: Province
+          type: string
+        school_ids:
+          items:
+            type: integer
+          maxItems: 2
+          minItems: 2
+          title: School Ids
+          type: array
+        subject_type:
+          maxLength: 10
+          minLength: 1
+          title: Subject Type
+          type: string
+        year_from:
+          title: Year From
+          type: integer
+        year_to:
+          title: Year To
+          type: integer
+      required:
+      - school_ids
+      - major_id
+      - province
+      - subject_type
+      - batch
+      - year_from
+      - year_to
+      title: ScopeRequest
+      type: object
     ScoreRowOut:
       properties:
         avg_score:
@@ -1249,6 +1449,164 @@ components:
       - audit_events
       - last_job_at
       title: StatsOut
+      type: object
+    SyntheticDecisionCardRequest:
+      description: Only fictitious profiles may enter this experimental endpoint.
+      properties:
+        major:
+          maxLength: 80
+          minLength: 3
+          title: Major
+          type: string
+        province:
+          maxLength: 24
+          minLength: 3
+          title: Province
+          type: string
+        school_a:
+          maxLength: 80
+          minLength: 3
+          title: School A
+          type: string
+        school_b:
+          maxLength: 80
+          minLength: 3
+          title: School B
+          type: string
+        score:
+          maximum: 750.0
+          minimum: 100.0
+          title: Score
+          type: integer
+        subject_type:
+          pattern: ^(物理类|历史类)$
+          title: Subject Type
+          type: string
+        year:
+          maximum: 2100.0
+          minimum: 2020.0
+          title: Year
+          type: integer
+      required:
+      - school_a
+      - school_b
+      - major
+      - province
+      - subject_type
+      - score
+      - year
+      title: SyntheticDecisionCardRequest
+      type: object
+    SyntheticOptimizationSignoff:
+      additionalProperties: false
+      properties:
+        verdict:
+          enum:
+          - attest_reviewed
+          - reject
+          title: Verdict
+          type: string
+      required:
+      - verdict
+      title: SyntheticOptimizationSignoff
+      type: object
+    SyntheticOptimizationSubmission:
+      additionalProperties: false
+      properties:
+        pairs:
+          items:
+            maxItems: 2
+            minItems: 2
+            prefixItems:
+            - type: object
+            - type: object
+            type: array
+          maxItems: 5
+          minItems: 2
+          title: Pairs
+          type: array
+      required:
+      - pairs
+      title: SyntheticOptimizationSubmission
+      type: object
+    SyntheticPortfolioCandidate:
+      additionalProperties: false
+      properties:
+        major:
+          maxLength: 80
+          minLength: 3
+          title: Major
+          type: string
+        school:
+          maxLength: 80
+          minLength: 3
+          title: School
+          type: string
+      required:
+      - school
+      - major
+      title: SyntheticPortfolioCandidate
+      type: object
+    SyntheticPortfolioRequest:
+      additionalProperties: false
+      description: Fictional historical options, not ordered application preferences.
+      properties:
+        candidates:
+          items:
+            $ref: '#/components/schemas/SyntheticPortfolioCandidate'
+          maxItems: 8
+          minItems: 3
+          title: Candidates
+          type: array
+        province:
+          maxLength: 24
+          minLength: 3
+          title: Province
+          type: string
+        score:
+          maximum: 750.0
+          minimum: 100.0
+          title: Score
+          type: integer
+        subject_type:
+          pattern: ^(物理类|历史类)$
+          title: Subject Type
+          type: string
+        year:
+          maximum: 2100.0
+          minimum: 2020.0
+          title: Year
+          type: integer
+      required:
+      - province
+      - score
+      - subject_type
+      - year
+      - candidates
+      title: SyntheticPortfolioRequest
+      type: object
+    SyntheticResearchRequest:
+      properties:
+        major:
+          maxLength: 80
+          minLength: 3
+          title: Major
+          type: string
+        school_a:
+          maxLength: 80
+          minLength: 3
+          title: School A
+          type: string
+        school_b:
+          maxLength: 80
+          minLength: 3
+          title: School B
+          type: string
+      required:
+      - school_a
+      - school_b
+      - major
+      title: SyntheticResearchRequest
       type: object
     SystemStatusOut:
       properties:
@@ -1382,6 +1740,26 @@ components:
       required:
       - subject_type
       title: TrendSeriesOut
+      type: object
+    TriageReview:
+      additionalProperties: false
+      properties:
+        review_reference:
+          maxLength: 128
+          minLength: 8
+          pattern: ^[A-Za-z0-9_.:/-]+$
+          title: Review Reference
+          type: string
+        verdict:
+          enum:
+          - acknowledged
+          - escalated
+          title: Verdict
+          type: string
+      required:
+      - verdict
+      - review_reference
+      title: TriageReview
       type: object
     ValidationError:
       properties:
@@ -1639,6 +2017,1071 @@ paths:
               schema: {}
           description: Successful Response
       summary: Root
+  /api/v1/admin/admissions-research/runs:
+    get:
+      operationId: list_runs_api_v1_admin_admissions_research_runs_get
+      parameters:
+      - in: query
+        name: state
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: State
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 100
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          maximum: 10000
+          minimum: 0
+          title: Offset
+          type: integer
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Runs
+      tags:
+      - admissions-research
+    post:
+      operationId: create_run_api_v1_admin_admissions_research_runs_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewResearch'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Run
+      tags:
+      - admissions-research
+  /api/v1/admin/admissions-research/runs/{run_id}:
+    get:
+      operationId: get_run_api_v1_admin_admissions_research_runs__run_id__get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Run
+      tags:
+      - admissions-research
+  /api/v1/admin/admissions-research/runs/{run_id}/approve:
+    post:
+      operationId: approve_run_api_v1_admin_admissions_research_runs__run_id__approve_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Approval'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Approve Run
+      tags:
+      - admissions-research
+  /api/v1/admin/admissions-research/runs/{run_id}/cancel:
+    post:
+      operationId: cancel_run_api_v1_admin_admissions_research_runs__run_id__cancel_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Cancel Run
+      tags:
+      - admissions-research
+  /api/v1/admin/admissions-research/runs/{run_id}/report:
+    get:
+      operationId: get_report_api_v1_admin_admissions_research_runs__run_id__report_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema:
+                type: string
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Report
+      tags:
+      - admissions-research
+  /api/v1/admin/agent-experiments/decision-card:
+    post:
+      description: Run real synthetic SQL evidence verification, not admissions prediction.
+      operationId: synthetic_decision_card_api_v1_admin_agent_experiments_decision_card_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyntheticDecisionCardRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Synthetic Decision Card Api V1 Admin Agent Experiments
+                  Decision Card Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Synthetic Decision Card
+      tags:
+      - agent-experiments
+  /api/v1/admin/agent-experiments/decision-card/example:
+    get:
+      description: Choose two fictional schools with actual SQL rows in the frozen
+        demo.
+      operationId: synthetic_decision_card_example_api_v1_admin_agent_experiments_decision_card_example_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Synthetic Decision Card Example Api V1 Admin Agent
+                  Experiments Decision Card Example Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Synthetic Decision Card Example
+      tags:
+      - agent-experiments
+  /api/v1/admin/agent-experiments/example:
+    get:
+      description: Discover an explicitly fictional request from the same seeded dataset.
+      operationId: synthetic_research_example_api_v1_admin_agent_experiments_example_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Synthetic Research Example Api V1 Admin Agent Experiments
+                  Example Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Synthetic Research Example
+      tags:
+      - agent-experiments
+  /api/v1/admin/agent-experiments/portfolio:
+    post:
+      description: Operator-only SQL evidence screening. No model or production advice.
+      operationId: synthetic_portfolio_api_v1_admin_agent_experiments_portfolio_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyntheticPortfolioRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Synthetic Portfolio Api V1 Admin Agent Experiments
+                  Portfolio Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Synthetic Portfolio
+      tags:
+      - agent-experiments
+  /api/v1/admin/agent-experiments/research:
+    post:
+      description: 'Run actual synthetic SQL data tools and return redacted Agent
+        trace.
+
+
+        This is a demonstration of runtime policy, NOT actual LLM autonomy.'
+      operationId: synthetic_research_api_v1_admin_agent_experiments_research_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyntheticResearchRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Synthetic Research Api V1 Admin Agent Experiments
+                  Research Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Synthetic Research
+      tags:
+      - agent-experiments
+  /api/v1/admin/agent-optimizer/demo-pointer:
+    get:
+      operationId: get_synthetic_demo_pointer_api_v1_admin_agent_optimizer_demo_pointer_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Get Synthetic Demo Pointer Api V1 Admin Agent Optimizer
+                  Demo Pointer Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Synthetic Demo Pointer
+      tags:
+      - agent-optimizer
+  /api/v1/admin/agent-optimizer/demo-pointer/rollback:
+    post:
+      operationId: rollback_synthetic_demo_pointer_api_v1_admin_agent_optimizer_demo_pointer_rollback_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Rollback Synthetic Demo Pointer Api V1 Admin Agent
+                  Optimizer Demo Pointer Rollback Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Rollback Synthetic Demo Pointer
+      tags:
+      - agent-optimizer
+  /api/v1/admin/agent-optimizer/proposals:
+    post:
+      operationId: submit_synthetic_optimization_api_v1_admin_agent_optimizer_proposals_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyntheticOptimizationSubmission'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                title: Response Submit Synthetic Optimization Api V1 Admin Agent Optimizer
+                  Proposals Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Submit Synthetic Optimization
+      tags:
+      - agent-optimizer
+  /api/v1/admin/agent-optimizer/proposals/{proposal_id}:
+    get:
+      operationId: get_synthetic_optimization_api_v1_admin_agent_optimizer_proposals__proposal_id__get
+      parameters:
+      - in: path
+        name: proposal_id
+        required: true
+        schema:
+          title: Proposal Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Get Synthetic Optimization Api V1 Admin Agent Optimizer
+                  Proposals  Proposal Id  Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Synthetic Optimization
+      tags:
+      - agent-optimizer
+  /api/v1/admin/agent-optimizer/proposals/{proposal_id}/review:
+    post:
+      operationId: review_synthetic_optimization_api_v1_admin_agent_optimizer_proposals__proposal_id__review_post
+      parameters:
+      - in: path
+        name: proposal_id
+        required: true
+        schema:
+          title: Proposal Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyntheticOptimizationSignoff'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Review Synthetic Optimization Api V1 Admin Agent Optimizer
+                  Proposals  Proposal Id  Review Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Review Synthetic Optimization
+      tags:
+      - agent-optimizer
+  /api/v1/admin/agent-optimizer/proposals/{proposal_id}/simulate:
+    post:
+      description: Only update a local demonstration pointer; no rollout is performed.
+      operationId: simulate_synthetic_stage_api_v1_admin_agent_optimizer_proposals__proposal_id__simulate_post
+      parameters:
+      - in: path
+        name: proposal_id
+        required: true
+        schema:
+          title: Proposal Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Simulate Synthetic Stage Api V1 Admin Agent Optimizer
+                  Proposals  Proposal Id  Simulate Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Simulate Synthetic Stage
+      tags:
+      - agent-optimizer
+  /api/v1/admin/agent-taskruns/evidence-memory:
+    get:
+      description: Read only the current principal's indexed fictional source receipts.
+      operationId: list_synthetic_evidence_memory_api_v1_admin_agent_taskruns_evidence_memory_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response List Synthetic Evidence Memory Api V1 Admin Agent
+                  Taskruns Evidence Memory Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Synthetic Evidence Memory
+      tags:
+      - agent-taskruns
+  /api/v1/admin/agent-taskruns/portfolio-runs:
+    post:
+      description: Create only frozen synthetic SQL work, subject to maker-checker
+        approval.
+      operationId: create_portfolio_taskrun_api_v1_admin_agent_taskruns_portfolio_runs_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewSyntheticPortfolioTaskRun'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                title: Response Create Portfolio Taskrun Api V1 Admin Agent Taskruns
+                  Portfolio Runs Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Portfolio Taskrun
+      tags:
+      - agent-taskruns
+  /api/v1/admin/agent-taskruns/runs:
+    post:
+      operationId: create_synthetic_taskrun_api_v1_admin_agent_taskruns_runs_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewSyntheticTaskRun'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                title: Response Create Synthetic Taskrun Api V1 Admin Agent Taskruns
+                  Runs Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Synthetic Taskrun
+      tags:
+      - agent-taskruns
+  /api/v1/admin/agent-taskruns/runs/{run_id}:
+    get:
+      operationId: get_synthetic_taskrun_api_v1_admin_agent_taskruns_runs__run_id__get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Get Synthetic Taskrun Api V1 Admin Agent Taskruns
+                  Runs  Run Id  Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Synthetic Taskrun
+      tags:
+      - agent-taskruns
+  /api/v1/admin/agent-taskruns/runs/{run_id}/approve:
+    post:
+      operationId: approve_synthetic_taskrun_api_v1_admin_agent_taskruns_runs__run_id__approve_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Approve Synthetic Taskrun Api V1 Admin Agent Taskruns
+                  Runs  Run Id  Approve Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Approve Synthetic Taskrun
+      tags:
+      - agent-taskruns
+  /api/v1/admin/agent-taskruns/runs/{run_id}/cancel:
+    post:
+      description: Owner/admin revokes lease; opt-in local Supervisor also kills its
+        own worker tree.
+      operationId: cancel_synthetic_taskrun_api_v1_admin_agent_taskruns_runs__run_id__cancel_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Cancel Synthetic Taskrun Api V1 Admin Agent Taskruns
+                  Runs  Run Id  Cancel Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Cancel Synthetic Taskrun
+      tags:
+      - agent-taskruns
+  /api/v1/admin/agent-taskruns/runs/{run_id}/execute:
+    post:
+      description: 'Only fast deterministic tasks are callable through HTTP.
+
+
+        Model-driven runs require the separately invoked, explicitly authorized
+
+        worker CLI so a browser click cannot trigger paid external model calls.'
+      operationId: execute_synthetic_taskrun_api_v1_admin_agent_taskruns_runs__run_id__execute_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Execute Synthetic Taskrun Api V1 Admin Agent Taskruns
+                  Runs  Run Id  Execute Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Execute Synthetic Taskrun
+      tags:
+      - agent-taskruns
+  /api/v1/admin/agent-taskruns/runs/{run_id}/memory:
+    delete:
+      description: Remove the owner-scoped memory index, not immutable task audit
+        history.
+      operationId: forget_synthetic_evidence_memory_api_v1_admin_agent_taskruns_runs__run_id__memory_delete
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Forget Synthetic Evidence Memory Api V1 Admin Agent
+                  Taskruns Runs  Run Id  Memory Delete
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Forget Synthetic Evidence Memory
+      tags:
+      - agent-taskruns
+    get:
+      description: Owner or admin can read, with fresh source/expiry/review checks.
+      operationId: get_synthetic_evidence_memory_api_v1_admin_agent_taskruns_runs__run_id__memory_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Get Synthetic Evidence Memory Api V1 Admin Agent Taskruns
+                  Runs  Run Id  Memory Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Synthetic Evidence Memory
+      tags:
+      - agent-taskruns
+    post:
+      description: Index a *fictional* two-admin-reviewed receipt; no LLM memory write.
+      operationId: publish_synthetic_evidence_memory_api_v1_admin_agent_taskruns_runs__run_id__memory_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishSyntheticEvidenceMemory'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                title: Response Publish Synthetic Evidence Memory Api V1 Admin Agent
+                  Taskruns Runs  Run Id  Memory Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Publish Synthetic Evidence Memory
+      tags:
+      - agent-taskruns
+  /api/v1/admin/agent-taskruns/runs/{run_id}/review:
+    get:
+      description: Read the frozen SHA before a separate admin submits a review.
+      operationId: get_synthetic_portfolio_review_api_v1_admin_agent_taskruns_runs__run_id__review_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Get Synthetic Portfolio Review Api V1 Admin Agent
+                  Taskruns Runs  Run Id  Review Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Synthetic Portfolio Review
+      tags:
+      - agent-taskruns
+    post:
+      description: A review declaration, not a certification of real admissions advice.
+      operationId: signoff_synthetic_portfolio_review_api_v1_admin_agent_taskruns_runs__run_id__review_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortfolioReviewSignoff'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Signoff Synthetic Portfolio Review Api V1 Admin Agent
+                  Taskruns Runs  Run Id  Review Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Signoff Synthetic Portfolio Review
+      tags:
+      - agent-taskruns
   /api/v1/admin/audit-logs:
     get:
       operationId: audit_logs_api_v1_admin_audit_logs_get
@@ -1780,6 +3223,88 @@ paths:
       summary: Me
       tags:
       - admin
+  /api/v1/admin/chat-reviews:
+    get:
+      description: List only anonymous reason codes and receipt digests.
+      operationId: list_chat_reviews_api_v1_admin_chat_reviews_get
+      parameters:
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 20
+          maximum: 100
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response List Chat Reviews Api V1 Admin Chat Reviews Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Chat Reviews
+      tags:
+      - chat-review
+  /api/v1/admin/chat-reviews/{ticket_id}/triage:
+    post:
+      description: Append an audited triage event; never mark the answer factual/approved.
+      operationId: triage_chat_review_api_v1_admin_chat_reviews__ticket_id__triage_post
+      parameters:
+      - in: path
+        name: ticket_id
+        required: true
+        schema:
+          title: Ticket Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriageReview'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                title: Response Triage Chat Review Api V1 Admin Chat Reviews  Ticket
+                  Id  Triage Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Triage Chat Review
+      tags:
+      - chat-review
   /api/v1/admin/quality/jobs:
     get:
       operationId: quality_jobs_api_v1_admin_quality_jobs_get
@@ -2242,6 +3767,22 @@ paths:
           - type: string
           - type: 'null'
           title: Authorization
+      - in: header
+        name: x-user-memory-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Token
+      - in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
       requestBody:
         content:
           application/json:
@@ -2331,6 +3872,245 @@ paths:
       summary: Submit Highlight
       tags:
       - chat
+  /api/v1/chat/research-runs:
+    post:
+      operationId: create_chat_research_api_v1_chat_research_runs_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewChatResearch'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Chat Research
+      tags:
+      - chat-research
+  /api/v1/chat/research-runs/options:
+    get:
+      operationId: chat_research_options_api_v1_chat_research_runs_options_get
+      parameters:
+      - in: query
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: query
+        name: school_query
+        required: false
+        schema:
+          default: ''
+          maxLength: 100
+          title: School Query
+          type: string
+      - in: query
+        name: major_query
+        required: false
+        schema:
+          default: ''
+          maxLength: 100
+          title: Major Query
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Chat Research Options
+      tags:
+      - chat-research
+  /api/v1/chat/research-runs/{run_id}:
+    get:
+      operationId: get_chat_research_api_v1_chat_research_runs__run_id__get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: query
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Chat Research
+      tags:
+      - chat-research
+  /api/v1/chat/research-runs/{run_id}/cancel:
+    post:
+      operationId: cancel_chat_research_api_v1_chat_research_runs__run_id__cancel_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: query
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Cancel Chat Research
+      tags:
+      - chat-research
+  /api/v1/chat/research-runs/{run_id}/events:
+    get:
+      operationId: chat_research_events_api_v1_chat_research_runs__run_id__events_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: query
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Chat Research Events
+      tags:
+      - chat-research
+  /api/v1/chat/research-runs/{run_id}/report:
+    get:
+      operationId: get_chat_research_report_api_v1_chat_research_runs__run_id__report_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: query
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema:
+                type: string
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Chat Research Report
+      tags:
+      - chat-research
   /api/v1/data/filters:
     get:
       description: Filter values actually present in the current database.
@@ -2833,6 +4613,178 @@ paths:
       summary: Search Knowledge
       tags:
       - knowledge
+  /api/v1/memory/entries:
+    get:
+      operationId: list_memory_entries_api_v1_memory_entries_get
+      parameters:
+      - in: header
+        name: x-user-memory-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Memory Entries
+      tags:
+      - user-memory
+  /api/v1/memory/entries/{key}:
+    delete:
+      operationId: delete_memory_entry_api_v1_memory_entries__key__delete
+      parameters:
+      - in: path
+        name: key
+        required: true
+        schema:
+          title: Key
+          type: string
+      - in: query
+        name: expected_version
+        required: true
+        schema:
+          maximum: 2147483646
+          minimum: 1
+          title: Expected Version
+          type: integer
+      - in: header
+        name: x-user-memory-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Delete Memory Entry
+      tags:
+      - user-memory
+    put:
+      operationId: write_memory_entry_api_v1_memory_entries__key__put
+      parameters:
+      - in: path
+        name: key
+        required: true
+        schema:
+          title: Key
+          type: string
+      - in: header
+        name: x-user-memory-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryWrite'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Write Memory Entry
+      tags:
+      - user-memory
+  /api/v1/memory/vault:
+    delete:
+      operationId: erase_memory_vault_api_v1_memory_vault_delete
+      parameters:
+      - in: header
+        name: x-user-memory-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Erase Memory Vault
+      tags:
+      - user-memory
+    post:
+      description: User explicitly creates an independent identity for future tasks.
+      operationId: create_memory_vault_api_v1_memory_vault_post
+      responses:
+        '201':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: Create Memory Vault
+      tags:
+      - user-memory
+  /api/v1/memory/vault/rotate:
+    post:
+      operationId: rotate_memory_credential_api_v1_memory_vault_rotate_post
+      parameters:
+      - in: header
+        name: x-user-memory-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Rotate Memory Credential
+      tags:
+      - user-memory
   /api/v1/onboarding:
     post:
       operationId: onboarding_step_api_v1_onboarding_post
@@ -2930,6 +4882,41 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Update Profile Field
+      tags:
+      - profile
+  /api/v1/profile/{session_id}/data:
+    delete:
+      description: Remove authenticated session's live DB state and generated JSON
+        reports.
+      operationId: delete_profile_session_data_api_v1_profile__session_id__data_delete
+      parameters:
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Delete Profile Session Data
       tags:
       - profile
   /api/v1/profile/{session_id}/next-question:

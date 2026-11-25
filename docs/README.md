@@ -5,6 +5,7 @@ Product-facing documentation:
 - [Architecture](architecture/README.md) — components, LangGraph flow, RAG
   chain, data flow, worker flow, deployment topology, source map.
 - [Industrial release contract](architecture/industrial-release-contract.md) — current business paths, deployment candidate, release gates and open evidence.
+- [Approved admissions research TaskRun](admissions-research-taskrun.md) — existing operator-approved Deep Agents lifecycle and the non-production Chat request surface.
 - [Tutorial](../TUTORIAL.md) — no-key demo and reproducible scripts.
 - [Data licence and provenance](../DATA_LICENSE.md)
 - [Privacy](../PRIVACY.md)
@@ -17,6 +18,7 @@ Product-facing documentation:
 Engineering evidence:
 
 - [ADRs](superpowers/adr/) — architecture decision records.
+- [ADR-010: Chat-submitted admissions research](superpowers/adr/ADR-010-chat-submitted-admissions-research.md) — explicit request, same journal, independent approval and no automatic model execution.
 - [Java microservices](java-microservices.md) — standard Java Gateway + read-only
   Catalog overlay: startup, CI gates, distributed rate limiting, deployment
   boundaries.

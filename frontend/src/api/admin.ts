@@ -177,6 +177,9 @@ export const adminApi = {
   createAuthorizedResearch(payload: AuthorizedResearchCreate, token: string): Promise<AuthorizedResearchRun> {
     return request<AuthorizedResearchRun>('/admin/admissions-research/runs', { method: 'POST', body: payload, token })
   },
+  listAuthorizedResearch(state: AuthorizedResearchRun['status'] | undefined, token: string): Promise<AuthorizedResearchRun[]> {
+    return request<AuthorizedResearchRun[]>(`/admin/admissions-research/runs${toQuery({ state, limit: 50 })}`, { token })
+  },
   getAuthorizedResearch(runId: string, token: string): Promise<AuthorizedResearchRun> {
     return request<AuthorizedResearchRun>(`/admin/admissions-research/runs/${encodeURIComponent(runId)}`, { token })
   },

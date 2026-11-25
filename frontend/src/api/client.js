@@ -190,6 +190,66 @@ export const highlightAPI = {
   },
 }
 
+export const chatResearchAPI = {
+  options({ sessionId, schoolQuery = '', majorQuery = '', token }) {
+    return _request(`/chat/research-runs/options${_toQuery({ session_id: sessionId, school_query: schoolQuery, major_query: majorQuery })}`, { token })
+  },
+  create({ sessionId, scope, idempotencyKey, token }) {
+    return _request('/chat/research-runs', {
+      method: 'POST',
+      body: { session_id: sessionId, scope, idempotency_key: idempotencyKey },
+      token,
+    })
+  },
+  get(runId, sessionId, token) {
+    return _request(`/chat/research-runs/${encodeURIComponent(runId)}${_toQuery({ session_id: sessionId })}`, { token })
+  },
+  cancel(runId, sessionId, token) {
+    return _request(`/chat/research-runs/${encodeURIComponent(runId)}/cancel${_toQuery({ session_id: sessionId })}`, {
+      method: 'POST', token,
+    })
+  },
+  async report(runId, sessionId, token) {
+    let response
+    try {
+      response = await fetch(`${API_BASE}/chat/research-runs/${encodeURIComponent(runId)}/report${_toQuery({ session_id: sessionId })}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    } catch (error) {
+      return { data: null, error: { code: 'NETWORK_ERROR', message: error.message } }
+    }
+    const text = await response.text()
+    return response.ok
+      ? { data: text, error: null }
+      : { data: null, error: { code: `HTTP_${response.status}`, message: text || response.statusText, status: response.status } }
+  },
+  async follow({ runId, sessionId, token, onEvent, signal }) {
+    const url = `${API_BASE}/chat/research-runs/${encodeURIComponent(runId)}/events${_toQuery({ session_id: sessionId })}`
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal })
+    if (!response.ok || !response.body) throw new Error(`Research progress unavailable (HTTP ${response.status})`)
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    const consume = line => {
+      if (!line.startsWith('data:')) return
+      try { onEvent?.(JSON.parse(line.slice(5).trimStart())) } catch { /* Ignore malformed progress frames. */ }
+    }
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let newline
+      while ((newline = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, newline).replace(/\r$/, '')
+        buffer = buffer.slice(newline + 1)
+        consume(line)
+      }
+    }
+    buffer += decoder.decode()
+    if (buffer) consume(buffer.replace(/\r$/, ''))
+  },
+}
+
 // ── data — schools / scores / plans ─────────────────────────────────
 
 export const dataAPI = {

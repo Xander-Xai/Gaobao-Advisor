@@ -22,6 +22,7 @@ from server.routes.agent_experiments import router as agent_experiments_router
 from server.routes.agent_optimizer import router as agent_optimizer_router
 from server.routes.agent_taskruns import router as agent_taskruns_router
 from server.routes.chat import router as chat_router
+from server.routes.chat_research_runs import router as chat_research_router
 from server.routes.chat_review import router as chat_review_router
 from server.routes.data import router as data_router
 from server.routes.health import router as health_router
@@ -143,6 +144,7 @@ app.mount("/metrics", metrics_app)
 app.include_router(health_router)
 app.include_router(onboarding_router)
 app.include_router(chat_router)
+app.include_router(chat_research_router)
 app.include_router(chat_review_router)
 app.include_router(agent_experiments_router)
 app.include_router(agent_taskruns_router)
