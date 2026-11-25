@@ -369,7 +369,10 @@ def audited_release(history_db, reviewed_manifest, tmp_path):
     doc, install = reviewed_manifest
     # Synthetic fixture deliberately uses two cohorts; the live audit must
     # detect missing rows even if a single chat query would not select them.
+    history_db.get(AdmissionScore, 2).min_rank = 2020
+    history_db.commit()
     history = query_history(history_db, province="广东", score=600, subject="历史", year=2025)
+    assert len(history["rows"]) == 1
     doc["rows"].update(
         {
             key: {"source_id": "fixture", "locator": "fixture row", "row_sha256": canonical_digest(values)}
