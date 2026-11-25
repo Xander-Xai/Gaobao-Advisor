@@ -188,3 +188,36 @@ def test_industrial_invalid_score_never_queries_sql(monkeypatch):
     session.assert_not_called()
     assert "明确的高考整数总分" in reply
     assert not card["facts"]
+
+
+def test_history_fingerprint_changes_with_row_values_and_hides_approval(history_db, monkeypatch):
+    monkeypatch.setenv("GAOBAO_ADMISSIONS_YEAR", "2025")
+    monkeypatch.setenv("GAOBAO_DATA_APPROVAL_REF", "internal-fixture-reference")
+    before = query_history(history_db, province="广东", score=600, subject="物理", year=2025)
+    row = history_db.get(AdmissionScore, 1)
+    row.min_score = 598
+    history_db.commit()
+    after = query_history(history_db, province="广东", score=600, subject="物理", year=2025)
+    assert before["rows"][0]["id"] == after["rows"][0]["id"]
+    assert before["evidence_sha256"] != after["evidence_sha256"]
+    reply, card = build_history_reply({"scene": "gaokao", "data_query_results": {"industrial_history": after}})
+    assert after["evidence_sha256"] in reply
+    assert f"historical_sql_sha256:{after['evidence_sha256']}" in card["sources"]
+    assert "internal-fixture-reference" not in str(card)
+    assert "internal-fixture-reference" not in reply
+
+
+@pytest.mark.parametrize("mutation", ["row", "year", "digest"])
+def test_history_refuses_inconsistent_evidence(history_db, monkeypatch, mutation):
+    monkeypatch.setenv("GAOBAO_ADMISSIONS_YEAR", "2025")
+    evidence = query_history(history_db, province="广东", score=600, subject="物理", year=2025)
+    if mutation == "row":
+        evidence["rows"][0]["min_score"] = 700
+    elif mutation == "year":
+        evidence["year"] = 2024
+    else:
+        evidence.pop("evidence_sha256")
+    reply, card = build_history_reply({"scene": "gaokao", "data_query_results": {"industrial_history": evidence}})
+    assert "证据不一致" in reply
+    assert not card["facts"]
+    assert not card["sources"]

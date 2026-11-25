@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 
@@ -73,6 +75,13 @@ def explicit_turn_score(text: str) -> tuple[bool, int | None]:
     return True, score if 100 <= score <= 750 else None
 
 
+def evidence_digest(evidence: dict) -> str:
+    """Fingerprint delivered values; not a signature or proof of official origin."""
+    payload = {key: value for key, value in evidence.items() if key != "evidence_sha256"}
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def query_history(db, *, province: str, score: int, subject: str, year: int) -> dict:
     """Use no nearest-score, other-year, other-subject or inferred-rank fallback."""
     base = {"year": year, "province": province, "score": score, "subject": subject}
@@ -114,7 +123,7 @@ def query_history(db, *, province: str, score: int, subject: str, year: int) -> 
         .limit(10)
         .all()
     )
-    return {
+    evidence = {
         **base,
         "status": "HISTORICAL_ROWS" if rows else "NO_SCHOOL_ROWS",
         "subject": rank.subject_type,
@@ -124,6 +133,7 @@ def query_history(db, *, province: str, score: int, subject: str, year: int) -> 
             {
                 "id": row.id,
                 "school": name,
+                "school_id": row.school_id,
                 "batch": row.batch,
                 "min_score": row.min_score,
                 "min_rank": row.min_rank,
@@ -131,6 +141,8 @@ def query_history(db, *, province: str, score: int, subject: str, year: int) -> 
             for row, name in rows
         ],
     }
+    evidence["evidence_sha256"] = evidence_digest(evidence)
+    return evidence
 
 
 def build_history_reply(state: dict) -> tuple[str, dict]:
@@ -150,12 +162,18 @@ def build_history_reply(state: dict) -> tuple[str, dict]:
         summary = f"当前发布只支持{year}年历史数据，不能回答其他年份。"
     elif state.get("missing_fields") or evidence.get("status") == "UNSUPPORTED_COHORT":
         summary = "请补充省份、明确分数和招生科类（物理类、历史类、理科、文科或综合）。"
+    elif evidence.get("status") in {"HISTORICAL_ROWS", "NO_SCHOOL_ROWS"} and (
+        evidence.get("year") != year or evidence.get("evidence_sha256") != evidence_digest(evidence)
+    ):
+        summary = "历史数据证据不一致，已停止发布，请稍后重试。"
     elif evidence.get("status") in {"HISTORICAL_ROWS", "NO_SCHOOL_ROWS"}:
         cohort = f"{year}年{evidence['province']}{evidence['subject']}"
         summary = f"{cohort}，同年同科类历史记录；不代表当年或未来录取资格。"
         facts.append(f"{evidence['score']}分对应历史累计位次{evidence['rank']}（一分一段记录 #{evidence['rank_id']}）")
         sources.append(f"yi_fen_yi_duan:{evidence['rank_id']}")
-        sources.append(f"dataset_authorization_ref:{os.environ.get('GAOBAO_DATA_APPROVAL_REF', 'unavailable')}")
+        digest = evidence["evidence_sha256"]
+        sources.append(f"historical_sql_sha256:{digest}")
+        facts.append(f"查询结果指纹：{digest}（仅标识本次数据库事实，不证明官方来源）")
         for row in evidence["rows"]:
             facts.append(
                 f"{row['school']}｜{row['batch']}｜历史最低分{row['min_score']}分｜"
