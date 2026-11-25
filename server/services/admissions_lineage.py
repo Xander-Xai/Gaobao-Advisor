@@ -65,7 +65,12 @@ def _load(path: str, pin: str, year: int, approval: str) -> dict:
             raise ManifestError("Manifest exceeds size limit or does not match release pin")
         doc = json.loads(raw, object_pairs_hook=_unique_object)
         if not isinstance(doc, dict) or set(doc) != {
-            "schema", "dataset_version", "year", "approval_ref", "sources", "rows"
+            "schema",
+            "dataset_version",
+            "year",
+            "approval_ref",
+            "sources",
+            "rows",
         }:
             raise ManifestError("Invalid manifest fields")
         if (
@@ -123,7 +128,9 @@ def row_values(evidence: dict) -> dict[str, dict]:
     scope = {key: evidence[key] for key in ("year", "province", "subject")}
     values = {
         f"yi_fen_yi_duan:{evidence['rank_id']}": {
-            **scope, "score": evidence["score"], "rank": evidence["rank"]
+            **scope,
+            "score": evidence["score"],
+            "rank": evidence["rank"],
         }
     }
     schools = set()
@@ -147,12 +154,14 @@ def verified_lineage(evidence: dict, manifest: tuple[str, dict]) -> dict:
         if not entry or entry["row_sha256"] != canonical_digest(values):
             raise ManifestError("Unapproved or changed SQL row")
         source = doc["sources"][entry["source_id"]]
-        records.append({
-            "row": row_id,
-            "source_id": entry["source_id"],
-            "url": source["url"],
-            "file_sha256": source["file_sha256"],
-            "locator": entry["locator"],
-            "row_sha256": entry["row_sha256"],
-        })
+        records.append(
+            {
+                "row": row_id,
+                "source_id": entry["source_id"],
+                "url": source["url"],
+                "file_sha256": source["file_sha256"],
+                "locator": entry["locator"],
+                "row_sha256": entry["row_sha256"],
+            }
+        )
     return {"dataset_version": doc["dataset_version"], "manifest_sha256": pin, "records": records}

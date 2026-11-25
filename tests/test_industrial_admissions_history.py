@@ -221,3 +221,144 @@ def test_history_refuses_inconsistent_evidence(history_db, monkeypatch, mutation
     assert "证据不一致" in reply
     assert not card["facts"]
     assert not card["sources"]
+
+
+@pytest.fixture
+def reviewed_manifest(history_db, monkeypatch, tmp_path):
+    import hashlib
+    import json
+
+    from server.services.admissions_lineage import canonical_digest, row_values
+
+    reference = query_history(history_db, province="广东", score=600, subject="物理", year=2025)
+    doc = {
+        "schema": "admissions-lineage/v1",
+        "dataset_version": "synthetic-fixture-v1",
+        "year": 2025,
+        "approval_ref": "internal-fixture-approval",
+        "sources": {"fixture": {"url": "https://example.invalid/fixture", "file_sha256": "a" * 64}},
+        "rows": {
+            key: {"source_id": "fixture", "locator": "fixture row", "row_sha256": canonical_digest(values)}
+            for key, values in row_values(reference).items()
+        },
+    }
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    monkeypatch.setenv("GAOBAO_ADMISSIONS_YEAR", "2025")
+    monkeypatch.setenv("GAOBAO_DATA_APPROVAL_REF", doc["approval_ref"])
+
+    def install(document):
+        raw = json.dumps(document, ensure_ascii=False).encode()
+        path = tmp_path / "reviewed.json"
+        path.write_bytes(raw)
+        monkeypatch.setenv("GAOBAO_ADMISSIONS_MANIFEST_PATH", str(path))
+        monkeypatch.setenv("GAOBAO_ADMISSIONS_MANIFEST_SHA256", hashlib.sha256(raw).hexdigest())
+
+    install(doc)
+    return doc, install
+
+
+def _industrial_graph_history(history_db, monkeypatch):
+    from server.graph.nodes.data_nodes import data_query_node
+
+    monkeypatch.setattr("db.database.get_session", lambda: Session(history_db.bind))
+    state = {
+        "scene": "gaokao",
+        "input_text": "广东600分物理类",
+        "slots": {"province": "广东", "subject": "物理类", "score": 600},
+    }
+    state.update(data_query_node(state))
+    return state
+
+
+def test_reviewed_rows_bind_actual_graph_and_public_card(history_db, reviewed_manifest, monkeypatch):
+    state = _industrial_graph_history(history_db, monkeypatch)
+    evidence = state["data_query_results"]["industrial_history"]
+    assert evidence["status"] == "HISTORICAL_ROWS"
+    assert len(evidence["lineage"]["records"]) == 2
+    reply, card = build_history_reply(state)
+    assert "fixture correct school" in reply
+    assert "synthetic-fixture-v1" in reply
+    assert evidence["lineage"]["manifest_sha256"] in reply
+    assert "https://example.invalid/fixture" in reply
+    assert "internal-fixture-approval" not in str(card)
+    assert "internal-fixture-approval" not in reply
+
+
+@pytest.mark.parametrize("changed", ["rank", "school", "name", "duplicate"])
+def test_changed_or_ambiguous_sql_fails_closed(history_db, reviewed_manifest, monkeypatch, changed):
+    if changed == "rank":
+        history_db.get(YiFenYiDuan, 1).cumulative_count = 1001
+    elif changed == "school":
+        history_db.get(AdmissionScore, 1).min_score = 598
+    elif changed == "name":
+        history_db.get(School, 1).name = "changed name"
+    else:
+        history_db.add(
+            AdmissionScore(
+                school_id=1, province="广东", year=2025, subject_type="物理类", min_score=599, min_rank=1020
+            )
+        )
+    history_db.commit()
+    state = _industrial_graph_history(history_db, monkeypatch)
+    assert state["data_query_results"]["industrial_history"]["status"] == "UNAPPROVED_LINEAGE"
+    reply, card = build_history_reply(state)
+    assert "已停止发布" in reply
+    assert not card["facts"]
+    assert not card["sources"]
+
+
+def test_missing_manifest_does_not_query_sql(history_db, reviewed_manifest, monkeypatch):
+    from unittest.mock import Mock
+
+    from server.graph.nodes.data_nodes import data_query_node
+
+    monkeypatch.delenv("GAOBAO_ADMISSIONS_MANIFEST_PATH")
+    session = Mock(side_effect=AssertionError("unapproved query"))
+    monkeypatch.setattr("db.database.get_session", session)
+    result = data_query_node(
+        {"scene": "gaokao", "slots": {"province": "广东", "subject": "物理类", "score": 600}}
+    )
+    session.assert_not_called()
+    assert result["data_query_results"]["industrial_history"]["status"] == "UNAPPROVED_LINEAGE"
+
+
+@pytest.mark.parametrize("mutation", ["pin", "approval", "source", "year"])
+def test_manifest_refuses_unreviewed_bytes(history_db, reviewed_manifest, monkeypatch, mutation):
+    from server.services.admissions_lineage import ManifestError, approved_manifest
+
+    doc, install = reviewed_manifest
+    if mutation == "pin":
+        monkeypatch.setenv("GAOBAO_ADMISSIONS_MANIFEST_SHA256", "b" * 64)
+    elif mutation == "approval":
+        monkeypatch.setenv("GAOBAO_DATA_APPROVAL_REF", "different-review")
+    elif mutation == "source":
+        doc["sources"]["fixture"]["url"] = "http://example.invalid"
+        install(doc)
+    else:
+        doc["year"] = 2024
+        install(doc)
+    with pytest.raises(ManifestError):
+        approved_manifest(2025)
+
+
+def test_render_rechecks_manifest_even_if_query_fingerprint_recomputed(history_db, reviewed_manifest, monkeypatch):
+    from server.services.industrial_admissions import evidence_digest
+
+    state = _industrial_graph_history(history_db, monkeypatch)
+    evidence = state["data_query_results"]["industrial_history"]
+    evidence["rows"][0]["min_score"] = 700
+    evidence["evidence_sha256"] = evidence_digest(evidence)
+    reply, card = build_history_reply(state)
+    assert "证据不一致" in reply
+    assert not card["facts"]
+
+
+def test_keyed_chat_receipt_digest_changes_with_release_pin(monkeypatch):
+    from server.services.industrial_chat_receipt import make_turn_key
+
+    monkeypatch.setenv("GAOBAO_ADMISSIONS_MANIFEST_SHA256", "a" * 64)
+    first = make_turn_key("fixture-key-00000001", "gaokao", "600分", {})
+    monkeypatch.setenv("GAOBAO_ADMISSIONS_MANIFEST_SHA256", "b" * 64)
+    second = make_turn_key("fixture-key-00000001", "gaokao", "600分", {})
+    assert first.key_digest == second.key_digest
+    assert first.request_digest != second.request_digest

@@ -50,3 +50,14 @@ GAOBAO_ADMISSIONS_YEAR 必填。±5% 位次邻域仅为历史数据展示，最�
 ### 行级来源与批准版本（2026-11-25 独立候选）
 
 #200–#202 已合并，前文候选文字是历史记录。工业 API/worker 启动必须解析独立审批的只读 JSON 清单（最大 32MiB，SHA-256 pin、审批引用及年度匹配，schema admissions-lineage/v1）；实际咨询节点按 rank/院校行 ID 与规范化当前值逐项核验，未登记、内容漂移、重复院校/批次或清单不一致停止发布；渲染前复核来源登记及查询摘要。公开文本/卡片记录数据版本、清单 pin、公开 URL、源文件 SHA-256、行定位；不公开内部审批编号。旧请求回执摘要绑定清单 pin，切换版本不接受原 key 重放。清单在进程按 pin 缓存，发布需原子替换私有文件、统一配置并重启/排空全部副本；不支持混合发布或热更新。清单是运营者独立审核的输入，hash 不证明官方真实性、授权、源文件到行的解析正确性或完整覆盖。禁止从合成数据自动签发 approval；真实源文件/审核流程、Java Catalog/公开目录/私有研究同版本绑定、全库覆盖验证和大规模数据集分片仍未完成。
+
+
+#### 审批清单的操作合同
+
+运营者首先独立核对公开发布机构、源文件下载日期、合法授权及提取结果；保留原始文件，计算文件 SHA-256，记录精确页码/行/表号。禁止仅对现有未知来源数据库做 hash 后称为已审查。私有清单格式为：
+
+- schema 固定 admissions-lineage/v1，dataset_version 为 1–128 位 ASCII 标识，year 为整数，approval_ref 与私有配置匹配。
+- sources 是 source_id 到 {url, file_sha256} 的映射，URL 必须为审核过的公开 HTTPS 链接，不允许凭证或私有地址。
+- rows 是 yi_fen_yi_duan:<id> 或 admission_scores:<id> 到 {source_id, locator, row_sha256} 的映射；rank 与院校行均需登记。
+- 规范化行值：rank 为 year/province/subject（实际 SQL 科类）/score/rank；院校行为 year/province/subject/id/school/school_id/batch/min_score/min_rank。使用 admissions_lineage.canonical_digest（排序 JSON key、UTF-8、紧凑分隔、不允许 NaN）；同值/不同编码的规范化规则不得随意改变。
+- 用独立审核流程批准清单后计算完整文件的 SHA-256，配置 pin 与私有只读挂载。源文件与清单不提交公开仓库，不由程序自动颁发授权；测试中 example.invalid 仅合成夹具。当前加载器校验元数据与 pin，不下载 URL 或重新计算未挂载的原始源文件摘要。完整覆盖/审批真实性及数据摄入/版本切换/回滚需要独立验收。
