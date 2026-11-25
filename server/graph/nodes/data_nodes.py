@@ -55,7 +55,7 @@ def data_query_node(state: dict[str, Any]) -> dict[str, Any]:
         requested = set(re.findall(r"(20[0-9]{2})\s*年", state.get("input_text", "")))
         if requested - {str(year)}:
             history = {"status": "YEAR_MISMATCH"}
-        elif scene == "gaokao" and not state.get("knowledge_query"):
+        elif scene == "gaokao" and not state.get("knowledge_query") and not state.get("industrial_score_invalid"):
             score = exact_score(slots)
             province, subject = slots.get("province"), slots.get("subject")
             if score is not None and isinstance(province, str) and isinstance(subject, str):
