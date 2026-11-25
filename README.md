@@ -1,6 +1,6 @@
 # Gaobao Advisor｜可核验的高考志愿辅助决策系统
 
-> **当前架构核查（2026-11-25）**：#198 已合并 master，基线 `2c27d020`。本候选分支收紧工业 SQL 咨询：指定审批年度、同省同科类同年精确位次和院校级记录，不跨年回退，不生成录取概率。公共模型解释、旧语音及历史对话报告不进入工业发布范围。详见 [工业招生证据治理](docs/architecture/industrial-admissions-evidence.md)。未完成生产验收。
+> **当前架构核查（2026-11-25）**：#203 已合并 master（merge `94a8568`），工业 SQL 咨询要求指定审批年度、同省同科类同年精确位次、已登记来源与行级摘要；未注册或变更的 SQL 行失败关闭。公共模型解释、旧语音及历史对话报告不进入工业发布范围。详见 [工业招生证据治理](docs/architecture/industrial-admissions-evidence.md)与[发布合同](docs/architecture/industrial-release-contract.md)。代码合并不代表真实数据验收或生产上线。
 
 > **架构治理（2026-11-25）**：确定性 LangGraph 咨询为默认主线；Deep Agents 是经批准的复杂招生研究候选，原生只读 Harness 作为参考和 Eval 基线，沙箱只面向受控招生分析。Java Gateway/Catalog、MySQL、Redis 与 Worker 为标准部署的正式组件。见 [架构裁决与裁剪门禁](docs/architecture/README.md#architecture-decision-freeze--2026-11-25)。
 
@@ -12,6 +12,8 @@
 围绕“考生如何在信息不完整时获得可追溯、可解释的志愿咨询结果”，实现 **画像追问 → 结构化 SQL 查询 → 合成知识检索 → 来源/风险检查 → SSE 交互** 的端到端业务链路。工程上包含 Vue 3、FastAPI、受约束的 LangGraph 工作流，以及正式架构中的 Java Gateway/Catalog、MySQL、Redis、Docker Compose 和 CI 集成验证。
 
 **复杂研究业务链路**采用独立审批 TaskRun → Deep Agents → 只读 SQL/招生分析沙箱 → 独立核验 → 私有报告。原生 Harness 是独立回归与评测基线：用真正的只读业务工具检验模型/Planner 的多步工具执行、预算控制、Fail-Closed 和离线 Eval，不将使用框架或通过单测等同于业务成功。
+
+**Chat 业务接入状态（#204 增量）**：正式 Chat 页面可显式提交两个院校、一个专业及省份/科类/批次/年份范围；同一 session Bearer 绑定任务所有权，使用既有私有 journal、管理员审批、Deep Agents Worker 与证据校验，并通过 SSE 展示真实 TaskRun 状态。提交本身不触发模型或沙箱，也不会自动把自由文本转成研究规格。入口默认关闭，只在显式配置的非生产环境可用；生产与工业运行配置仍关闭。该路径当前没有真实招生数据、付费模型执行或生产隐私验收证据。
 
 > **代码归属：** 基于上游早期 MIT 许可代码继续二次开发与工程加固，保留原始许可声明；具体见 [第三方归属说明](THIRD_PARTY_NOTICES.md)。
 
@@ -55,7 +57,7 @@
 
 ## Agent Harness / Eval 实验
 
-**阅读说明：** 下文为隔离验证与历史工程证据，不是正式用户功能。正式复杂研究执行入口为 [授权研究 TaskRun](docs/admissions-research-taskrun.md)，公共咨询与研究生命周期分离。禁止把合成 fixture 直接开放给用户。
+**阅读说明：** 下文为隔离验证与历史工程证据，不是正式用户功能。正式复杂研究执行生命周期为 [授权研究 TaskRun](docs/admissions-research-taskrun.md)；Chat 只可提交需人工审批的结构化请求，普通咨询与研究执行保持分离。禁止把合成 fixture 直接开放给用户。
 
 合成业务 Context A/B 已随 [PR #160](https://github.com/Xander-Xai/Gaobao-Advisor/pull/160) 合入；`python -m benchmarks.context_ab_eval --scripted-smoke --out-dir /tmp/gaobao-context-ab` 可复现固定 SQL 真值对照。脚本化控制器不代表真实模型效果或 Token 降本。真实模型版本一致性增强已随 [PR #162](https://github.com/Xander-Xai/Gaobao-Advisor/pull/162) 合入；真实模型结果仍未测量。
 

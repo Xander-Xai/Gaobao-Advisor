@@ -2,7 +2,7 @@
 
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import PlainTextResponse
 from fastapi.routing import APIRoute
@@ -103,6 +103,17 @@ def create_run(request: NewResearch, principal: AdminPrincipal = Depends(require
     spec = request.model_dump(exclude={"idempotency_key"})
     spec["dataset_ref"] = configured_dataset()
     return translate(lambda: journal.create(principal.username, request.idempotency_key, spec))
+
+
+@router.get("/runs")
+def list_runs(
+    state: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=10000),
+    principal: AdminPrincipal = Depends(require_role("operator")),
+):
+    journal = store()
+    return translate(lambda: journal.list_runs(principal.username, admin=True, state=state, limit=limit, offset=offset))
 
 
 @router.get("/runs/{run_id}")

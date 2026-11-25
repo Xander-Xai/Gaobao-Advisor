@@ -247,6 +247,26 @@ class ResearchJournal:
             self._visible(row, actor, admin)
             return self._view(row)
 
+    def list_runs(self, actor: str, *, admin: bool = False, state: str | None = None, limit: int = 50, offset: int = 0):
+        if not actor or type(limit) is not int or not 1 <= limit <= 100 or type(offset) is not int or offset < 0:
+            raise ValueError("Invalid research list request")
+        if state is not None and state not in {"PENDING_APPROVAL", "APPROVED", "RUNNING", *TERMINAL}:
+            raise ValueError("Invalid research state filter")
+        clauses, values = [], []
+        if not admin:
+            clauses.append("owner=?")
+            values.append(actor)
+        if state is not None:
+            clauses.append("state=?")
+            values.append(state)
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        with self.tx() as db:
+            rows = db.execute(
+                "SELECT * FROM authorized_research_runs" + where + " ORDER BY created DESC,id DESC LIMIT ? OFFSET ?",
+                (*values, limit, offset),
+            ).fetchall()
+            return [self._view(self._row(db, row["id"])) for row in rows]
+
     def approve(self, run_id: str, approver: str, spec_sha256: str):
         with self.tx() as db:
             row = self._row(db, run_id)

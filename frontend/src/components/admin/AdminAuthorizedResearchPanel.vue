@@ -29,6 +29,20 @@
       <input id="research-run-id" v-model.trim="runId" data-testid="research-run-id" placeholder="research_..." class="min-w-0 flex-1 rounded border p-2 font-mono text-xs" />
       <button type="button" data-testid="research-refresh" :disabled="busy || !runId" class="rounded border px-3 py-2 text-xs" @click="refresh">查询状态</button>
     </div>
+    <div class="space-y-2 rounded border border-slate-200 p-3">
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="text-sm font-medium">待审核请求</h3>
+        <button type="button" data-testid="research-queue-refresh" :disabled="busy" class="rounded border px-3 py-2 text-xs disabled:opacity-50" @click="refreshQueue">刷新队列</button>
+      </div>
+      <p v-if="queueLoaded && !queue.length" class="text-xs text-slate-600">当前没有待审批任务。</p>
+      <ul v-if="queue.length" class="space-y-1" data-testid="research-queue">
+        <li v-for="item in queue" :key="item.run_id">
+          <button type="button" class="w-full rounded bg-slate-50 p-2 text-left text-xs hover:bg-slate-100" @click="selectQueued(item)">
+            {{ item.run_id }} · {{ item.spec.scope.province }} {{ item.spec.scope.subject_type }} · {{ item.owner }}
+          </button>
+        </li>
+      </ul>
+    </div>
     <div v-if="task" class="space-y-3 rounded border p-3" data-testid="research-detail">
       <p class="text-sm font-semibold">状态：{{ task.status }} · 发起人：{{ task.owner }} · 审批人：{{ task.approved_by || '待审批' }}</p>
       <p class="break-all text-xs">请求摘要：{{ task.spec_sha256 }}</p>
@@ -70,6 +84,8 @@ const image = ref('')
 const approvalRef = ref('')
 const runId = ref('')
 const task = ref<AuthorizedResearchRun | null>(null)
+const queue = ref<AuthorizedResearchRun[]>([])
+const queueLoaded = ref(false)
 const report = ref('')
 const reviewed = ref(false)
 const busy = ref(false)
@@ -136,6 +152,28 @@ function refresh(): void {
   const token = admin.token
   const id = runId.value
   void operate(() => adminApi.getAuthorizedResearch(id, token))
+}
+
+async function refreshQueue(): Promise<void> {
+  if (!admin.token || busy.value) return
+  busy.value = true
+  error.value = ''
+  try {
+    queue.value = await adminApi.listAuthorizedResearch('PENDING_APPROVAL', admin.token)
+    queueLoaded.value = true
+  } catch (err) {
+    fail(err)
+  } finally {
+    busy.value = false
+  }
+}
+
+function selectQueued(item: AuthorizedResearchRun): void {
+  runId.value = item.run_id
+  task.value = item
+  report.value = ''
+  reviewed.value = false
+  error.value = ''
 }
 
 function approve(): void {

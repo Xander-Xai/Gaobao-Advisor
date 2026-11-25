@@ -9,6 +9,7 @@ import {
   highlightAPI,
   onboardingAPI,
   chatAPI,
+  chatResearchAPI,
 } from '../client'
 
 /**
@@ -109,6 +110,48 @@ describe('dataAPI', () => {
     expect(trendUrl).toContain('subject_type=')
     expect(trendUrl).toContain('major=')
     expect(trendUrl).toContain('years=3')
+  })
+})
+
+describe('chatResearchAPI', () => {
+  it('submits the structured scope with the owning session bearer', async () => {
+    const fetchMock = mockFetchResponse({ body: { run_id: 'research_1', status: 'PENDING_APPROVAL' } })
+    global.fetch = fetchMock
+    const request = {
+      sessionId: 'session-owner',
+      scope: { school_ids: [1, 2], major_id: 3 },
+      idempotencyKey: 'research-key-01',
+      token: 'session-bearer',
+    }
+
+    const { data } = await chatResearchAPI.create(request)
+
+    expect(data.status).toBe('PENDING_APPROVAL')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/chat/research-runs')
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer session-bearer')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      session_id: 'session-owner',
+      scope: request.scope,
+      idempotency_key: 'research-key-01',
+    })
+  })
+
+  it('streams progress with session ownership and decodes SSE data frames', async () => {
+    const encoded = new TextEncoder().encode('event: progress\ndata: {"type":"progress","status":"RUNNING"}\n\n')
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: new ReadableStream({ start(controller) { controller.enqueue(encoded); controller.close() } }),
+    })
+    const events = []
+
+    await chatResearchAPI.follow({
+      runId: 'research_1', sessionId: 'session-owner', token: 'session-bearer', onEvent: event => events.push(event),
+    })
+
+    expect(global.fetch.mock.calls[0][0]).toContain('/chat/research-runs/research_1/events?session_id=session-owner')
+    expect(global.fetch.mock.calls[0][1].headers.Authorization).toBe('Bearer session-bearer')
+    expect(events).toEqual([{ type: 'progress', status: 'RUNNING' }])
   })
 })
 

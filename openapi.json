@@ -129,6 +129,38 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "x-user-memory-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Token"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -279,6 +311,2271 @@
         }
       }
     },
+    "/api/v1/chat/research-runs": {
+      "post": {
+        "tags": [
+          "chat-research"
+        ],
+        "summary": "Create Chat Research",
+        "operationId": "create_chat_research_api_v1_chat_research_runs_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewChatResearch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/research-runs/options": {
+      "get": {
+        "tags": [
+          "chat-research"
+        ],
+        "summary": "Chat Research Options",
+        "operationId": "chat_research_options_api_v1_chat_research_runs_options_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "school_query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "School Query"
+            }
+          },
+          {
+            "name": "major_query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "default": "",
+              "title": "Major Query"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/research-runs/{run_id}": {
+      "get": {
+        "tags": [
+          "chat-research"
+        ],
+        "summary": "Get Chat Research",
+        "operationId": "get_chat_research_api_v1_chat_research_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/research-runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "chat-research"
+        ],
+        "summary": "Cancel Chat Research",
+        "operationId": "cancel_chat_research_api_v1_chat_research_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/research-runs/{run_id}/report": {
+      "get": {
+        "tags": [
+          "chat-research"
+        ],
+        "summary": "Get Chat Research Report",
+        "operationId": "get_chat_research_report_api_v1_chat_research_runs__run_id__report_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chat/research-runs/{run_id}/events": {
+      "get": {
+        "tags": [
+          "chat-research"
+        ],
+        "summary": "Chat Research Events",
+        "operationId": "chat_research_events_api_v1_chat_research_runs__run_id__events_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/chat-reviews": {
+      "get": {
+        "tags": [
+          "chat-review"
+        ],
+        "summary": "List Chat Reviews",
+        "description": "List only anonymous reason codes and receipt digests.",
+        "operationId": "list_chat_reviews_api_v1_admin_chat_reviews_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Chat Reviews Api V1 Admin Chat Reviews Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/chat-reviews/{ticket_id}/triage": {
+      "post": {
+        "tags": [
+          "chat-review"
+        ],
+        "summary": "Triage Chat Review",
+        "description": "Append an audited triage event; never mark the answer factual/approved.",
+        "operationId": "triage_chat_review_api_v1_admin_chat_reviews__ticket_id__triage_post",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticket Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriageReview"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Triage Chat Review Api V1 Admin Chat Reviews  Ticket Id  Triage Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-experiments/example": {
+      "get": {
+        "tags": [
+          "agent-experiments"
+        ],
+        "summary": "Synthetic Research Example",
+        "description": "Discover an explicitly fictional request from the same seeded dataset.",
+        "operationId": "synthetic_research_example_api_v1_admin_agent_experiments_example_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Synthetic Research Example Api V1 Admin Agent Experiments Example Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-experiments/research": {
+      "post": {
+        "tags": [
+          "agent-experiments"
+        ],
+        "summary": "Synthetic Research",
+        "description": "Run actual synthetic SQL data tools and return redacted Agent trace.\n\nThis is a demonstration of runtime policy, NOT actual LLM autonomy.",
+        "operationId": "synthetic_research_api_v1_admin_agent_experiments_research_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyntheticResearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Synthetic Research Api V1 Admin Agent Experiments Research Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-experiments/decision-card/example": {
+      "get": {
+        "tags": [
+          "agent-experiments"
+        ],
+        "summary": "Synthetic Decision Card Example",
+        "description": "Choose two fictional schools with actual SQL rows in the frozen demo.",
+        "operationId": "synthetic_decision_card_example_api_v1_admin_agent_experiments_decision_card_example_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Synthetic Decision Card Example Api V1 Admin Agent Experiments Decision Card Example Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-experiments/decision-card": {
+      "post": {
+        "tags": [
+          "agent-experiments"
+        ],
+        "summary": "Synthetic Decision Card",
+        "description": "Run real synthetic SQL evidence verification, not admissions prediction.",
+        "operationId": "synthetic_decision_card_api_v1_admin_agent_experiments_decision_card_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyntheticDecisionCardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Synthetic Decision Card Api V1 Admin Agent Experiments Decision Card Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-experiments/portfolio": {
+      "post": {
+        "tags": [
+          "agent-experiments"
+        ],
+        "summary": "Synthetic Portfolio",
+        "description": "Operator-only SQL evidence screening. No model or production advice.",
+        "operationId": "synthetic_portfolio_api_v1_admin_agent_experiments_portfolio_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyntheticPortfolioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Synthetic Portfolio Api V1 Admin Agent Experiments Portfolio Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-taskruns/runs/{run_id}/memory": {
+      "post": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Publish Synthetic Evidence Memory",
+        "description": "Index a *fictional* two-admin-reviewed receipt; no LLM memory write.",
+        "operationId": "publish_synthetic_evidence_memory_api_v1_admin_agent_taskruns_runs__run_id__memory_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishSyntheticEvidenceMemory"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Publish Synthetic Evidence Memory Api V1 Admin Agent Taskruns Runs  Run Id  Memory Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Get Synthetic Evidence Memory",
+        "description": "Owner or admin can read, with fresh source/expiry/review checks.",
+        "operationId": "get_synthetic_evidence_memory_api_v1_admin_agent_taskruns_runs__run_id__memory_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Synthetic Evidence Memory Api V1 Admin Agent Taskruns Runs  Run Id  Memory Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Forget Synthetic Evidence Memory",
+        "description": "Remove the owner-scoped memory index, not immutable task audit history.",
+        "operationId": "forget_synthetic_evidence_memory_api_v1_admin_agent_taskruns_runs__run_id__memory_delete",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Forget Synthetic Evidence Memory Api V1 Admin Agent Taskruns Runs  Run Id  Memory Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-taskruns/evidence-memory": {
+      "get": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "List Synthetic Evidence Memory",
+        "description": "Read only the current principal's indexed fictional source receipts.",
+        "operationId": "list_synthetic_evidence_memory_api_v1_admin_agent_taskruns_evidence_memory_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Synthetic Evidence Memory Api V1 Admin Agent Taskruns Evidence Memory Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-taskruns/runs": {
+      "post": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Create Synthetic Taskrun",
+        "operationId": "create_synthetic_taskrun_api_v1_admin_agent_taskruns_runs_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSyntheticTaskRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create Synthetic Taskrun Api V1 Admin Agent Taskruns Runs Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-taskruns/portfolio-runs": {
+      "post": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Create Portfolio Taskrun",
+        "description": "Create only frozen synthetic SQL work, subject to maker-checker approval.",
+        "operationId": "create_portfolio_taskrun_api_v1_admin_agent_taskruns_portfolio_runs_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSyntheticPortfolioTaskRun"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create Portfolio Taskrun Api V1 Admin Agent Taskruns Portfolio Runs Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-taskruns/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Get Synthetic Taskrun",
+        "operationId": "get_synthetic_taskrun_api_v1_admin_agent_taskruns_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Synthetic Taskrun Api V1 Admin Agent Taskruns Runs  Run Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-taskruns/runs/{run_id}/review": {
+      "get": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Get Synthetic Portfolio Review",
+        "description": "Read the frozen SHA before a separate admin submits a review.",
+        "operationId": "get_synthetic_portfolio_review_api_v1_admin_agent_taskruns_runs__run_id__review_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Synthetic Portfolio Review Api V1 Admin Agent Taskruns Runs  Run Id  Review Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Signoff Synthetic Portfolio Review",
+        "description": "A review declaration, not a certification of real admissions advice.",
+        "operationId": "signoff_synthetic_portfolio_review_api_v1_admin_agent_taskruns_runs__run_id__review_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortfolioReviewSignoff"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Signoff Synthetic Portfolio Review Api V1 Admin Agent Taskruns Runs  Run Id  Review Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-taskruns/runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Cancel Synthetic Taskrun",
+        "description": "Owner/admin revokes lease; opt-in local Supervisor also kills its own worker tree.",
+        "operationId": "cancel_synthetic_taskrun_api_v1_admin_agent_taskruns_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Cancel Synthetic Taskrun Api V1 Admin Agent Taskruns Runs  Run Id  Cancel Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-taskruns/runs/{run_id}/approve": {
+      "post": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Approve Synthetic Taskrun",
+        "operationId": "approve_synthetic_taskrun_api_v1_admin_agent_taskruns_runs__run_id__approve_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Approve Synthetic Taskrun Api V1 Admin Agent Taskruns Runs  Run Id  Approve Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-taskruns/runs/{run_id}/execute": {
+      "post": {
+        "tags": [
+          "agent-taskruns"
+        ],
+        "summary": "Execute Synthetic Taskrun",
+        "description": "Only fast deterministic tasks are callable through HTTP.\n\nModel-driven runs require the separately invoked, explicitly authorized\nworker CLI so a browser click cannot trigger paid external model calls.",
+        "operationId": "execute_synthetic_taskrun_api_v1_admin_agent_taskruns_runs__run_id__execute_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Execute Synthetic Taskrun Api V1 Admin Agent Taskruns Runs  Run Id  Execute Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/admissions-research/runs": {
+      "post": {
+        "tags": [
+          "admissions-research"
+        ],
+        "summary": "Create Run",
+        "operationId": "create_run_api_v1_admin_admissions_research_runs_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewResearch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "admissions-research"
+        ],
+        "summary": "List Runs",
+        "operationId": "list_runs_api_v1_admin_admissions_research_runs_get",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10000,
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/admissions-research/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "admissions-research"
+        ],
+        "summary": "Get Run",
+        "operationId": "get_run_api_v1_admin_admissions_research_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/admissions-research/runs/{run_id}/report": {
+      "get": {
+        "tags": [
+          "admissions-research"
+        ],
+        "summary": "Get Report",
+        "operationId": "get_report_api_v1_admin_admissions_research_runs__run_id__report_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/admissions-research/runs/{run_id}/approve": {
+      "post": {
+        "tags": [
+          "admissions-research"
+        ],
+        "summary": "Approve Run",
+        "operationId": "approve_run_api_v1_admin_admissions_research_runs__run_id__approve_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Approval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/admissions-research/runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "admissions-research"
+        ],
+        "summary": "Cancel Run",
+        "operationId": "cancel_run_api_v1_admin_admissions_research_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-optimizer/proposals": {
+      "post": {
+        "tags": [
+          "agent-optimizer"
+        ],
+        "summary": "Submit Synthetic Optimization",
+        "operationId": "submit_synthetic_optimization_api_v1_admin_agent_optimizer_proposals_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyntheticOptimizationSubmission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Submit Synthetic Optimization Api V1 Admin Agent Optimizer Proposals Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-optimizer/proposals/{proposal_id}": {
+      "get": {
+        "tags": [
+          "agent-optimizer"
+        ],
+        "summary": "Get Synthetic Optimization",
+        "operationId": "get_synthetic_optimization_api_v1_admin_agent_optimizer_proposals__proposal_id__get",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Proposal Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Synthetic Optimization Api V1 Admin Agent Optimizer Proposals  Proposal Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-optimizer/proposals/{proposal_id}/review": {
+      "post": {
+        "tags": [
+          "agent-optimizer"
+        ],
+        "summary": "Review Synthetic Optimization",
+        "operationId": "review_synthetic_optimization_api_v1_admin_agent_optimizer_proposals__proposal_id__review_post",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Proposal Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyntheticOptimizationSignoff"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Review Synthetic Optimization Api V1 Admin Agent Optimizer Proposals  Proposal Id  Review Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-optimizer/proposals/{proposal_id}/simulate": {
+      "post": {
+        "tags": [
+          "agent-optimizer"
+        ],
+        "summary": "Simulate Synthetic Stage",
+        "description": "Only update a local demonstration pointer; no rollout is performed.",
+        "operationId": "simulate_synthetic_stage_api_v1_admin_agent_optimizer_proposals__proposal_id__simulate_post",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Proposal Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Simulate Synthetic Stage Api V1 Admin Agent Optimizer Proposals  Proposal Id  Simulate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-optimizer/demo-pointer": {
+      "get": {
+        "tags": [
+          "agent-optimizer"
+        ],
+        "summary": "Get Synthetic Demo Pointer",
+        "operationId": "get_synthetic_demo_pointer_api_v1_admin_agent_optimizer_demo_pointer_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Synthetic Demo Pointer Api V1 Admin Agent Optimizer Demo Pointer Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/agent-optimizer/demo-pointer/rollback": {
+      "post": {
+        "tags": [
+          "agent-optimizer"
+        ],
+        "summary": "Rollback Synthetic Demo Pointer",
+        "operationId": "rollback_synthetic_demo_pointer_api_v1_admin_agent_optimizer_demo_pointer_rollback_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Rollback Synthetic Demo Pointer Api V1 Admin Agent Optimizer Demo Pointer Rollback Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/profile/{session_id}": {
       "get": {
         "tags": [
@@ -405,6 +2702,63 @@
         }
       }
     },
+    "/api/v1/profile/{session_id}/data": {
+      "delete": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Delete Profile Session Data",
+        "description": "Remove authenticated session's live DB state and generated JSON reports.",
+        "operationId": "delete_profile_session_data_api_v1_profile__session_id__data_delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/profile/{session_id}/next-question": {
       "get": {
         "tags": [
@@ -509,6 +2863,296 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memory/vault": {
+      "post": {
+        "tags": [
+          "user-memory"
+        ],
+        "summary": "Create Memory Vault",
+        "description": "User explicitly creates an independent identity for future tasks.",
+        "operationId": "create_memory_vault_api_v1_memory_vault_post",
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "user-memory"
+        ],
+        "summary": "Erase Memory Vault",
+        "operationId": "erase_memory_vault_api_v1_memory_vault_delete",
+        "parameters": [
+          {
+            "name": "x-user-memory-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memory/entries": {
+      "get": {
+        "tags": [
+          "user-memory"
+        ],
+        "summary": "List Memory Entries",
+        "operationId": "list_memory_entries_api_v1_memory_entries_get",
+        "parameters": [
+          {
+            "name": "x-user-memory-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memory/entries/{key}": {
+      "put": {
+        "tags": [
+          "user-memory"
+        ],
+        "summary": "Write Memory Entry",
+        "operationId": "write_memory_entry_api_v1_memory_entries__key__put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "x-user-memory-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "user-memory"
+        ],
+        "summary": "Delete Memory Entry",
+        "operationId": "delete_memory_entry_api_v1_memory_entries__key__delete",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "expected_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483646,
+              "minimum": 1,
+              "title": "Expected Version"
+            }
+          },
+          {
+            "name": "x-user-memory-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memory/vault/rotate": {
+      "post": {
+        "tags": [
+          "user-memory"
+        ],
+        "summary": "Rotate Memory Credential",
+        "operationId": "rotate_memory_credential_api_v1_memory_vault_rotate_post",
+        "parameters": [
+          {
+            "name": "x-user-memory-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Token"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2493,6 +5137,9 @@
           },
           "token_type": {
             "type": "string",
+            "enum": [
+              "bearer"
+            ],
             "const": "bearer",
             "title": "Token Type",
             "default": "bearer"
@@ -2641,6 +5288,21 @@
         ],
         "title": "AdmissionScoreOut"
       },
+      "Approval": {
+        "properties": {
+          "spec_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Spec Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "spec_sha256"
+        ],
+        "title": "Approval"
+      },
       "AuditLogOut": {
         "properties": {
           "id": {
@@ -2676,7 +5338,6 @@
             "title": "Outcome"
           },
           "detail": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Detail"
           },
@@ -2761,7 +5422,6 @@
           "slots": {
             "anyOf": [
               {
-                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -3345,6 +6005,152 @@
         ],
         "title": "KnowledgeSearchRequest"
       },
+      "MemoryWrite": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Value"
+          },
+          "expected_version": {
+            "type": "integer",
+            "maximum": 2147483646.0,
+            "minimum": 0.0,
+            "title": "Expected Version"
+          },
+          "ttl_days": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Ttl Days",
+            "default": 180
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "expected_version"
+        ],
+        "title": "MemoryWrite"
+      },
+      "NewChatResearch": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 4,
+            "pattern": "^[a-zA-Z0-9_\\-]+$",
+            "title": "Session Id"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{8,96}$",
+            "title": "Idempotency Key"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ScopeRequest"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "idempotency_key",
+          "scope"
+        ],
+        "title": "NewChatResearch"
+      },
+      "NewResearch": {
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/ScopeRequest"
+          },
+          "model_id": {
+            "type": "string",
+            "pattern": "^openai:[A-Za-z0-9_.-]{2,100}$",
+            "title": "Model Id"
+          },
+          "image_id": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Image Id"
+          },
+          "approval_ref": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Approval Ref"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.:-]{8,96}$",
+            "title": "Idempotency Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scope",
+          "model_id",
+          "image_id",
+          "approval_ref",
+          "idempotency_key"
+        ],
+        "title": "NewResearch"
+      },
+      "NewSyntheticPortfolioTaskRun": {
+        "properties": {
+          "portfolio": {
+            "$ref": "#/components/schemas/SyntheticPortfolioRequest"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 96,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Idempotency Key"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "portfolio",
+          "idempotency_key"
+        ],
+        "title": "NewSyntheticPortfolioTaskRun",
+        "description": "Explicitly non-model, operator-approved multi-candidate research."
+      },
+      "NewSyntheticTaskRun": {
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/SyntheticDecisionCardRequest"
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "deterministic",
+              "deepagents",
+              "native_harness"
+            ],
+            "title": "Engine",
+            "default": "deterministic"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 96,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile",
+          "idempotency_key"
+        ],
+        "title": "NewSyntheticTaskRun"
+      },
       "NextQuestionResponse": {
         "properties": {
           "session_id": {
@@ -3387,7 +6193,6 @@
             "title": "Step"
           },
           "data": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Data"
           }
@@ -3488,6 +6293,31 @@
         ],
         "title": "PlanRowOut"
       },
+      "PortfolioReviewSignoff": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "verified_historical_only",
+              "reject"
+            ],
+            "title": "Verdict"
+          },
+          "receipt_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Receipt Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "verdict",
+          "receipt_sha256"
+        ],
+        "title": "PortfolioReviewSignoff",
+        "description": "A signed-in administrator reviews a frozen *fictional* receipt hash."
+      },
       "ProfileResponse": {
         "properties": {
           "session_id": {
@@ -3495,7 +6325,6 @@
             "title": "Session Id"
           },
           "profile": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Profile"
           },
@@ -3541,6 +6370,21 @@
           "value"
         ],
         "title": "ProfileUpdateRequest"
+      },
+      "PublishSyntheticEvidenceMemory": {
+        "properties": {
+          "ttl_seconds": {
+            "type": "integer",
+            "maximum": 2592000.0,
+            "minimum": 60.0,
+            "title": "Ttl Seconds",
+            "default": 86400
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PublishSyntheticEvidenceMemory",
+        "description": "Explicit opt-in for indexing independently rechecked fictional receipts."
       },
       "QualityIssueOut": {
         "properties": {
@@ -3773,7 +6617,6 @@
             "title": "Idempotency Key"
           },
           "filters": {
-            "additionalProperties": true,
             "type": "object",
             "title": "Filters"
           },
@@ -4153,6 +6996,62 @@
         ],
         "title": "SchoolPageOut"
       },
+      "ScopeRequest": {
+        "properties": {
+          "school_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "School Ids"
+          },
+          "major_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Major Id"
+          },
+          "province": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Province"
+          },
+          "subject_type": {
+            "type": "string",
+            "maxLength": 10,
+            "minLength": 1,
+            "title": "Subject Type"
+          },
+          "batch": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Batch"
+          },
+          "year_from": {
+            "type": "integer",
+            "title": "Year From"
+          },
+          "year_to": {
+            "type": "integer",
+            "title": "Year To"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "school_ids",
+          "major_id",
+          "province",
+          "subject_type",
+          "batch",
+          "year_from",
+          "year_to"
+        ],
+        "title": "ScopeRequest"
+      },
       "ScoreRowOut": {
         "properties": {
           "id": {
@@ -4351,6 +7250,209 @@
           "last_job_at"
         ],
         "title": "StatsOut"
+      },
+      "SyntheticDecisionCardRequest": {
+        "properties": {
+          "school_a": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "School A"
+          },
+          "school_b": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "School B"
+          },
+          "major": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "Major"
+          },
+          "province": {
+            "type": "string",
+            "maxLength": 24,
+            "minLength": 3,
+            "title": "Province"
+          },
+          "subject_type": {
+            "type": "string",
+            "pattern": "^(物理类|历史类)$",
+            "title": "Subject Type"
+          },
+          "score": {
+            "type": "integer",
+            "maximum": 750.0,
+            "minimum": 100.0,
+            "title": "Score"
+          },
+          "year": {
+            "type": "integer",
+            "maximum": 2100.0,
+            "minimum": 2020.0,
+            "title": "Year"
+          }
+        },
+        "type": "object",
+        "required": [
+          "school_a",
+          "school_b",
+          "major",
+          "province",
+          "subject_type",
+          "score",
+          "year"
+        ],
+        "title": "SyntheticDecisionCardRequest",
+        "description": "Only fictitious profiles may enter this experimental endpoint."
+      },
+      "SyntheticOptimizationSignoff": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "attest_reviewed",
+              "reject"
+            ],
+            "title": "Verdict"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "verdict"
+        ],
+        "title": "SyntheticOptimizationSignoff"
+      },
+      "SyntheticOptimizationSubmission": {
+        "properties": {
+          "pairs": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "object"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "maxItems": 5,
+            "minItems": 2,
+            "title": "Pairs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pairs"
+        ],
+        "title": "SyntheticOptimizationSubmission"
+      },
+      "SyntheticPortfolioCandidate": {
+        "properties": {
+          "school": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "School"
+          },
+          "major": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "Major"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "school",
+          "major"
+        ],
+        "title": "SyntheticPortfolioCandidate"
+      },
+      "SyntheticPortfolioRequest": {
+        "properties": {
+          "province": {
+            "type": "string",
+            "maxLength": 24,
+            "minLength": 3,
+            "title": "Province"
+          },
+          "score": {
+            "type": "integer",
+            "maximum": 750.0,
+            "minimum": 100.0,
+            "title": "Score"
+          },
+          "subject_type": {
+            "type": "string",
+            "pattern": "^(物理类|历史类)$",
+            "title": "Subject Type"
+          },
+          "year": {
+            "type": "integer",
+            "maximum": 2100.0,
+            "minimum": 2020.0,
+            "title": "Year"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/SyntheticPortfolioCandidate"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 3,
+            "title": "Candidates"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "province",
+          "score",
+          "subject_type",
+          "year",
+          "candidates"
+        ],
+        "title": "SyntheticPortfolioRequest",
+        "description": "Fictional historical options, not ordered application preferences."
+      },
+      "SyntheticResearchRequest": {
+        "properties": {
+          "school_a": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "School A"
+          },
+          "school_b": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "School B"
+          },
+          "major": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 3,
+            "title": "Major"
+          }
+        },
+        "type": "object",
+        "required": [
+          "school_a",
+          "school_b",
+          "major"
+        ],
+        "title": "SyntheticResearchRequest"
       },
       "SystemStatusOut": {
         "properties": {
@@ -4555,6 +7657,32 @@
           "subject_type"
         ],
         "title": "TrendSeriesOut"
+      },
+      "TriageReview": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "acknowledged",
+              "escalated"
+            ],
+            "title": "Verdict"
+          },
+          "review_reference": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9_.:/-]+$",
+            "title": "Review Reference"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "verdict",
+          "review_reference"
+        ],
+        "title": "TriageReview"
       },
       "ValidationError": {
         "properties": {
