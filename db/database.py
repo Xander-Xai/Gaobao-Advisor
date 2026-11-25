@@ -164,6 +164,7 @@ def init_db():
         AdminTokenRevocation,
         AdmissionScore,
         CareerTrend,
+        ChatTurnReceipt,
         Conversation,
         ConversationMessage,
         DataQualityIssue,

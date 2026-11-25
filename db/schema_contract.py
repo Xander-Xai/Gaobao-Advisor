@@ -54,7 +54,9 @@ USER_MEMORY_TABLES: tuple[str, ...] = ("user_memory_vaults", "user_memory_entrie
 # must accept older create_all databases that lack the revocation and dataset
 # metadata tables; migrations 0003/0005 create them afterwards.
 BASELINE_TABLES: tuple[str, ...] = HISTORICAL_TABLES + ADMIN_TABLES
-ALL_TABLES: tuple[str, ...] = BASELINE_TABLES + SECURITY_TABLES + METADATA_TABLES + USER_MEMORY_TABLES
+ALL_TABLES: tuple[str, ...] = (
+    BASELINE_TABLES + SECURITY_TABLES + METADATA_TABLES + USER_MEMORY_TABLES + ("chat_turn_receipts",)
+)
 
 
 def _type_signature(value: Any) -> tuple[str, int | None]:

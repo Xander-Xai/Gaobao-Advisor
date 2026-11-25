@@ -73,6 +73,7 @@ def test_erasure_covers_sql_and_report_file(isolated):
         "quality_scores": 1,
         "feedback": 1,
         "highlights": 1,
+        "chat_turn_receipts": 0,
         "compaction_snapshots": 1,
         "messages": 1,
         "conversations": 1,

@@ -91,3 +91,5 @@ curl -f http://127.0.0.1:8088/api/v1/health/ready
 参考：[授权研究 TaskRun](../admissions-research-taskrun.md)、[独立研究 Eval](../validation/authorized-research-eval.md)、[Java 微服务](../java-microservices.md)、[快照机制](../validation/session-compaction-snapshot-20261124.md)。历史审计保留日期，不覆盖原始证据。
 
 Industrial FastAPI HTTP admission is documented in [public HTTP admission](../security/industrial-public-http-admission.md). Rate settings and shared identity secret must be consistent across replicas; verify trusted proxy networks and HTTP 429/503 behavior before opening the service.
+
+Authenticated industrial chat continuations may opt into the [completed-turn idempotency contract](industrial-admissions-evidence.md#已认证续轮请求幂等独立候选-pr2026-11-25). The receipt migration must reach the unique head before startup; anonymous and unkeyed retry remain outside the guarantee.

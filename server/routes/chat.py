@@ -124,6 +124,7 @@ def _finalize_chat_answer(
     model_generated: bool,
     rewrite_attempts: int = 0,
     turn_version=None,
+    turn_key=None,
 ) -> tuple[dict, bool]:
     """Verify the exact answer, then persist it once before SSE publishes it.
 
@@ -140,8 +141,10 @@ def _finalize_chat_answer(
         final["reply"], final["structured_result"] = build_history_reply(final)
         final["atomic_memory"] = True
         final["industrial_turn_version"] = turn_version
+        final["industrial_turn_key"] = turn_key
         final.update(memory_node(final))
         final.pop("industrial_turn_version", None)
+        final.pop("industrial_turn_key", None)
         if not any(
             event.get("node") == "memory_update" and event.get("event") == "persisted"
             for event in final.get("trace", [])
@@ -222,6 +225,22 @@ def _finalize_chat_answer(
     return checked, degraded
 
 
+def _receipt_events(session_id: str, receipt: dict):
+    """Both original and retry use the same committed reply and message identity."""
+    if receipt["slots"]:
+        yield {"type": "slots", "data": receipt["slots"]}
+    yield {"type": "structured", "result": receipt["structured_result"]}
+    reply = receipt["reply"]
+    for offset in range(0, len(reply), 20):
+        yield {"type": "token", "content": reply[offset : offset + 20]}
+    yield {
+        "type": "done",
+        "session_id": session_id,
+        "message_id": receipt["message_id"],
+        "session_token": create_session_token(session_id),
+    }
+
+
 async def _sse_generator(
     session_id: str,
     scene: str,
@@ -230,6 +249,7 @@ async def _sse_generator(
     user_memory: list[dict] | None = None,
     *,
     fresh: bool = False,
+    turn_key=None,
 ):
     """Prepare graph state, generate a candidate and validate/persist before SSE.
 
@@ -238,6 +258,22 @@ async def _sse_generator(
     unchecked provider chunks are ever emitted to the browser.
     """
     from server.industrial_runtime import industrial_enabled
+
+    if turn_key is not None:
+        from server.services.industrial_chat_receipt import RequestKeyConflict, lookup_receipt
+
+        try:
+            receipt = await asyncio.to_thread(lookup_receipt, session_id, turn_key)
+        except RequestKeyConflict:
+            yield f"data: {json.dumps({'type': 'error', 'code': 'IDEMPOTENCY_CONFLICT', 'message': '请求键已用于其他请求'})}\n\n"
+            return
+        except Exception:
+            yield f"data: {json.dumps({'type': 'error', 'code': 'SESSION_UNAVAILABLE', 'message': '会话服务暂时不可用'})}\n\n"
+            return
+        if receipt is not None:
+            for event in _receipt_events(session_id, receipt):
+                yield f"data: {json.dumps(event)}\n\n"
+            return
 
     graph = get_advisor_graph()
     turn_version = None
@@ -275,7 +311,7 @@ async def _sse_generator(
     # A rejected turn is not a business answer. Do not send the rejected
     # input to a model/judge or persist it as conversation/profile memory.
     if result.get("security_blocked"):
-        if industrial_enabled() and fresh:
+        if industrial_enabled() and (fresh or turn_key is not None):
             yield f"data: {json.dumps({'type': 'error', 'code': 'SECURITY_BLOCKED', 'message': result['reply']})}\n\n"
             return
         refusal = result["reply"]
@@ -335,12 +371,30 @@ async def _sse_generator(
             model_generated=is_template and llm_configured and not degraded,
             rewrite_attempts=rewrite_attempts,
             turn_version=turn_version,
+            turn_key=turn_key,
         )
     except asyncio.CancelledError:
         raise
     except Exception:
+        if turn_key is not None:
+            try:
+                receipt = await asyncio.to_thread(lookup_receipt, session_id, turn_key)
+            except RequestKeyConflict:
+                yield f"data: {json.dumps({'type': 'error', 'code': 'IDEMPOTENCY_CONFLICT', 'message': '请求键已用于其他请求'})}\n\n"
+                return
+            except Exception:
+                receipt = None
+            if receipt is not None:
+                for event in _receipt_events(session_id, receipt):
+                    yield f"data: {json.dumps(event)}\n\n"
+                return
         logger.exception("Chat finalization/persistence failed")
         yield f"data: {json.dumps({'type': 'error', 'code': 'FINALIZATION_FAILED', 'message': '回答校验或保存失败，请稍后重试'})}\n\n"
+        return
+
+    if turn_key is not None:
+        for event in _receipt_events(session_id, final["industrial_receipt"]):
+            yield f"data: {json.dumps(event)}\n\n"
         return
 
     if quality_degraded:
@@ -376,6 +430,7 @@ async def chat(
     request: ChatRequest,
     authorization: str | None = Header(None),
     x_user_memory_token: str | None = Header(None),
+    idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ):
     """Anonymous clients get a *new server-owned* session; existing sessions need proof.
 
@@ -392,6 +447,21 @@ async def chat(
         ):
             raise HTTPException(status_code=401, detail="Invalid session token")
         session_id = request.session_id
+
+    from server.industrial_runtime import industrial_enabled
+
+    turn_key = None
+    if industrial_enabled() and idempotency_key is not None:
+        from server.services.industrial_chat_receipt import make_turn_key
+
+        if authorization is None or x_user_memory_token is not None:
+            raise HTTPException(status_code=400, detail="Keyed chat requires existing session without memory token")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", idempotency_key):
+            raise HTTPException(status_code=400, detail="Invalid Idempotency-Key")
+        try:
+            turn_key = make_turn_key(idempotency_key, request.scene, request.message, request.slots)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid keyed request") from exc
 
     # Validate the independent vault credential before any SSE response.
     memory_items: list[dict] = []
@@ -416,6 +486,7 @@ async def chat(
             request.slots,
             memory_items,
             fresh=authorization is None,
+            turn_key=turn_key,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},

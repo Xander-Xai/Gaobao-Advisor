@@ -111,3 +111,76 @@ def test_deleted_bearer_cannot_reenter_chat_or_legacy_mutations(factory, monkeyp
     graph.invoke.assert_not_called()
     with factory() as db:
         assert db.query(Conversation).count() == 0
+
+
+def test_keyed_chat_reuses_committed_reply_and_deletes_receipt(factory, monkeypatch, tmp_path):
+    import json
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from db.models import ChatTurnReceipt
+    from server.auth import create_session_token
+    from server.routes import chat
+
+    monkeypatch.setenv("GAOBAO_ADMISSIONS_YEAR", "2025")
+    sid = "industrial-session"
+    _, _, fresh = load_turn(sid, None, fresh=True)
+    assert persist(fresh) == "persisted"
+    graph = Mock()
+    graph.invoke.side_effect = lambda state: state
+    monkeypatch.setattr(chat, "get_advisor_graph", lambda: graph)
+    app = FastAPI()
+    app.include_router(chat.router)
+    headers = {
+        "Authorization": "Bearer " + create_session_token(sid),
+        "Idempotency-Key": "fixture-turn-00000001",
+    }
+    body = {"session_id": sid, "message": "600分", "slots": {"subject": "物理类"}}
+
+    def events(response):
+        return [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+
+    with TestClient(app) as client:
+        first = events(client.post("/api/v1/chat", json=body, headers=headers))
+        second = events(client.post("/api/v1/chat", json=body, headers=headers))
+        assert first[-1]["type"] == second[-1]["type"] == "done"
+        assert first[-1]["message_id"] == second[-1]["message_id"]
+        assert first[:-1] == second[:-1]
+        assert graph.invoke.call_count == 1
+        changed = events(client.post("/api/v1/chat", json={**body, "message": "610分"}, headers=headers))
+        assert changed[0]["code"] == "IDEMPOTENCY_CONFLICT"
+        assert graph.invoke.call_count == 1
+        with factory() as db:
+            assert db.query(ConversationMessage).count() == 4
+            assert db.query(ChatTurnReceipt).count() == 1
+        erased = erase_live_session_data(sid, ReportStorage(tmp_path / "reports"))
+        assert erased["deleted_row_counts"]["chat_turn_receipts"] == 1
+        refused = events(client.post("/api/v1/chat", json=body, headers=headers))
+        assert refused[0]["code"] == "SESSION_UNAVAILABLE"
+        assert graph.invoke.call_count == 1
+    with factory() as db:
+        assert db.query(ChatTurnReceipt).count() == 0
+        assert db.query(ConversationMessage).count() == 0
+
+
+def test_keyed_chat_rejects_anonymous_and_invalid_keys(factory):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.auth import create_session_token
+    from server.routes import chat
+
+    app = FastAPI()
+    app.include_router(chat.router)
+    body = {"session_id": "industrial-session", "message": "600分"}
+    with TestClient(app) as client:
+        anonymous = client.post("/api/v1/chat", json=body, headers={"Idempotency-Key": "fixture-turn-00000001"})
+        assert anonymous.status_code == 400
+        invalid = client.post(
+            "/api/v1/chat",
+            json=body,
+            headers={"Authorization": "Bearer " + create_session_token(body["session_id"]), "Idempotency-Key": "short"},
+        )
+        assert invalid.status_code == 400
