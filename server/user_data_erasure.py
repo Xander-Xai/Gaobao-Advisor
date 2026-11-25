@@ -39,6 +39,8 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
     removed: dict[str, int] = {}
     commit_attempted = False
     try:
+        # Serialize with industrial chat finalization before deleting children.
+        session_row = db.query(Conversation).filter(Conversation.session_id == session_id).with_for_update().first()
         removed["quality_scores"] = (
             db.query(QualityScore).filter(QualityScore.conversation_id == session_id).delete(synchronize_session=False)
         )
@@ -48,7 +50,6 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
         removed["highlights"] = (
             db.query(Highlight).filter(Highlight.session_id == session_id).delete(synchronize_session=False)
         )
-        session_row = db.query(Conversation).filter(Conversation.session_id == session_id).first()
         if session_row is None:
             removed["compaction_snapshots"] = 0
             removed["messages"] = 0

@@ -19,6 +19,14 @@ def render_reply_node(state: dict[str, Any]) -> dict[str, Any]:
     security_scan), pass it through unchanged.  Otherwise, assemble
     a reply from the structured result and reasoning.
     """
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        from server.services.industrial_admissions import build_history_reply
+
+        reply, card = build_history_reply(state)
+        return {"reply": reply, "template_reply": reply, "reply_source": "graph", "structured_result": card}
+
     # 如果 reply 已有,追加 disclaimer(来源标注由 source_attribution 节点处理)
     existing_reply = state.get("reply", "")
     if existing_reply:

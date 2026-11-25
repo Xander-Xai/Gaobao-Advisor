@@ -16,6 +16,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?explicit managed MySQL required}
       REDIS_URL: ${REDIS_URL:?explicit managed Redis required}
       GAOBAO_DATA_APPROVAL_REF: ${GAOBAO_DATA_APPROVAL_REF:?data authorization reference required}
+      GAOBAO_ADMISSIONS_YEAR: ${GAOBAO_ADMISSIONS_YEAR:?approved historical data year required}
       AUTO_MIGRATE: "false"
       AUTO_SEED_DEMO: "false"
       DB_AUTO_CREATE: "false"
@@ -47,6 +48,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?explicit managed MySQL required}
       REDIS_URL: ${REDIS_URL:?explicit managed Redis required}
       GAOBAO_DATA_APPROVAL_REF: ${GAOBAO_DATA_APPROVAL_REF:?data authorization reference required}
+      GAOBAO_ADMISSIONS_YEAR: ${GAOBAO_ADMISSIONS_YEAR:?approved historical data year required}
       AUTO_MIGRATE: "false"
       AUTO_SEED_DEMO: "false"
       DB_AUTO_CREATE: "false"

@@ -31,6 +31,12 @@ async def voice_call(
     - Server sends: {"type": "assistant_text", "text": "..."} for assistant reply
     - Server sends: {"type": "tts_start"} / {"type": "tts_end"} for TTS lifecycle
     """
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        # Legacy voice path bypasses SSE finalization and has no real ASR/TTS.
+        await websocket.close(code=1008, reason="Voice not released for industrial use")
+        return
     await websocket.accept()
 
     # Validate session_id

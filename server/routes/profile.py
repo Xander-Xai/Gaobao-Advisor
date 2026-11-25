@@ -25,6 +25,13 @@ def _require_auth(session_id: str, authorization: str | None = None) -> None:
     require_session_auth(session_id, authorization)
 
 
+def _require_legacy_write() -> None:
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        raise HTTPException(status_code=503, detail="Legacy profile mutation not released")
+
+
 class ProfileUpdateRequest(BaseModel):
     field: str = Field(..., min_length=1, max_length=32)
     value: str = Field(..., min_length=1, max_length=200)
@@ -65,6 +72,7 @@ async def get_profile(session_id: str, authorization: str | None = Header(None))
 async def update_profile_field(session_id: str, req: ProfileUpdateRequest, authorization: str | None = Header(None)):
     """Update a single profile field."""
     _require_auth(session_id, authorization)
+    _require_legacy_write()
     profile = load_profile(session_id)
     valid_fields = {"province", "score", "subject", "interest", "region", "family", "goal"}
     if req.field not in valid_fields:
@@ -109,6 +117,7 @@ async def delete_profile_session_data(session_id: str, authorization: str | None
 async def get_next_question(session_id: str, authorization: str | None = Header(None)):
     """Get the next soul query question for this session."""
     _require_auth(session_id, authorization)
+    _require_legacy_write()
     engine = get_soul_query_engine()
     profile = load_profile(session_id)
     query_state = _load_query_state(session_id)
@@ -128,6 +137,7 @@ async def get_next_question(session_id: str, authorization: str | None = Header(
 async def skip_field(session_id: str, req: SkipFieldRequest, authorization: str | None = Header(None)):
     """Skip an optional field (uses default value)."""
     _require_auth(session_id, authorization)
+    _require_legacy_write()
     engine = get_soul_query_engine()
     query_state = _load_query_state(session_id)
     engine.handle_skip(query_state, req.field)

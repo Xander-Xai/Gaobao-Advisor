@@ -42,8 +42,32 @@ def data_query_node(state: dict[str, Any]) -> dict[str, Any]:
     For the gaokao scene, queries matching schools and score data.
     Handles errors gracefully — data query failures should not block the pipeline.
     """
+    from server.industrial_runtime import industrial_enabled
+
     scene = state.get("scene", "general")
     slots = state.get("slots", {})
+    if industrial_enabled():
+        from db.database import get_session
+        from server.services.industrial_admissions import approved_year, exact_score, query_history
+
+        year = approved_year()
+        history = {}
+        requested = set(re.findall(r"(20[0-9]{2})\s*年", state.get("input_text", "")))
+        if requested - {str(year)}:
+            history = {"status": "YEAR_MISMATCH"}
+        elif scene == "gaokao" and not state.get("knowledge_query") and not state.get("industrial_score_invalid"):
+            score = exact_score(slots)
+            province, subject = slots.get("province"), slots.get("subject")
+            if score is not None and isinstance(province, str) and isinstance(subject, str):
+                db = get_session()
+                try:
+                    history = query_history(db, province=province, score=score, subject=subject, year=year)
+                finally:
+                    db.close()
+        return {
+            "data_query_results": {"industrial_history": history},
+            "trace": list(state.get("trace", [])) + [{"node": "data_query", "event": "industrial_exact_history"}],
+        }
     results: dict[str, Any] = {}
 
     try:

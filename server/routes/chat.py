@@ -53,19 +53,26 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
     """
     from db.crud import load_conversation_slots
     from db.database import get_session
+    from server.industrial_runtime import industrial_enabled
 
+    industrial = industrial_enabled()
     stored: dict = {}
     db = None
     try:
         db = get_session()
-        stored = load_conversation_slots(db, session_id) or {}
+        if industrial:
+            stored = load_conversation_slots(db, session_id, strict=True) or {}
+        else:
+            stored = load_conversation_slots(db, session_id) or {}
     except Exception:
+        if industrial:
+            raise RuntimeError("Session storage unavailable") from None
         logger.warning("Could not load persisted slots for session %s", session_id, exc_info=True)
     finally:
         if db is not None:
             db.close()
 
-    slots = flatten_slots(stored)
+    slots = flatten_slots(stored, derive_score=not industrial)
     for key, value in (provided_slots or {}).items():
         if key not in slots and value not in (None, "", False):
             slots[key] = value
@@ -111,7 +118,12 @@ def _deterministic_gate_issues(state: dict, candidate: str) -> list[str]:
 
 
 def _finalize_chat_answer(
-    state: dict, candidate: str, *, model_generated: bool, rewrite_attempts: int = 0
+    state: dict,
+    candidate: str,
+    *,
+    model_generated: bool,
+    rewrite_attempts: int = 0,
+    turn_version=None,
 ) -> tuple[dict, bool]:
     """Verify the exact answer, then persist it once before SSE publishes it.
 
@@ -119,7 +131,23 @@ def _finalize_chat_answer(
     completion. The LLM-as-Judge is diagnostic: a 50-point *unscored* fallback
     must not be mistaken for evidence of safety or a verified business result.
     """
+    from server.industrial_runtime import industrial_enabled
+
     final = dict(state)
+    if industrial_enabled():
+        from server.services.industrial_admissions import build_history_reply
+
+        final["reply"], final["structured_result"] = build_history_reply(final)
+        final["atomic_memory"] = True
+        final["industrial_turn_version"] = turn_version
+        final.update(memory_node(final))
+        final.pop("industrial_turn_version", None)
+        if not any(
+            event.get("node") == "memory_update" and event.get("event") == "persisted"
+            for event in final.get("trace", [])
+        ):
+            raise RuntimeError("Final-answer persistence failed")
+        return final, False
     fallback = final.get("template_reply") or final.get("reply") or "当前信息不足，无法完成分析。"
     if not candidate.strip():
         candidate, model_generated = fallback, False
@@ -200,6 +228,8 @@ async def _sse_generator(
     message: str,
     existing_slots: dict | None,
     user_memory: list[dict] | None = None,
+    *,
+    fresh: bool = False,
 ):
     """Prepare graph state, generate a candidate and validate/persist before SSE.
 
@@ -207,8 +237,22 @@ async def _sse_generator(
     final source gate, quality evaluation and durable conversation turn. No
     unchecked provider chunks are ever emitted to the browser.
     """
+    from server.industrial_runtime import industrial_enabled
+
     graph = get_advisor_graph()
-    persisted_slots, query_state = await asyncio.to_thread(_load_chat_state, session_id, existing_slots)
+    turn_version = None
+    try:
+        if industrial_enabled():
+            from server.services.industrial_session import load_turn
+
+            persisted_slots, query_state, turn_version = await asyncio.to_thread(
+                load_turn, session_id, existing_slots, fresh=fresh
+            )
+        else:
+            persisted_slots, query_state = await asyncio.to_thread(_load_chat_state, session_id, existing_slots)
+    except Exception:
+        yield f"data: {json.dumps({'type': 'error', 'code': 'SESSION_UNAVAILABLE', 'message': '会话服务暂时不可用'})}\n\n"
+        return
     initial_state = {
         "session_id": session_id,
         "input_text": message,
@@ -231,6 +275,9 @@ async def _sse_generator(
     # A rejected turn is not a business answer. Do not send the rejected
     # input to a model/judge or persist it as conversation/profile memory.
     if result.get("security_blocked"):
+        if industrial_enabled() and fresh:
+            yield f"data: {json.dumps({'type': 'error', 'code': 'SECURITY_BLOCKED', 'message': result['reply']})}\n\n"
+            return
         refusal = result["reply"]
         for i in range(0, len(refusal), 20):
             yield f"data: {json.dumps({'type': 'token', 'content': refusal[i : i + 20]})}\n\n"
@@ -239,7 +286,7 @@ async def _sse_generator(
 
     reply = result.get("reply") or ""
     is_template = result.get("reply_source") == "template"
-    llm_configured = bool(str(load_llm_config().get("api_key", "")).strip())
+    llm_configured = not industrial_enabled() and bool(str(load_llm_config().get("api_key", "")).strip())
     degraded = False
     degraded_message = ""
 
@@ -287,6 +334,7 @@ async def _sse_generator(
             reply,
             model_generated=is_template and llm_configured and not degraded,
             rewrite_attempts=rewrite_attempts,
+            turn_version=turn_version,
         )
     except asyncio.CancelledError:
         raise
@@ -367,6 +415,7 @@ async def chat(
             request.message,
             request.slots,
             memory_items,
+            fresh=authorization is None,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
@@ -387,6 +436,10 @@ class FeedbackRequest(BaseModel):
 async def submit_feedback(request: FeedbackRequest, authorization: str | None = Header(None)):
     """提交用户反馈（有帮助/没帮助）— 仅限会话所有者。"""
     require_session_auth(request.session_id, authorization)
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        raise HTTPException(status_code=503, detail="Session feedback/highlight writes not released")
 
     from server.quality.feedback import FeedbackCollector
 
@@ -416,6 +469,10 @@ class HighlightExtractRequest(BaseModel):
 async def submit_highlight(request: HighlightExtractRequest, authorization: str | None = Header(None)):
     """提取金句 — 仅限会话所有者。"""
     require_session_auth(request.session_id, authorization)
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        raise HTTPException(status_code=503, detail="Session feedback/highlight writes not released")
 
     db = None
     try:

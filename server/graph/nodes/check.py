@@ -16,7 +16,11 @@ def profile_check_node(state: dict[str, Any]) -> dict[str, Any]:
     scene = state.get("scene", "general")
     slots = state.get("slots", {})
     config = SCENE_CONFIGS.get(scene, SCENE_CONFIGS["general"])
+    from server.industrial_runtime import industrial_enabled
+
     required = config["required_slots"]
+    if industrial_enabled() and scene == "gaokao":
+        required = ["province", "score_rank", "subject"]
 
     missing = [field for field in required if not slots.get(field)]
 

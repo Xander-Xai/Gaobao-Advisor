@@ -34,6 +34,10 @@ def _load_owned_report(report_id: str, authorization: str | None):
     distinguish "not found" from "not yours". A caller can only reach a report
     by presenting the HMAC token bound to its session_id.
     """
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        raise HTTPException(status_code=503, detail="Evidence-bound report export not released")
     token = bearer_token(authorization)
     if token is None:
         raise HTTPException(status_code=401, detail="Missing session token")
@@ -333,6 +337,10 @@ async def generate_report(body: GenerateRequest, authorization: str | None = Hea
     """
     session_id = body.session_id
     require_session_auth(session_id, authorization)
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        raise HTTPException(status_code=503, detail="Evidence-bound report generation not released")
 
     # 1. Load real data from conversation database
     slots = _load_session_slots(session_id)

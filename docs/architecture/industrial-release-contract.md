@@ -1,6 +1,6 @@
 # 高报 Agent：工业架构与发布合同
 
-**适用范围**：当前 checkout 的正式架构、工程部署候选和验收门禁。2026-11-25 核查 master 合并 #196 为 `20144571220e83970ceaca9efa8e86c0d022ebd1`；#198 变更需查看实际合并及 exact-head CI。本文不是上线许可。
+**适用范围**：当前 checkout 的正式架构、工程部署候选和验收门禁。2026-11-25 核查 master 已合并 #198，基线 `2c27d0208095ae8616b6a1e18fc93d47282169ba`。本分支增量见 [工业招生证据治理](industrial-admissions-evidence.md)。本文不是上线许可。
 
 ## 1. 唯一职责与状态归属
 
@@ -58,6 +58,7 @@ python scripts/compose_standard.py up --build -d
 - DATABASE_URL：已授权 MySQL 应用账号，不使用 root 或迁移账号。
 - REDIS_URL：已配置认证与网络隔离的 Redis。
 - GAOBAO_DATA_APPROVAL_REF：内部授权标识，不等于独立核验许可证。
+- GAOBAO_ADMISSIONS_YEAR：候选配置必须明确审批历史年度；API/worker 检查该年度位次及院校级录取记录存在。
 - CATALOG_JDBC_URL、CATALOG_DB_USER、CATALOG_DB_PASSWORD：同一数据集的独立只读账号。
 - INDUSTRIAL_HTTP_PORT：可选本地反代端口，默认 8088。
 

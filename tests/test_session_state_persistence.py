@@ -231,3 +231,28 @@ def test_query_state_survives_a_full_two_turn_conversation(session_factory):
     assert stored["_query_state"]["round_count"] == 2
     assert stored["_query_state"]["asked_fields"] == ["province", "subject"]
     assert stored["province"] == PROFILE_SLOTS["province"]
+
+
+@pytest.mark.parametrize("stored", ["{broken", "[]", "null", "123"])
+def test_industrial_corrupt_session_slots_fail_closed(session_factory, monkeypatch, stored):
+    from server.routes.chat import _load_chat_state
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    with session_factory() as db:
+        db.add(Conversation(session_id="industrial-corrupt", slots_json=stored))
+        db.commit()
+    with pytest.raises(RuntimeError, match="Session storage unavailable"):
+        _load_chat_state("industrial-corrupt", {"score": 600})
+
+
+def test_industrial_session_loading_does_not_coerce_raw_score(session_factory, monkeypatch):
+    from server.routes.chat import _load_chat_state
+    from server.services.industrial_admissions import exact_score
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    with session_factory() as db:
+        save_slots(db, "industrial-score", {"score_rank": "1600分"})
+    slots, _ = _load_chat_state("industrial-score", None)
+    assert slots["score_rank"] == "1600分"
+    assert "score" not in slots
+    assert exact_score(slots) is None

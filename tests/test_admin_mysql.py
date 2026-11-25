@@ -187,3 +187,67 @@ def test_mysql_orphaned_dispatched_job_is_recovered(mysql_factory):
         assert outbox.dispatched_at is None
     finally:
         session.close()
+
+
+def test_mysql_industrial_session_concurrent_turns_and_erasure(mysql_factory, monkeypatch, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from db.models import Conversation, ConversationMessage
+    from server.graph.nodes.memory import memory_node
+    from server.report.storage import ReportStorage
+    from server.services.industrial_session import SessionConflict, load_turn
+    from server.user_data_erasure import erase_live_session_data
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    monkeypatch.setattr("db.database.get_session", mysql_factory)
+    monkeypatch.setattr("server.graph.nodes.memory.get_session", mysql_factory)
+    sid = "mysql-industrial-race"
+
+    def persist(version, score):
+        result = memory_node(
+            {
+                "session_id": sid,
+                "input_text": f"{score}分",
+                "reply": "fixture reply",
+                "slots": {"province": "广东", "score_rank": f"{score}分"},
+                "atomic_memory": True,
+                "industrial_turn_version": version,
+            }
+        )
+        return result["trace"][-1]["event"]
+
+    _, _, fresh = load_turn(sid, None, fresh=True)
+    assert persist(fresh, 600) == "persisted"
+    _, _, version = load_turn(sid, None, fresh=False)
+    barrier = Barrier(2, timeout=10)
+
+    def competing(score):
+        barrier.wait()
+        return persist(version, score)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(competing, [610, 620])) == ["persist_failed", "persisted"]
+    with mysql_factory() as db:
+        assert db.query(ConversationMessage).count() == 4
+    _, _, pending = load_turn(sid, None, fresh=False)
+    barrier = Barrier(2, timeout=10)
+
+    def erase():
+        barrier.wait()
+        return erase_live_session_data(sid, ReportStorage(tmp_path / "reports"))
+
+    def write():
+        barrier.wait()
+        return persist(pending, 630)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        deleting = pool.submit(erase)
+        writing = pool.submit(write)
+        assert deleting.result(timeout=20)["live_data_erased"]
+        assert writing.result(timeout=20) in {"persisted", "persist_failed"}
+    with pytest.raises(SessionConflict):
+        load_turn(sid, None, fresh=False)
+    with mysql_factory() as db:
+        assert db.query(Conversation).filter_by(session_id=sid).count() == 0
+        assert db.query(ConversationMessage).count() == 0

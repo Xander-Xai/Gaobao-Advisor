@@ -1,5 +1,7 @@
 # Gaobao Advisor｜可核验的高考志愿辅助决策系统
 
+> **当前架构核查（2026-11-25）**：#198 已合并 master，基线 `2c27d020`。本候选分支收紧工业 SQL 咨询：指定审批年度、同省同科类同年精确位次和院校级记录，不跨年回退，不生成录取概率。公共模型解释、旧语音及历史对话报告不进入工业发布范围。详见 [工业招生证据治理](docs/architecture/industrial-admissions-evidence.md)。未完成生产验收。
+
 > **架构治理（2026-11-25）**：确定性 LangGraph 咨询为默认主线；Deep Agents 是经批准的复杂招生研究候选，原生只读 Harness 作为参考和 Eval 基线，沙箱只面向受控招生分析。Java Gateway/Catalog、MySQL、Redis 与 Worker 为标准部署的正式组件。见 [架构裁决与裁剪门禁](docs/architecture/README.md#architecture-decision-freeze--2026-11-25)。
 
 

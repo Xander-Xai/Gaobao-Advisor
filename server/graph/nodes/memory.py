@@ -61,8 +61,19 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
     ticket_id = None
     db = get_session()
     try:
-        conv = get_or_create_conversation(db, session_id)
+        from server.industrial_runtime import industrial_enabled
+
+        industrial = industrial_enabled()
         atomic = bool(state.get("atomic_memory"))
+        if industrial:
+            from server.services.industrial_session import TurnVersion, claim_turn
+
+            version = state.get("industrial_turn_version")
+            if not atomic or not isinstance(version, TurnVersion):
+                raise RuntimeError("Industrial turn requires a server-owned version")
+            conv = claim_turn(db, session_id, version)
+        else:
+            conv = get_or_create_conversation(db, session_id)
         if input_text:
             if atomic:
                 save_message(db, session_id, "user", input_text, commit=False)
@@ -135,6 +146,9 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
                     )
                 )
             db.commit()
+            if industrial:
+                trace.append({"node": "memory_update", "event": "persisted"})
+                return {"trace": trace}
         else:
             save_slots(db, session_id, canonical)
 
