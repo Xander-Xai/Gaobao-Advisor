@@ -19,6 +19,7 @@ class AdvisorState(TypedDict, total=False):
 
     # ── Slot extraction ────────────────────────────────────────
     slots: dict
+    industrial_score_invalid: bool  # refuse ambiguous scores before SQL
     profile_snapshot: dict
     missing_fields: list[str]
     # Soul-query counter and already-asked fields. Persisted inside
