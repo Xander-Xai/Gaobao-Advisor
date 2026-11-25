@@ -118,7 +118,12 @@ def _deterministic_gate_issues(state: dict, candidate: str) -> list[str]:
 
 
 def _finalize_chat_answer(
-    state: dict, candidate: str, *, model_generated: bool, rewrite_attempts: int = 0
+    state: dict,
+    candidate: str,
+    *,
+    model_generated: bool,
+    rewrite_attempts: int = 0,
+    turn_version=None,
 ) -> tuple[dict, bool]:
     """Verify the exact answer, then persist it once before SSE publishes it.
 
@@ -134,7 +139,9 @@ def _finalize_chat_answer(
 
         final["reply"], final["structured_result"] = build_history_reply(final)
         final["atomic_memory"] = True
+        final["industrial_turn_version"] = turn_version
         final.update(memory_node(final))
+        final.pop("industrial_turn_version", None)
         if not any(
             event.get("node") == "memory_update" and event.get("event") == "persisted"
             for event in final.get("trace", [])
@@ -221,6 +228,8 @@ async def _sse_generator(
     message: str,
     existing_slots: dict | None,
     user_memory: list[dict] | None = None,
+    *,
+    fresh: bool = False,
 ):
     """Prepare graph state, generate a candidate and validate/persist before SSE.
 
@@ -231,8 +240,16 @@ async def _sse_generator(
     from server.industrial_runtime import industrial_enabled
 
     graph = get_advisor_graph()
+    turn_version = None
     try:
-        persisted_slots, query_state = await asyncio.to_thread(_load_chat_state, session_id, existing_slots)
+        if industrial_enabled():
+            from server.services.industrial_session import load_turn
+
+            persisted_slots, query_state, turn_version = await asyncio.to_thread(
+                load_turn, session_id, existing_slots, fresh=fresh
+            )
+        else:
+            persisted_slots, query_state = await asyncio.to_thread(_load_chat_state, session_id, existing_slots)
     except Exception:
         yield f"data: {json.dumps({'type': 'error', 'code': 'SESSION_UNAVAILABLE', 'message': '会话服务暂时不可用'})}\n\n"
         return
@@ -258,6 +275,9 @@ async def _sse_generator(
     # A rejected turn is not a business answer. Do not send the rejected
     # input to a model/judge or persist it as conversation/profile memory.
     if result.get("security_blocked"):
+        if industrial_enabled() and fresh:
+            yield f"data: {json.dumps({'type': 'error', 'code': 'SECURITY_BLOCKED', 'message': result['reply']})}\n\n"
+            return
         refusal = result["reply"]
         for i in range(0, len(refusal), 20):
             yield f"data: {json.dumps({'type': 'token', 'content': refusal[i : i + 20]})}\n\n"
@@ -314,6 +334,7 @@ async def _sse_generator(
             reply,
             model_generated=is_template and llm_configured and not degraded,
             rewrite_attempts=rewrite_attempts,
+            turn_version=turn_version,
         )
     except asyncio.CancelledError:
         raise
@@ -394,6 +415,7 @@ async def chat(
             request.message,
             request.slots,
             memory_items,
+            fresh=authorization is None,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
@@ -414,6 +436,10 @@ class FeedbackRequest(BaseModel):
 async def submit_feedback(request: FeedbackRequest, authorization: str | None = Header(None)):
     """提交用户反馈（有帮助/没帮助）— 仅限会话所有者。"""
     require_session_auth(request.session_id, authorization)
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        raise HTTPException(status_code=503, detail="Session feedback/highlight writes not released")
 
     from server.quality.feedback import FeedbackCollector
 
@@ -443,6 +469,10 @@ class HighlightExtractRequest(BaseModel):
 async def submit_highlight(request: HighlightExtractRequest, authorization: str | None = Header(None)):
     """提取金句 — 仅限会话所有者。"""
     require_session_auth(request.session_id, authorization)
+    from server.industrial_runtime import industrial_enabled
+
+    if industrial_enabled():
+        raise HTTPException(status_code=503, detail="Session feedback/highlight writes not released")
 
     db = None
     try:
