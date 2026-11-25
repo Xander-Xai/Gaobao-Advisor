@@ -63,7 +63,7 @@
           <button v-if="runId" type="button" :disabled="busy" class="rounded border border-slate-400 px-3 py-2 text-sm disabled:opacity-50" @click="refresh">
             刷新状态
           </button>
-          <button v-if="hasReport" type="button" :disabled="busy" class="rounded border border-slate-400 px-3 py-2 text-sm disabled:opacity-50" @click="loadReport">
+          <button v-if="hasReport" type="button" data-testid="research-report" :disabled="busy" class="rounded border border-slate-400 px-3 py-2 text-sm disabled:opacity-50" @click="loadReport">
             查看验证报告
           </button>
           <button v-if="['FAILED', 'CANCELLED', 'EXPIRED'].includes(status)" type="button" data-testid="research-resubmit" :disabled="busy" class="rounded border border-amber-700 px-3 py-2 text-sm text-amber-900 disabled:opacity-50" @click="resubmitForApproval">
@@ -171,17 +171,18 @@ function scope() {
   }
 }
 
-async function follow(run) {
+async function follow(run, sessionId, token) {
   streamController?.abort()
   streamController = new AbortController()
   try {
     await chatResearchAPI.follow({
       runId: run,
-      sessionId: chat.currentSessionId,
-      token: chat.sessionToken,
+      sessionId,
+      token,
       signal: streamController.signal,
       onEvent(event) {
-        if (event.type !== 'progress' || event.run_id !== run) return
+        if (event.type !== 'progress' || event.run_id !== run ||
+            chat.currentSessionId !== sessionId || chat.sessionToken !== token || runId.value !== run) return
         status.value = event.status
         stage.value = event.stage
         failureCode.value = event.failure_code || ''
@@ -194,29 +195,34 @@ async function follow(run) {
 
 async function submit() {
   if (busy.value || !canSubmit.value) return
+  const sessionId = chat.currentSessionId
+  const token = chat.sessionToken
   busy.value = true
   error.value = ''
   report.value = ''
   try {
     const requestScope = scope()
-    const fingerprint = JSON.stringify({ session: chat.currentSessionId, scope: requestScope })
+    const fingerprint = JSON.stringify({ session: sessionId, scope: requestScope })
     if (fingerprint !== lastFingerprint) {
       lastFingerprint = fingerprint
       idempotencyKey = globalThis.crypto?.randomUUID?.() || `chat-research-${Date.now().toString(16)}`
     }
     const { data, error: apiError } = await chatResearchAPI.create({
-      sessionId: chat.currentSessionId,
+      sessionId,
       scope: requestScope,
       idempotencyKey,
-      token: chat.sessionToken,
+      token,
     })
     if (apiError) throw new Error(apiError.message || '提交研究请求失败。')
+    if (chat.currentSessionId !== sessionId || chat.sessionToken !== token) return
     runId.value = data.run_id
     status.value = data.status
     stage.value = 'awaiting_operator_approval'
-    void follow(data.run_id)
+    void follow(data.run_id, sessionId, token)
   } catch (err) {
-    error.value = err?.message || '研究请求失败。'
+    if (chat.currentSessionId === sessionId && chat.sessionToken === token) {
+      error.value = err?.message || '研究请求失败。'
+    }
   } finally {
     busy.value = false
   }
@@ -224,19 +230,24 @@ async function submit() {
 
 async function loadOptions() {
   if (busy.value || !canSubmit.value) return
+  const sessionId = chat.currentSessionId
+  const token = chat.sessionToken
   busy.value = true
   error.value = ''
   try {
     const { data, error: apiError } = await chatResearchAPI.options({
-      sessionId: chat.currentSessionId,
+      sessionId,
       schoolQuery: schoolQuery.value,
       majorQuery: majorQuery.value,
-      token: chat.sessionToken,
+      token,
     })
     if (apiError) throw new Error(apiError.message || '无法读取已授权数据目录。')
+    if (chat.currentSessionId !== sessionId || chat.sessionToken !== token) return
     options.value = data
   } catch (err) {
-    error.value = err?.message || '无法读取已授权数据目录。'
+    if (chat.currentSessionId === sessionId && chat.sessionToken === token) {
+      error.value = err?.message || '无法读取已授权数据目录。'
+    }
   } finally {
     busy.value = false
   }
@@ -250,16 +261,22 @@ function resubmitForApproval() {
 
 async function refresh() {
   if (busy.value || !runId.value || !canSubmit.value) return
+  const sessionId = chat.currentSessionId
+  const token = chat.sessionToken
+  const requestedRunId = runId.value
   busy.value = true
   error.value = ''
   try {
-    const { data, error: apiError } = await chatResearchAPI.get(runId.value, chat.currentSessionId, chat.sessionToken)
+    const { data, error: apiError } = await chatResearchAPI.get(requestedRunId, sessionId, token)
     if (apiError) throw new Error(apiError.message || '读取任务状态失败。')
+    if (chat.currentSessionId !== sessionId || chat.sessionToken !== token || runId.value !== requestedRunId) return
     status.value = data.status
     failureCode.value = data.failure_code || ''
     stage.value = data.status === 'RUNNING' ? 'deep_agents_execution' : ''
   } catch (err) {
-    error.value = err?.message || '读取任务状态失败。'
+    if (chat.currentSessionId === sessionId && chat.sessionToken === token && runId.value === requestedRunId) {
+      error.value = err?.message || '读取任务状态失败。'
+    }
   } finally {
     busy.value = false
   }
@@ -267,16 +284,22 @@ async function refresh() {
 
 async function cancel() {
   if (busy.value || !runId.value || !canSubmit.value) return
+  const sessionId = chat.currentSessionId
+  const token = chat.sessionToken
+  const requestedRunId = runId.value
   busy.value = true
   error.value = ''
   try {
-    const { data, error: apiError } = await chatResearchAPI.cancel(runId.value, chat.currentSessionId, chat.sessionToken)
+    const { data, error: apiError } = await chatResearchAPI.cancel(requestedRunId, sessionId, token)
     if (apiError) throw new Error(apiError.message || '取消任务失败。')
+    if (chat.currentSessionId !== sessionId || chat.sessionToken !== token || runId.value !== requestedRunId) return
     status.value = data.status
     stage.value = 'cancelled'
     streamController?.abort()
   } catch (err) {
-    error.value = err?.message || '取消任务失败。'
+    if (chat.currentSessionId === sessionId && chat.sessionToken === token && runId.value === requestedRunId) {
+      error.value = err?.message || '取消任务失败。'
+    }
   } finally {
     busy.value = false
   }
@@ -284,14 +307,20 @@ async function cancel() {
 
 async function loadReport() {
   if (busy.value || !runId.value || !hasReport.value || !canSubmit.value) return
+  const sessionId = chat.currentSessionId
+  const token = chat.sessionToken
+  const requestedRunId = runId.value
   busy.value = true
   error.value = ''
   try {
-    const { data, error: apiError } = await chatResearchAPI.report(runId.value, chat.currentSessionId, chat.sessionToken)
+    const { data, error: apiError } = await chatResearchAPI.report(requestedRunId, sessionId, token)
     if (apiError) throw new Error(apiError.message || '读取验证报告失败。')
+    if (chat.currentSessionId !== sessionId || chat.sessionToken !== token || runId.value !== requestedRunId) return
     report.value = data
   } catch (err) {
-    error.value = err?.message || '读取验证报告失败。'
+    if (chat.currentSessionId === sessionId && chat.sessionToken === token && runId.value === requestedRunId) {
+      error.value = err?.message || '读取验证报告失败。'
+    }
   } finally {
     busy.value = false
   }

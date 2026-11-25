@@ -98,4 +98,43 @@ describe('ChatResearchRequest', () => {
     expect(create.mock.calls[1][0].scope).toEqual(create.mock.calls[0][0].scope)
     expect(wrapper.text()).toContain('重新提交会创建新的 TaskRun')
   })
+
+  it('does not render a prior session report after the active chat changes', async () => {
+    const chat = useChatStore()
+    chat.currentSessionId = 'session-user-1234'
+    await flushPromises()
+    chat.sessionToken = 'session-capability'
+    vi.spyOn(chatResearchAPI, 'options').mockResolvedValue({
+      data: {
+        schools: [{ id: 101, name: 'Authorized School A' }, { id: 102, name: 'Authorized School B' }],
+        majors: [{ id: 42, name: 'Authorized Major' }],
+      },
+      error: null,
+    })
+    vi.spyOn(chatResearchAPI, 'create').mockResolvedValue({ data: { ...task, status: 'SUCCEEDED' }, error: null })
+    vi.spyOn(chatResearchAPI, 'follow').mockResolvedValue(undefined)
+    let resolveReport: (value: { data: string; error: null }) => void = () => undefined
+    vi.spyOn(chatResearchAPI, 'report').mockReturnValue(new Promise(resolve => { resolveReport = resolve }))
+    const wrapper = mount(ChatResearchRequest)
+    await wrapper.find('[data-testid="research-options-search"]').trigger('click')
+    await flushPromises()
+    const fields: Record<string, string> = {
+      'school-a': '101', 'school-b': '102', major: '42', province: '广东',
+      subject: '物理', batch: '本科', 'year-from': '2022', 'year-to': '2024',
+    }
+    for (const [name, value] of Object.entries(fields)) {
+      await wrapper.find(`[data-testid="research-${name}"]`).setValue(value)
+    }
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    await wrapper.find('[data-testid="research-report"]').trigger('click')
+    await flushPromises()
+
+    chat.currentSessionId = 'session-other-1234'
+    await flushPromises()
+    resolveReport({ data: 'PRIVATE REPORT FROM OLD SESSION', error: null })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('PRIVATE REPORT FROM OLD SESSION')
+  })
 })
