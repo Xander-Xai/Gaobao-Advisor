@@ -53,7 +53,6 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
     """
     from db.crud import load_conversation_slots
     from db.database import get_session
-
     from server.industrial_runtime import industrial_enabled
 
     industrial = industrial_enabled()

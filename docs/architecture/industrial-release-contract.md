@@ -81,7 +81,7 @@ curl -f http://127.0.0.1:8088/api/v1/health/ready
 | G0 入口 | 一套标准 Java/MySQL/Redis/Python 拓扑，目录/聊天/运营质检 E2E，禁止 API 直通 | 新变更待 exact-head CI；历史 Java synthetic CI 不能替代 |
 | G1 数据/Schema | MySQL explicit、独立迁移、唯一 Alembic head、CUSTOM 数据、授权与版本审计 | 启动门禁已实现；真实数据权利/质量仍需审核 |
 | G2 隐私 | 摘要 AES-GCM、TTL 清理、无缓存研究 API、密钥隔离；原对话及备份删除、真实身份与同意 | 新加密实现待 CI；真实个人数据/长期偏好/生产摘要 NO-GO |
-| G3 可靠性 | API 与 worker 独立启动校验、Redis readiness、外部 MySQL/Redis 断连、Outbox 恢复、备份恢复 | Catalog 的 Redis 限流不等于全部公共 API 跨副本限流；FastAPI 公共限流仍为进程内。实际候选集群故障注入、SLO 和恢复报告缺失 |
+| G3 可靠性 | API 与 worker 独立启动校验、Redis readiness、外部 MySQL/Redis 断连、Outbox 恢复、备份恢复 | Catalog 与工业 FastAPI HTTP 各有独立 Redis 原子限流；WebSocket 消息与模型配额尚未覆盖。实际候选集群故障注入、SLO 和恢复报告缺失 |
 | G4 研究 | 授权数据、审批、身份/回执绑定、隔离、预算、正确拒答、独立 gold | #196 已合并；真实模型/真实数据/独立 gold/容器与 worker 部署验收未完成 |
 | G5 Eval/优化 | 同模型、同 gold、同预算、完整分母和 Holdout；真实 usage/账单 | 无真实结果，不宣传降本 |
 | G6 安全发布 | TLS、专用凭据、镜像/SBOM、轮换、监控告警、容量与回滚 | 无真实生产证据，NO-GO |
@@ -89,3 +89,5 @@ curl -f http://127.0.0.1:8088/api/v1/health/ready
 **不把所有实验移入生产。** 原生 Harness 与脚本化合成用例是正常工业回归资产；业务能力由明确入口、权限、状态、失败处理和独立验收承担。真实研究部署使用现有 `server.agent.admissions_research_dispatch`，在单独授权 worker host 和私有 journal 下运行，不在公开候选 stack 自动启动付费调用。需要扩展到分布式时，先设计 MySQL/队列 fencing 和外部调用不确定性，不伪称 exactly-once 或跨进程 Deep Agents checkpoint。
 
 参考：[授权研究 TaskRun](../admissions-research-taskrun.md)、[独立研究 Eval](../validation/authorized-research-eval.md)、[Java 微服务](../java-microservices.md)、[快照机制](../validation/session-compaction-snapshot-20261124.md)。历史审计保留日期，不覆盖原始证据。
+
+Industrial FastAPI HTTP admission is documented in [public HTTP admission](../security/industrial-public-http-admission.md). Rate settings and shared identity secret must be consistent across replicas; verify trusted proxy networks and HTTP 429/503 behavior before opening the service.

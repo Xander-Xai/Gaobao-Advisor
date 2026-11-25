@@ -205,3 +205,30 @@ def test_unreachable_redis_is_explicit():
     with pytest.raises(SecurityBackendUnavailable):
         limiter.check("client")
     limiter.reset()
+
+
+def test_public_token_bucket_atomic_across_instances(redis_client):
+    from server.middleware.ratelimit import RedisTokenBucketLimiter
+
+    namespace = f"{TEST_REDIS_ROOT}:public"
+    kwargs = {
+        "url": REDIS_TEST_URL,
+        "secret": "test-shared-secret",
+        "rate": 0.001,
+        "capacity": 5,
+        "namespace": namespace,
+        "client": redis_client,
+    }
+    first = RedisTokenBucketLimiter(**kwargs)
+    second = RedisTokenBucketLimiter(**kwargs)
+
+    def call(index: int) -> bool:
+        return (first if index % 2 else second).allow("192.0.2.1")
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        assert sum(pool.map(call, range(50))) == 5
+    key = first.key_for("192.0.2.1")
+    assert key == second.key_for("192.0.2.1")
+    assert "192.0.2.1" not in key
+    assert redis_client.pttl(key) > 0
+    assert second.allow("192.0.2.2")
