@@ -52,6 +52,27 @@ def exact_score(slots: dict) -> int | None:
     return scores[0] if scores and len(set(scores)) == 1 else None
 
 
+def explicit_turn_score(text: str) -> tuple[bool, int | None]:
+    """Recognize explicit numeric scores without the legacy substring parser.
+
+    The boolean distinguishes a score mention from a turn with no score.
+    Relative, approximate and multiple scores require clarification.
+    """
+    matches = re.findall(r"[+＋\-－−]?[0-9０-９]+(?:[.,，．][0-9０-９]+)*\s*分", text)
+    if not matches:
+        return False, None
+    if len(matches) != 1 or re.search(
+        r"不到|不满|没到|低于|高于|差|超过|超了|过了|线上|线下|左右|大约|约|上下|至少|至多|以上|以下|分多|多分",
+        text,
+    ):
+        return True, None
+    match = re.fullmatch(r"([0-9]{3})\s*分", matches[0])
+    if match is None:
+        return True, None
+    score = int(match.group(1))
+    return True, score if 100 <= score <= 750 else None
+
+
 def query_history(db, *, province: str, score: int, subject: str, year: int) -> dict:
     """Use no nearest-score, other-year, other-subject or inferred-rank fallback."""
     base = {"year": year, "province": province, "score": score, "subject": subject}
@@ -123,6 +144,8 @@ def build_history_reply(state: dict) -> tuple[str, dict]:
         summary = "现行政策知识库尚未获准发布，请核实省教育考试院最新公告。"
     elif state.get("scene") != "gaokao":
         summary = "当前发布范围仅为高考历史招生数据查询。"
+    elif state.get("industrial_score_invalid"):
+        summary = "请提供一个明确的高考整数总分（例如600分），不使用分差、近似值或多个分数。"
     elif evidence.get("status") == "YEAR_MISMATCH":
         summary = f"当前发布只支持{year}年历史数据，不能回答其他年份。"
     elif state.get("missing_fields") or evidence.get("status") == "UNSUPPORTED_COHORT":
