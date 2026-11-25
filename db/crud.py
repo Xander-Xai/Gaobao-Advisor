@@ -449,14 +449,19 @@ def load_conversation_history(db: Session, session_id: str) -> list[dict]:
     return [{"role": m.role, "content": m.content} for m in conv.messages]
 
 
-def load_conversation_slots(db: Session, session_id: str) -> dict | None:
+def load_conversation_slots(db: Session, session_id: str, *, strict: bool = False) -> dict | None:
     """加载对话槽位。"""
     conv = db.query(Conversation).filter(Conversation.session_id == session_id).first()
     if not conv or not conv.slots_json:
         return None
     try:
-        return json.loads(conv.slots_json)
+        parsed = json.loads(conv.slots_json)
+        if strict and not isinstance(parsed, dict):
+            raise ValueError("Invalid stored session slots")
+        return parsed
     except Exception:
+        if strict:
+            raise
         return None
 
 
