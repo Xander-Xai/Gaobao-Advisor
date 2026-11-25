@@ -328,7 +328,6 @@ async def _sse_generator(
                 yield f"data: {json.dumps(event)}\n\n"
             return
 
-    graph = get_advisor_graph()
     turn_version = None
     try:
         if industrial_enabled():
@@ -354,10 +353,21 @@ async def _sse_generator(
     if query_state:
         initial_state["_query_state"] = query_state
 
+    research_intent = not industrial_enabled() and requires_managed_admissions_research(message)
     try:
-        result = await asyncio.to_thread(graph.invoke, initial_state)
+        if research_intent:
+            # Reuse the existing security gate, then go directly to the
+            # approval-form prompt. Do not run SQL/RAG preparation, a provider
+            # model, or the paid quality judge on this routing turn.
+            from server.graph.nodes.security_scan import security_scan_node
+
+            result = dict(initial_state)
+            result.update(await asyncio.to_thread(security_scan_node, initial_state))
+        else:
+            graph = get_advisor_graph()
+            result = await asyncio.to_thread(graph.invoke, initial_state)
     except Exception:
-        logger.exception("Chat preparation graph failed")
+        logger.exception("Chat preparation failed")
         yield f"data: {json.dumps({'type': 'error', 'code': 'GRAPH_FAILED', 'message': '服务暂时不可用，请稍后重试'})}\n\n"
         return
 
@@ -373,7 +383,7 @@ async def _sse_generator(
         yield f"data: {json.dumps({'type': 'done', 'session_id': session_id, 'message_id': f'{session_id}-response', 'session_token': create_session_token(session_id)})}\n\n"
         return
 
-    if not industrial_enabled() and requires_managed_admissions_research(message):
+    if research_intent:
         enabled = _managed_research_request_enabled()
         result = dict(result)
         result.update(
