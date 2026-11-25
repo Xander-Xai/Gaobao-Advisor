@@ -35,3 +35,5 @@ Engineering evidence:
 Default demo data is synthetic. Do not add real admissions databases, private
 conversations, third-party corpora without redistribution rights, or credentials
 to any documentation, example or screenshot.
+
+- [Industrial public HTTP admission](security/industrial-public-http-admission.md) — Redis atomic admission, failure and deployment boundaries.
