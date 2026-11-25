@@ -140,3 +140,51 @@ def test_industrial_text_and_card_share_exact_receipts(history_db, monkeypatch):
 )
 def test_industrial_score_requires_exact_unambiguous_value(slots, expected):
     assert exact_score(slots) == expected
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("广东600分物理类", 600),
+        ("我改成620分", 620),
+        ("广东1600分物理类", None),
+        ("广东600.5分物理类", None),
+        ("广东-600分物理类", None),
+        ("广东600分左右", None),
+        ("一本线上100分", None),
+        ("不到600分", None),
+        ("600分还是610分", None),
+        ("考了600", None),
+    ],
+)
+def test_industrial_current_turn_score_precedes_legacy_extraction(monkeypatch, message, expected):
+    from server.graph.nodes.extract import slot_extract_node
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    state = {"input_text": message, "slots": {"province": "广东", "subject": "物理类", "score_rank": "590分"}}
+    result = slot_extract_node(state)
+    assert result["industrial_score_invalid"] is (expected is None)
+    assert exact_score(result["slots"]) == expected
+
+
+def test_industrial_invalid_score_never_queries_sql(monkeypatch):
+    from unittest.mock import Mock
+
+    from server.graph.nodes.data_nodes import data_query_node
+    from server.graph.nodes.extract import slot_extract_node
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    monkeypatch.setenv("GAOBAO_ADMISSIONS_YEAR", "2025")
+    session = Mock(side_effect=AssertionError("invalid input reached SQL"))
+    monkeypatch.setattr("db.database.get_session", session)
+    state = {
+        "input_text": "广东1600分物理类",
+        "scene": "gaokao",
+        "slots": {"province": "广东", "subject": "物理类", "score_rank": "600分"},
+    }
+    state.update(slot_extract_node(state))
+    state.update(data_query_node(state))
+    reply, card = build_history_reply(state)
+    session.assert_not_called()
+    assert "明确的高考整数总分" in reply
+    assert not card["facts"]
