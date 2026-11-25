@@ -79,16 +79,21 @@ export const chatAPI = {
    * `done.session_token` to auth profile/voice.
    */
   async send(sessionId, message, slots = {}, scene = 'gaokao', token = null, { onEvent, memoryToken, idempotencyKey } = {}) {
-    const response = await fetch(`${API_BASE}/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(memoryToken ? { 'X-User-Memory-Token': memoryToken } : {}),
-        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
-      },
-      body: JSON.stringify({ session_id: sessionId, message, slots, scene }),
-    })
+    let response
+    try {
+      response = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(memoryToken ? { 'X-User-Memory-Token': memoryToken } : {}),
+          ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+        },
+        body: JSON.stringify({ session_id: sessionId, message, slots, scene }),
+      })
+    } catch (error) {
+      throw Object.assign(new Error('聊天连接失败', { cause: error }), { retryableTransport: true })
+    }
     if (!response.ok || !response.body) {
       throw new Error(`Chat failed: HTTP ${response.status}`)
     }
@@ -126,7 +131,13 @@ export const chatAPI = {
       if (typeof onEvent === 'function') onEvent(event)
     }
     while (true) {
-      const { done, value } = await reader.read()
+      let chunk
+      try {
+        chunk = await reader.read()
+      } catch (error) {
+        throw Object.assign(new Error('聊天连接中断', { cause: error }), { retryableTransport: true })
+      }
+      const { done, value } = chunk
       if (done) break
       buffer += decoder.decode(value, { stream: true })
       drainLines()
