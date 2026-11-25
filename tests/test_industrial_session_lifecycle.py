@@ -81,3 +81,33 @@ def test_industrial_legacy_write_without_version_rejected(factory):
     assert persist(None) == "persist_failed"
     with factory() as db:
         assert db.query(Conversation).count() == 0
+
+
+def test_deleted_bearer_cannot_reenter_chat_or_legacy_mutations(factory, monkeypatch):
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.auth import create_session_token
+    from server.routes import chat, profile
+
+    sid = "industrial-deleted"
+    graph = Mock()
+    monkeypatch.setattr(chat, "get_advisor_graph", lambda: graph)
+    app = FastAPI()
+    app.include_router(chat.router)
+    app.include_router(profile.router)
+    headers = {"Authorization": "Bearer " + create_session_token(sid)}
+    with TestClient(app) as client:
+        response = client.post("/api/v1/chat", json={"session_id": sid, "message": "600分"}, headers=headers)
+        assert "SESSION_UNAVAILABLE" in response.text
+        assert '"type": "done"' not in response.text
+        update = client.put(f"/api/v1/profile/{sid}", json={"field": "score", "value": "600"}, headers=headers)
+        assert update.status_code == 503
+        assert client.get(f"/api/v1/profile/{sid}/next-question", headers=headers).status_code == 503
+        skip = client.post(f"/api/v1/profile/{sid}/skip", json={"field": "interest"}, headers=headers)
+        assert skip.status_code == 503
+    graph.invoke.assert_not_called()
+    with factory() as db:
+        assert db.query(Conversation).count() == 0
