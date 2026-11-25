@@ -38,6 +38,13 @@ no automatic paid replay use the same TaskRun lifecycle. Ordinary `/chat`
 answers stay deterministic and no free-text complexity classifier starts a
 run. This is an opt-in request/submission path, not production authorization,
 real-model evaluation, real-data acceptance or production deployment.
+
+The fixed worker SQL projection joins the school registry and excludes rows
+whose school is marked `SYNTHETIC_DEMO_DATA`. This guard runs again in the
+worker's pre-model admission-history read, so a caller that forges synthetic
+IDs cannot turn demo rows into a report or provider request; an empty approved
+cohort returns the existing deterministic `no_admission_history` refusal.
+
 The operator API creates and inspects the run; a different admin approves its
 exact request digest. Only a separately invoked worker can spend model tokens
 or start a sandbox. No browser click triggers model calls.

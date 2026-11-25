@@ -84,9 +84,9 @@ def _digest(value: Any) -> str:
 
 def read_research_rows(session: Any, scope: ResearchScope, kind: str) -> list[dict[str, Any]]:
     """Fixed SQL projection; the agent cannot change predicates or table names."""
-    from sqlalchemy import select
+    from sqlalchemy import or_, select
 
-    from db.models import AdmissionScore, EnrollmentPlan
+    from db.models import AdmissionScore, EnrollmentPlan, School
 
     if kind == "admission-history":
         table = AdmissionScore
@@ -96,12 +96,18 @@ def read_research_rows(session: Any, scope: ResearchScope, kind: str) -> list[di
         fields = ("id", "school_id", "major_id", "year", "plan_count", "subject_requirement", "tuition", "duration")
     else:
         raise ValueError("Unknown research dimension")
-    query = select(*(getattr(table, key) for key in fields)).where(
-        table.school_id.in_(scope.school_ids),
-        table.major_id == scope.major_id,
-        table.province == scope.province,
-        table.batch == scope.batch,
-        table.year.between(scope.year_from, scope.year_to),
+    query = (
+        select(*(getattr(table, key) for key in fields))
+        .select_from(table)
+        .join(School, School.id == table.school_id)
+        .where(
+            table.school_id.in_(scope.school_ids),
+            table.major_id == scope.major_id,
+            table.province == scope.province,
+            table.batch == scope.batch,
+            table.year.between(scope.year_from, scope.year_to),
+            or_(School.special_type.is_(None), School.special_type != "SYNTHETIC_DEMO_DATA"),
+        )
     )
     if kind == "admission-history":
         query = query.where(AdmissionScore.subject_type == scope.subject_type)

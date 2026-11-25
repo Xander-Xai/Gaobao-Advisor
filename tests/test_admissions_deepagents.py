@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from db.models import AdmissionScore, EnrollmentPlan
+from db.models import AdmissionScore, EnrollmentPlan, School
 from server.agent import admissions_deepagents as research
 
 SCOPE = research.ResearchScope((1, 2), 3, "广东", "物理", "本科批", 2024, 2024)
@@ -16,10 +16,12 @@ SCOPE = research.ResearchScope((1, 2), 3, "广东", "物理", "本科批", 2024,
 @pytest.fixture
 def sessions():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    School.__table__.create(engine)
     AdmissionScore.__table__.create(engine)
     EnrollmentPlan.__table__.create(engine)
     with Session(engine) as session:
         for school in (1, 2, 9):
+            session.add(School(id=school, name=f"Research School {school}", province="广东"))
             session.add(
                 AdmissionScore(
                     school_id=school,
@@ -383,3 +385,32 @@ def test_managed_research_rejects_direct_cli_before_io(monkeypatch, tmp_path):
         )
     assert exc.value.code == 2
     assert not output.exists()
+
+
+def test_synthetic_school_rows_are_rejected_before_model_construction(sessions):
+    with sessions() as session:
+        session.query(School).filter(School.id.in_((1, 2))).update(
+            {School.special_type: "SYNTHETIC_DEMO_DATA"}, synchronize_session=False
+        )
+        session.commit()
+
+    with sessions() as session:
+        assert research.read_research_rows(session, SCOPE, "admission-history") == []
+        assert research.read_research_rows(session, SCOPE, "enrollment-plans") == []
+
+    def no_model(*args, **kwargs):
+        pytest.fail("synthetic fixture rows must be rejected before Agent construction")
+
+    result = research.run_admissions_research(
+        SCOPE,
+        sessions,
+        "openai:test-model",
+        approval_ref="explicit-test-authorization",
+        authorized=True,
+        model_authorized=True,
+        agent_factory=no_model,
+        analysis_image_id="sha256:" + "a" * 64,
+    )
+    assert result["engine"] == "deterministic_preflight"
+    assert result["error"] == research.NO_HISTORY_REASON
+    assert result["observed_model_messages"] == 0
