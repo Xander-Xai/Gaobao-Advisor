@@ -184,3 +184,37 @@ def test_keyed_chat_rejects_anonymous_and_invalid_keys(factory):
             headers={"Authorization": "Bearer " + create_session_token(body["session_id"]), "Idempotency-Key": "short"},
         )
         assert invalid.status_code == 400
+
+
+def test_industrial_done_advertises_keyed_support_and_standard_refuses_key(factory, monkeypatch):
+    import json
+    from unittest.mock import Mock
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.routes import chat
+
+    monkeypatch.setenv("GAOBAO_ADMISSIONS_YEAR", "2025")
+    graph = Mock()
+    graph.invoke.side_effect = lambda state: state
+    monkeypatch.setattr(chat, "get_advisor_graph", lambda: graph)
+    app = FastAPI()
+    app.include_router(chat.router)
+    with TestClient(app) as client:
+        response = client.post("/api/v1/chat", json={"session_id": "placeholder", "message": "600分"})
+        events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+        done = events[-1]
+        assert done["type"] == "done"
+        assert done["idempotency_supported"] is True
+        monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "standard")
+        refused = client.post(
+            "/api/v1/chat",
+            json={"session_id": done["session_id"], "message": "600分"},
+            headers={
+                "Authorization": "Bearer " + done["session_token"],
+                "Idempotency-Key": "fixture-turn-00000001",
+            },
+        )
+        assert refused.status_code == 409
+        assert graph.invoke.call_count == 1

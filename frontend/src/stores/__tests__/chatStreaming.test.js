@@ -237,3 +237,103 @@ it('sends explicit memory capability across new chats and stops after disconnect
   expect(responses[0].options.body).not.toContain(token)
   expect(JSON.stringify(store.$state)).not.toContain(token)
 })
+
+
+describe('industrial authenticated bounded retry (real client)', () => {
+  const supportedDone = {
+    type: 'done', session_id: 'session-industrial', session_token: 'token-industrial',
+    idempotency_supported: true, message_id: 'receipt-1',
+  }
+  function response(events) {
+    const stream = createGatedStream()
+    for (const event of events) stream.push(frame(event))
+    stream.close()
+    return { ok: true, status: 200, body: { getReader: () => stream.reader } }
+  }
+  async function start(store) {
+    store.createSession()
+    global.fetch = vi.fn().mockResolvedValueOnce(response([
+      { type: 'slots', data: { score: 600 } }, supportedDone,
+    ]))
+    await store.sendMessage('首次咨询')
+  }
+
+  it('replays EOF with identical key and body, replacing partial tokens and slots', async () => {
+    const store = useChatStore()
+    await start(store)
+    global.fetch.mockResolvedValueOnce(response([
+      { type: 'slots', data: { score: 610 } },
+      { type: 'structured', result: { title: 'partial' } },
+      { type: 'token', content: '部分' },
+    ])).mockResolvedValueOnce(response([
+      { type: 'slots', data: { score: 620 } },
+      { type: 'structured', result: { title: 'committed' } },
+      { type: 'token', content: '完整结果' },
+      { ...supportedDone, message_id: 'receipt-2' },
+    ]))
+    await store.sendMessage('修改分数')
+    expect(global.fetch).toHaveBeenCalledTimes(3)
+    const [, first, retry] = global.fetch.mock.calls.map(call => call[1])
+    expect(first.headers['Idempotency-Key']).toMatch(/^[a-f0-9]{32}$/)
+    expect(first.headers).toEqual(retry.headers)
+    expect(first.body).toBe(retry.body)
+    expect(JSON.parse(first.body).slots).toEqual({ score: 600 })
+    expect(store.slots).toEqual({ score: 620 })
+    expect(store.messages.filter(m => m.content === '修改分数')).toHaveLength(1)
+    expect(store.messages.at(-1)).toMatchObject({ content: '完整结果', messageId: 'receipt-2', structured: { title: 'committed' } })
+    expect(store.lastError).toBeNull()
+  })
+
+  it('retries a transport rejection only once and does not commit partial slots', async () => {
+    const store = useChatStore()
+    await start(store)
+    global.fetch.mockRejectedValueOnce(new TypeError('network down')).mockResolvedValueOnce(response([
+      { type: 'slots', data: { score: 999 } },
+      { type: 'token', content: '未完成' },
+    ]))
+    await store.sendMessage('继续')
+    expect(global.fetch).toHaveBeenCalledTimes(3)
+    expect(store.slots).toEqual({ score: 600 })
+    expect(store.messages.at(-1).incomplete).toBe(true)
+  })
+
+  it.each(['sse', 'http'])('does not retry explicit %s errors', async kind => {
+    const store = useChatStore()
+    await start(store)
+    global.fetch.mockResolvedValueOnce(kind === 'sse'
+      ? response([{ type: 'error', code: 'IDEMPOTENCY_CONFLICT', message: '冲突' }])
+      : { ok: false, status: 409 })
+    await store.sendMessage('继续')
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+    expect(store.lastError).toBeTruthy()
+  })
+
+  it('does not retry after changing the initiating view', async () => {
+    const store = useChatStore()
+    await start(store)
+    const stream = createGatedStream()
+    global.fetch.mockResolvedValueOnce({ ok: true, status: 200, body: { getReader: () => stream.reader } })
+    const pending = store.sendMessage('继续')
+    stream.push(frame({ type: 'token', content: '旧回复' }))
+    await vi.waitFor(() => expect(store.messages.at(-1)?.content).toBe('旧回复'))
+    store.createSession()
+    stream.close()
+    await pending
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+    expect(store.messages).toEqual([])
+    expect(store.slots).toEqual({})
+    expect(store.lastError).toBeNull()
+  })
+
+  it('does not retry an unadvertised legacy session', async () => {
+    const store = useChatStore()
+    store.createSession()
+    global.fetch = vi.fn().mockResolvedValueOnce(response([{
+      type: 'done', session_id: 'session-standard', session_token: 'standard-token',
+    }])).mockResolvedValueOnce(response([]))
+    await store.sendMessage('首次咨询')
+    await store.sendMessage('继续')
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+    expect(global.fetch.mock.calls[1][1].headers['Idempotency-Key']).toBeUndefined()
+  })
+})

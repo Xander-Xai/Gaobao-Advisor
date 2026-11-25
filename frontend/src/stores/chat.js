@@ -85,7 +85,7 @@ export const useChatStore = defineStore('chat', () => {
     const applyEvent = event => {
       if (doneReceived || serverError) return
       if (event.type === 'done') {
-        if (key && (event.idempotency_supported !== true || event.session_id !== initiatingId || !event.session_token)) {
+        if (key && (event.idempotency_supported !== true || event.session_id !== initiatingId || !event.session_token || !event.message_id)) {
           serverError = true
           if (isCurrent()) lastError.value = '服务器幂等能力或会话不一致，请核对历史记录'
           idempotentSessions.delete(initiatingId)
