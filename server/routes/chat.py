@@ -265,10 +265,10 @@ async def _sse_generator(
         try:
             receipt = await asyncio.to_thread(lookup_receipt, session_id, turn_key)
         except RequestKeyConflict:
-            yield f"data: {json.dumps({'type': 'error', 'code': 'IDEMPOTENCY_CONFLICT'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'code': 'IDEMPOTENCY_CONFLICT', 'message': '请求键已用于其他请求'})}\n\n"
             return
         except Exception:
-            yield f"data: {json.dumps({'type': 'error', 'code': 'SESSION_UNAVAILABLE'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'code': 'SESSION_UNAVAILABLE', 'message': '会话服务暂时不可用'})}\n\n"
             return
         if receipt is not None:
             for event in _receipt_events(session_id, receipt):
@@ -311,7 +311,7 @@ async def _sse_generator(
     # A rejected turn is not a business answer. Do not send the rejected
     # input to a model/judge or persist it as conversation/profile memory.
     if result.get("security_blocked"):
-        if industrial_enabled() and fresh:
+        if industrial_enabled() and (fresh or turn_key is not None):
             yield f"data: {json.dumps({'type': 'error', 'code': 'SECURITY_BLOCKED', 'message': result['reply']})}\n\n"
             return
         refusal = result["reply"]
@@ -380,7 +380,7 @@ async def _sse_generator(
             try:
                 receipt = await asyncio.to_thread(lookup_receipt, session_id, turn_key)
             except RequestKeyConflict:
-                yield f"data: {json.dumps({'type': 'error', 'code': 'IDEMPOTENCY_CONFLICT'})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'code': 'IDEMPOTENCY_CONFLICT', 'message': '请求键已用于其他请求'})}\n\n"
                 return
             except Exception:
                 receipt = None

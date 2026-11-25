@@ -251,3 +251,44 @@ def test_mysql_industrial_session_concurrent_turns_and_erasure(mysql_factory, mo
     with mysql_factory() as db:
         assert db.query(Conversation).filter_by(session_id=sid).count() == 0
         assert db.query(ConversationMessage).count() == 0
+
+
+def test_mysql_keyed_receipt_race_commits_one_pair(mysql_factory, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from db.models import ChatTurnReceipt, ConversationMessage
+    from server.graph.nodes.memory import memory_node
+    from server.services.industrial_chat_receipt import lookup_receipt, make_turn_key
+    from server.services.industrial_session import load_turn
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    monkeypatch.setattr("db.database.get_session", mysql_factory)
+    monkeypatch.setattr("server.graph.nodes.memory.get_session", mysql_factory)
+    sid = "mysql-keyed-receipt"
+    _, _, fresh = load_turn(sid, None, fresh=True)
+    base = {"session_id": sid, "input_text": "fixture", "reply": "fixture", "atomic_memory": True}
+    initial = memory_node({**base, "industrial_turn_version": fresh})
+    assert initial["trace"][-1]["event"] == "persisted"
+    key = make_turn_key("fixture-key-00000001", "gaokao", "fixture", None)
+    _, _, version = load_turn(sid, None, fresh=False)
+    barrier = Barrier(2, timeout=10)
+
+    def attempt(_):
+        barrier.wait()
+        result = memory_node(
+            {
+                **base,
+                "industrial_turn_version": version,
+                "industrial_turn_key": key,
+                "structured_result": {"fixture": True},
+            }
+        )
+        return result["trace"][-1]["event"]
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert sorted(pool.map(attempt, range(2))) == ["persist_failed", "persisted"]
+    assert lookup_receipt(sid, key)["reply"] == "fixture"
+    with mysql_factory() as db:
+        assert db.query(ChatTurnReceipt).count() == 1
+        assert db.query(ConversationMessage).count() == 4
