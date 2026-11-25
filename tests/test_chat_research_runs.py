@@ -1,11 +1,12 @@
 """Session-bound Chat requests reuse the single approved admissions journal."""
 
 import hashlib
+from dataclasses import asdict
 
 import pytest
 
 from db.models import Major, School
-from server.agent.admissions_research_taskrun import open_configured_journal
+from server.agent.admissions_research_taskrun import digest, execute_approved, open_configured_journal
 from server.auth import create_session_token
 from tests.conftest import auth_header, login
 
@@ -151,3 +152,87 @@ def test_chat_research_options_expose_searchable_authorized_catalog_ids(admin_cl
     assert {item["id"] for item in options["schools"]} == {first_id, second_id}
     assert all(item["name"] != "Hidden Synthetic Research School" for item in options["schools"])
     assert options["majors"] == [{"id": major_id, "name": "Authorized Research Major"}]
+
+
+def test_chat_request_approval_worker_and_private_report_use_one_journal(admin_client, research_env):
+    from server.agent.admissions_analysis_sandbox import _expected
+    from server.agent.admissions_deepagents import _coverage
+
+    created = admin_client.post("/api/v1/chat/research-runs", json=_request(), headers=_headers()).json()
+    run_id = created["run_id"]
+    operator = auth_header(login(admin_client, "operator"))
+    admin = auth_header(login(admin_client, "admin"))
+    queue = admin_client.get("/api/v1/admin/admissions-research/runs?state=PENDING_APPROVAL", headers=operator)
+    assert [item["run_id"] for item in queue.json()] == [run_id]
+
+    approved = admin_client.post(
+        f"/api/v1/admin/admissions-research/runs/{run_id}/approve",
+        json={"spec_sha256": created["spec_sha256"]},
+        headers=admin,
+    )
+    assert approved.status_code == 200, approved.text
+    journal = open_configured_journal()
+
+    def runner(scope, session_factory, model_id, **kwargs):
+        kwargs["lease_guard"]()
+        rows = [
+            {
+                "id": 17,
+                "school_id": 101,
+                "major_id": 42,
+                "year": 2022,
+                "min_score": 600,
+                "max_score": 620,
+                "min_rank": 12000,
+            }
+        ]
+        evidence = {"admission-history": rows, "enrollment-plans": []}
+        analysis = _expected(rows, ("school_id", "year"))
+        task_id = "research_" + "b" * 32
+        return {
+            "schema": "admissions-research/v1",
+            "engine": "deepagents",
+            "task_id": task_id,
+            "status": "VERIFIED_PARTIAL_RESEARCH",
+            "scope": asdict(scope),
+            "approval_ref_sha256": digest("approval-policy-2026-001"),
+            "admission_recommendation_verified": False,
+            "evidence": evidence,
+            "evidence_sha256": digest(evidence),
+            "sandbox_analysis": {
+                "status": "VERIFIED_DESCRIPTIVE_ANALYSIS",
+                "result": analysis,
+                "result_sha256": digest(analysis),
+                "cleanup_verified": True,
+                "image_id": "sha256:" + "a" * 64,
+                "input_sha256": digest({"rows": rows, "group_by": ["school_id", "year"]}),
+            },
+            "coverage": {kind: _coverage(records, scope, kind) for kind, records in evidence.items()},
+            "receipt_ids": {
+                kind: digest({"task": task_id, "scope": asdict(scope), "kind": kind, "rows": records})
+                for kind, records in evidence.items()
+            },
+            "provider_usage": None,
+        }
+
+    result = execute_approved(journal, run_id, "approved-catalog-v1", None, runner=runner)
+    assert result["status"] == "NEEDS_REVIEW"
+
+    report = admin_client.get(
+        f"/api/v1/chat/research-runs/{run_id}/report",
+        params={"session_id": "session-owner-1234"},
+        headers=_headers(),
+    )
+    assert report.status_code == 200, report.text
+    assert "历史分数与位次统计" in report.text
+    assert "12000" in report.text
+    assert "approval-policy-2026-001" not in report.text
+    assert "private, no-store" in report.headers["cache-control"]
+
+    other_session = "session-other-1234"
+    denied = admin_client.get(
+        f"/api/v1/chat/research-runs/{run_id}/report",
+        params={"session_id": other_session},
+        headers=_headers(other_session),
+    )
+    assert denied.status_code == 404
