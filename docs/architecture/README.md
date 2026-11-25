@@ -24,7 +24,7 @@ record why the larger decisions were made.
 
 **目标边界（非已上线）**：简单咨询 → 确定性业务图；复杂研究 → 经批准的 Deep Agents 执行 → 只读 SQL/分析沙箱 → 独立证据核验 → 报告。Deep Agents 的 InMemorySaver 不等于持久图恢复；受控研究 journal 持久化任务生命周期、身份/审批和执行回执，过期任务不自动重放，不建立平行生产队列。原生 Harness、合成实验、旧 benchmark 保留用于对照或回归，不为每条路径重复增设功能。
 
-**Chat 请求接入（ADR-010）**：Chat 页面提供显式结构化研究请求表单，`POST /api/v1/chat/research-runs` 以当前 session capability 建立同一私有 TaskRun。它不从自由文本自动路由、不改变 `POST /api/v1/chat` 的确定性回答、不调用第二套运行时；严格需要独立运营审批和现有 Worker。默认关闭，production/industrial profile 不开放。SSE 是 TaskRun journal 状态的流式投影，不表示未记录的百分比或模型内部步骤。生产及真实数据验收仍未完成。
+**Chat 请求接入（ADR-010）**：`POST /api/v1/chat` 用窄范围、确定性的短语规则识别部分明确的多院校/多约束请求；命中时跳过自由文本模型生成和付费 Judge 调用，而返回结构化研究入口提示。Chat 页面提供显式研究表单，`POST /api/v1/chat/research-runs` 以当前 session capability 建立同一私有 TaskRun。检测不抽取院校/专业范围、不自动创建 TaskRun、不授权付费调用；简单事实查询仍走确定性业务图。严格需要独立运营审批和现有 Worker。请求功能默认关闭，production/industrial profile 不开放。SSE 是 TaskRun journal 状态的流式投影，不表示未记录的百分比或模型内部步骤。生产及真实数据验收仍未完成。
 
 **架构裁剪门禁**：先确认默认路由、operator 入口、实验入口的调用关系和兼容合同；再做等价状态/失败回归和简单基线对比。没有证据不删除安全检查，不自动开启模型、沙箱、真实数据或付费调用。未完成架构裁剪前暂停新增技术栈和能力缺口扩展。
 

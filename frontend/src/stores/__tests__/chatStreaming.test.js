@@ -104,6 +104,28 @@ describe('chat incremental rendering (real client + gated stream)', () => {
     expect(store.messages.at(-1).content).toBe('首块')
   })
 
+  it('attaches the managed-research intent event to the matching assistant turn', async () => {
+    const stream = createGatedStream()
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: { getReader: () => stream.reader },
+    })
+
+    const store = useChatStore()
+    store.createSession()
+    const pending = store.sendMessage('请比较两所学校并按选科筛选专业')
+    stream.push(frame({ type: 'research_intent', enabled: true }))
+    stream.push(frame({ type: 'token', content: '请补齐结构化研究范围。' }))
+
+    await vi.waitFor(() => expect(store.messages.at(-1)?.researchIntent).toEqual({ enabled: true }))
+
+    stream.push(frame({ type: 'done', session_id: 'session-research', session_token: 'tok-research' }))
+    stream.close()
+    await pending
+    expect(store.messages.at(-1).content).toBe('请补齐结构化研究范围。')
+  })
+
   it('marks the partial assistant reply incomplete when the connection drops', async () => {
     const stream = createGatedStream()
     global.fetch = vi.fn().mockResolvedValue({
