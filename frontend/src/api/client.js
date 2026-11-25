@@ -78,13 +78,14 @@ export const chatAPI = {
    * incrementally instead of waiting for `done`. Caller must read the final
    * `done.session_token` to auth profile/voice.
    */
-  async send(sessionId, message, slots = {}, scene = 'gaokao', token = null, { onEvent, memoryToken } = {}) {
+  async send(sessionId, message, slots = {}, scene = 'gaokao', token = null, { onEvent, memoryToken, idempotencyKey } = {}) {
     const response = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(memoryToken ? { 'X-User-Memory-Token': memoryToken } : {}),
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
       body: JSON.stringify({ session_id: sessionId, message, slots, scene }),
     })

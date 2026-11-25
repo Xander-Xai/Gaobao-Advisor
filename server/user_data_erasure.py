@@ -21,6 +21,7 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
     """
     from db.database import get_session
     from db.models import (
+        ChatTurnReceipt,
         Conversation,
         ConversationMessage,
         Feedback,
@@ -51,12 +52,18 @@ def erase_live_session_data(session_id: str, reports: ReportStorage) -> dict[str
             db.query(Highlight).filter(Highlight.session_id == session_id).delete(synchronize_session=False)
         )
         if session_row is None:
+            removed["chat_turn_receipts"] = 0
             removed["compaction_snapshots"] = 0
             removed["messages"] = 0
             removed["conversations"] = 0
         else:
             # Bulk SQL deletes bypass ORM cascades; explicitly erase the summary
             # even when SQLite foreign-key enforcement is disabled.
+            removed["chat_turn_receipts"] = (
+                db.query(ChatTurnReceipt)
+                .filter(ChatTurnReceipt.conversation_id == session_row.id)
+                .delete(synchronize_session=False)
+            )
             removed["compaction_snapshots"] = (
                 db.query(SessionCompactionSnapshot)
                 .filter(SessionCompactionSnapshot.conversation_id == session_row.id)

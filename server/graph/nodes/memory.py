@@ -145,10 +145,15 @@ def memory_node(state: dict[str, Any]) -> dict[str, Any]:
                         ),
                     )
                 )
+            receipt = None
+            if industrial and state.get("industrial_turn_key") is not None:
+                from server.services.industrial_chat_receipt import record_receipt
+
+                receipt = record_receipt(db, conv.id, state["industrial_turn_key"], state)
             db.commit()
             if industrial:
                 trace.append({"node": "memory_update", "event": "persisted"})
-                return {"trace": trace}
+                return {"trace": trace, "industrial_receipt": receipt}
         else:
             save_slots(db, session_id, canonical)
 

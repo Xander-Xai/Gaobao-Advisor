@@ -103,7 +103,7 @@ def test_adopt_existing_schema_preserves_data(tmp_path):
     try:
         with engine.connect() as connection:
             assert connection.execute(text("SELECT COUNT(*) FROM schools WHERE name='adopt-marker'")).scalar_one() == 1
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261124_0008"
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261125_0009"
         assert verify_tables(engine, ALL_TABLES) == []
     finally:
         engine.dispose()
@@ -183,7 +183,7 @@ def test_memory_merge_head_upgrades_either_existing_branch(tmp_path, prior_head)
         assert upgraded.returncode == 0, upgraded.stderr
         assert verify_tables(engine, ALL_TABLES) == []
         with engine.connect() as connection:
-            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261124_0008"
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261125_0009"
         assert before <= set(inspect(engine).get_table_names())
     finally:
         engine.dispose()

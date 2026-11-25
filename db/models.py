@@ -4,7 +4,7 @@ ORM 模型 — 13 张表（院校/专业/分数线/招生计划/学科排名/对
 
 import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from db.database import Base
@@ -194,6 +194,18 @@ class Conversation(Base):
     compaction_snapshot = relationship(
         "SessionCompactionSnapshot", back_populates="conversation", cascade="all, delete-orphan", uselist=False
     )
+
+
+class ChatTurnReceipt(Base):
+    """Session-owned completed industrial turn, erased with the conversation."""
+
+    __tablename__ = "chat_turn_receipts"
+
+    conversation_id = Column(Integer, ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True)
+    key_digest = Column(String(64), primary_key=True)
+    request_digest = Column(String(64), nullable=False)
+    response = Column(JSON, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
 
 
 class ConversationMessage(Base):
