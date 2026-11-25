@@ -294,9 +294,7 @@ def test_changed_or_ambiguous_sql_fails_closed(history_db, reviewed_manifest, mo
         history_db.get(School, 1).name = "changed name"
     else:
         history_db.add(
-            AdmissionScore(
-                school_id=1, province="广东", year=2025, subject_type="物理类", min_score=599, min_rank=1020
-            )
+            AdmissionScore(school_id=1, province="广东", year=2025, subject_type="物理类", min_score=599, min_rank=1020)
         )
     history_db.commit()
     state = _industrial_graph_history(history_db, monkeypatch)
@@ -315,9 +313,7 @@ def test_missing_manifest_does_not_query_sql(history_db, reviewed_manifest, monk
     monkeypatch.delenv("GAOBAO_ADMISSIONS_MANIFEST_PATH")
     session = Mock(side_effect=AssertionError("unapproved query"))
     monkeypatch.setattr("db.database.get_session", session)
-    result = data_query_node(
-        {"scene": "gaokao", "slots": {"province": "广东", "subject": "物理类", "score": 600}}
-    )
+    result = data_query_node({"scene": "gaokao", "slots": {"province": "广东", "subject": "物理类", "score": 600}})
     session.assert_not_called()
     assert result["data_query_results"]["industrial_history"]["status"] == "UNAPPROVED_LINEAGE"
 

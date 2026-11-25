@@ -201,7 +201,9 @@ def build_history_reply(state: dict) -> tuple[str, dict]:
             sources.append(f"admissions_manifest_sha256:{lineage['manifest_sha256']}")
             for record in lineage["records"]:
                 # Public reviewed URL and row locator, not internal approval identifiers.
-                citation = f"{record['row']}｜{record['url']}｜{record['locator']}｜源文件SHA-256:{record['file_sha256']}"
+                citation = (
+                    f"{record['row']}｜{record['url']}｜{record['locator']}｜源文件SHA-256:{record['file_sha256']}"
+                )
                 sources.append(citation)
                 facts.append(f"来源登记：{citation}")
         for row in evidence["rows"]:

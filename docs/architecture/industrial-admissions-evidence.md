@@ -61,3 +61,7 @@ GAOBAO_ADMISSIONS_YEAR 必填。±5% 位次邻域仅为历史数据展示，最�
 - rows 是 yi_fen_yi_duan:<id> 或 admission_scores:<id> 到 {source_id, locator, row_sha256} 的映射；rank 与院校行均需登记。
 - 规范化行值：rank 为 year/province/subject（实际 SQL 科类）/score/rank；院校行为 year/province/subject/id/school/school_id/batch/min_score/min_rank。使用 admissions_lineage.canonical_digest（排序 JSON key、UTF-8、紧凑分隔、不允许 NaN）；同值/不同编码的规范化规则不得随意改变。
 - 用独立审核流程批准清单后计算完整文件的 SHA-256，配置 pin 与私有只读挂载。源文件与清单不提交公开仓库，不由程序自动颁发授权；测试中 example.invalid 仅合成夹具。当前加载器校验元数据与 pin，不下载 URL 或重新计算未挂载的原始源文件摘要。完整覆盖/审批真实性及数据摄入/版本切换/回滚需要独立验收。
+
+#### 离线发布审计（候选增量）
+
+运行 `python -m scripts.audit_admissions_release --sources-dir /private/reviewed-sources`，使用独立 SELECT-only MySQL 账号与已审批 pin。原始文件按其 64 位 SHA-256 文件名存放，不进行网络下载。逐个流式重算文件摘要，在单一 MySQL InnoDB REPEATABLE READ / READ ONLY consistent snapshot 中核查批准年度内当前受支持的位次（100–750、正位次、非空省份、已支持科类）及院校级录取行（0–750、正位次、非空省份、已支持科类、batch 非 NULL），不只核查在线 top-10。结果区分缺失、额外、变值、歧义、孤立/合成学校、缺失/变更文件及范围外计数；退出码 0=全匹配、1=发现差异、2=执行失败。审计不创建表/迁移/写入数据或颁发授权，输出聚合计数与版本 pin，不输出源数据或内部审批引用。必须在排空导入并冻结招生表后执行、保留回执，并在上线/换版前复核；一致快照只代表本次审计时刻，未接入自动发布门禁。范围外记录不宣称已验证（含海南超750等）、不证明官方覆盖完整或原始文件至 SQL 的人工审核正确。Java Catalog 与 Python 公共目录仍未受同一行级发布合同保护；工业公开上线仍 NO-GO。
