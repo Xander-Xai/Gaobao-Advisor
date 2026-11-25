@@ -109,6 +109,16 @@ def _managed_research_request_enabled() -> bool:
         and os.getenv("GAOBAO_RUNTIME_PROFILE", "").strip().lower() != "industrial"
         and os.getenv("ADMISSIONS_RESEARCH_ENABLED", "").strip().lower() == "true"
         and os.getenv("ADMISSIONS_RESEARCH_USER_REQUESTS_ENABLED", "").strip().lower() == "true"
+        and all(
+            os.getenv(name, "").strip()
+            for name in (
+                "ADMISSIONS_RESEARCH_DATASET_REF",
+                "ADMISSIONS_RESEARCH_JOURNAL",
+                "ADMISSIONS_RESEARCH_MODEL_ID",
+                "ADMISSIONS_RESEARCH_IMAGE_ID",
+                "ADMISSIONS_RESEARCH_APPROVAL_REF",
+            )
+        )
     )
 
 

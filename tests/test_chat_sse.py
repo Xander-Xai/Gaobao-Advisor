@@ -107,6 +107,26 @@ def test_managed_research_intent_detector_keeps_simple_questions_on_chat(message
     assert not requires_managed_admissions_research(message)
 
 
+def test_managed_research_request_requires_complete_nonproduction_policy(monkeypatch):
+    from server.routes.chat import _managed_research_request_enabled
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "standard")
+    monkeypatch.setenv("ADMISSIONS_RESEARCH_ENABLED", "true")
+    monkeypatch.setenv("ADMISSIONS_RESEARCH_USER_REQUESTS_ENABLED", "true")
+    assert not _managed_research_request_enabled()
+
+    for name, value in {
+        "ADMISSIONS_RESEARCH_DATASET_REF": "approved-catalog-v1",
+        "ADMISSIONS_RESEARCH_JOURNAL": "/run/private/research.sqlite",
+        "ADMISSIONS_RESEARCH_MODEL_ID": "openai:approved-model",
+        "ADMISSIONS_RESEARCH_IMAGE_ID": "sha256:" + "a" * 64,
+        "ADMISSIONS_RESEARCH_APPROVAL_REF": "approval-ref-2026-001",
+    }.items():
+        monkeypatch.setenv(name, value)
+    assert _managed_research_request_enabled()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("requests_enabled", [True, False])
 async def test_complex_chat_turn_is_routed_to_research_form_without_model_answer(monkeypatch, requests_enabled):
@@ -114,6 +134,14 @@ async def test_complex_chat_turn_is_routed_to_research_form_without_model_answer
     monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "standard")
     monkeypatch.setenv("ADMISSIONS_RESEARCH_ENABLED", str(requests_enabled).lower())
     monkeypatch.setenv("ADMISSIONS_RESEARCH_USER_REQUESTS_ENABLED", str(requests_enabled).lower())
+    for name, value in {
+        "ADMISSIONS_RESEARCH_DATASET_REF": "approved-catalog-v1",
+        "ADMISSIONS_RESEARCH_JOURNAL": "/run/private/research.sqlite",
+        "ADMISSIONS_RESEARCH_MODEL_ID": "openai:approved-model",
+        "ADMISSIONS_RESEARCH_IMAGE_ID": "sha256:" + "a" * 64,
+        "ADMISSIONS_RESEARCH_APPROVAL_REF": "approval-ref-2026-001",
+    }.items():
+        monkeypatch.setenv(name, value)
 
     class _PreparationGraph:
         def invoke(self, state):
