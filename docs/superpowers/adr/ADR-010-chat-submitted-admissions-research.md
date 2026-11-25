@@ -20,12 +20,13 @@ receipt verifier, cancellation and report lifecycle remain authoritative.
 
 Public `POST /api/v1/chat` uses a narrow deterministic phrase detector for
 explicit multi-school / multi-constraint requests. A match suppresses
-free-form model response generation and the separate paid quality-judge call
-for that turn, then emits a `research_intent` SSE event with a conservative
-instruction. When the non-production request feature is enabled, the Chat UI
-opens the structured form. The detector does not extract school/major scope,
-create a TaskRun, or authorize a provider call; users must confirm a bounded
-scope through the form. Simple factual questions
+the consultation graph, SQL/RAG business lookups, free-form model response
+generation and the separate paid quality-judge call for that turn, after the
+existing security scan. It emits a `research_intent` SSE event with a
+conservative instruction. When the non-production request feature is enabled,
+the Chat UI opens the structured form. The detector does not extract
+school/major scope, create a TaskRun, or authorize a provider call; users must
+confirm a bounded scope through the form. Simple factual questions
 retain the existing deterministic consultation/SSE path. Submitting a request
 does not call a provider; an operator must approve the exact immutable
 specification and an authorized worker must separately execute it. Status SSE
