@@ -54,22 +54,26 @@ def _load_chat_state(session_id: str, provided_slots: dict | None) -> tuple[dict
     from db.crud import load_conversation_slots
     from db.database import get_session
 
+    from server.industrial_runtime import industrial_enabled
+
+    industrial = industrial_enabled()
     stored: dict = {}
     db = None
     try:
         db = get_session()
-        stored = load_conversation_slots(db, session_id) or {}
+        if industrial:
+            stored = load_conversation_slots(db, session_id, strict=True) or {}
+        else:
+            stored = load_conversation_slots(db, session_id) or {}
     except Exception:
-        from server.industrial_runtime import industrial_enabled
-
-        if industrial_enabled():
+        if industrial:
             raise RuntimeError("Session storage unavailable") from None
         logger.warning("Could not load persisted slots for session %s", session_id, exc_info=True)
     finally:
         if db is not None:
             db.close()
 
-    slots = flatten_slots(stored)
+    slots = flatten_slots(stored, derive_score=not industrial)
     for key, value in (provided_slots or {}).items():
         if key not in slots and value not in (None, "", False):
             slots[key] = value
