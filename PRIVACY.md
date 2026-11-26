@@ -1,53 +1,84 @@
-# Privacy
+# Privacy and data handling
 
-## What this demo stores
+This document describes repository behavior and configuration boundaries. It
+is not a legal privacy notice, data-processing agreement or compliance
+certification. Anyone deploying the software for real users must provide their
+own notice, lawful basis, retention schedule and operational controls.
 
-The running application writes only local runtime state:
+## Data processed by the application
 
-* `data/demo.db` — the generated synthetic database;
-* `data/reports/<session_id>/*.json` — conversation reports, when the report
-  feature is used.
+Depending on enabled features and the deployment database, the application may
+store:
 
-Both paths are gitignored and are not committed. The container generates the
-database on start; `docker compose down -v` removes the demo volume.
+- synthetic or operator-supplied school, major, admissions, enrollment-plan
+  and source-manifest data;
+- anonymous conversation messages, extracted profile slots and query state;
+- admin audit and data-quality job records;
+- generated reports associated with an authorized session;
+- versioned conversation-compression snapshots;
+- optional, explicitly created cross-task preference entries;
+- private research TaskRun metadata and bounded aggregate reports.
 
-## Historical exposure
+The standard local Compose setup is synthetic and local to the deployment. A
+database or report path being gitignored does not make its contents encrypted,
+automatically deleted or safe to expose.
 
-A database file removed from the current tree remains reachable through an
-older public Git object. The current tree contains no real admissions database
-and no user messages. The open remediation record, the redacted forensic
-summary and the owner-authorisation boundary are tracked in
-[Issue #58](https://github.com/Xander-Xai/gaobao-advisor/issues/58) and
-[SECURITY.md](SECURITY.md). Deleting a file from `master` is not a history
-purge; this repository does not claim otherwise.
+## Sessions, access and deletion
 
-## No telemetry
+Anonymous Chat sessions use a server-issued ID and an HMAC bearer token scoped
+to that session. This is a capability, not a verified account or real-world
+identity. Deployment operators are responsible for protecting signing secrets,
+database access, backups and transport.
 
-No Sentry DSN, analytics endpoint or telemetry key ships with the repository.
-The test suite only initialises Sentry when a developer explicitly configures
-`SENTRY_DSN` in their own environment; CI does not.
+`DELETE /api/v1/profile/{session_id}/data` removes eligible live session
+records. `DELETE /api/v1/memory/vault` revokes and removes the separately
+opted-in cross-task preference vault. Session deletion does not guarantee
+deletion from database backups, filesystem snapshots, logs, in-flight model
+requests or external providers, and it does not delete the independent memory
+vault. Operators must set retention and backup expiry rules appropriate to
+their deployment.
 
-## Session tokens
+## Context snapshots and long-term preferences
 
-A session token is an HMAC of the session ID under `SESSION_SECRET`. It is a
-capability over exactly one anonymous session, not an account. It contains no
-profile data. Multi-worker deployments must set an explicit `SESSION_SECRET`.
+The standard local synthetic profile can enable bounded conversation
+compression and AES-GCM-protected snapshot rows. Snapshots are derived context,
+not authoritative admissions evidence; original dialogue is still canonical
+conversation state. Key loss/rotation can invalidate snapshots. Snapshot
+encryption does not encrypt every conversation record, database backup, log or
+provider request.
 
-## Not a production privacy notice
+Cross-task preference memory is separate, explicit opt-in and disabled by
+default. The stored credential is hashed, but preference content is not
+currently encrypted at rest by this feature. Do not enable it for real personal
+data until identity binding, encryption, retention and privacy review have been
+completed.
 
-The default deployment handles synthetic data only. Anyone deploying this
-software with real users must replace this document with their own privacy
-notice and data-processing agreements before doing so.
+## External model and telemetry processing
 
+When an operator configures an LLM provider, ordinary consultation prompts and
+the context assembled for generation may be sent to that provider. The
+approved research Worker can send the authorized research request and relevant
+retrieved evidence to its configured model provider after separate operator
+approval. Provider retention, residency, training use, deletion and security
+terms are outside this repository's control; review them before transmitting
+personal or restricted data.
 
-## 用户跨任务记忆（默认关闭）
+Sentry is optional and only active when explicitly configured by the deployer.
+No repository analytics endpoint or default telemetry credential is shipped.
+Operators must review the configured SDK capture and redaction behavior before
+using real data. Do not log raw student prompts, provider exception bodies,
+tokens or credentials.
 
-独立的用户偏好保险箱不会从对话或会话档案自动创建。只有用户显式创建独立凭证，
-并经由 `/api/v1/memory/entries/{key}` 写入的非敏感偏好会进入新的长期记忆表。
-存储时仅持有记忆 token 的 SHA-256 摘要；**偏好内容当前在数据库中不是加密字段**。
-在完成加密、账号绑定、隐私审批之前，不得将此功能用于真实用户数据生产环境。
+## Synthetic and operator-supplied data
 
-`DELETE /api/v1/memory/vault` 会撤销该 token 并删除实时数据库中的所有偏好；
-`DELETE /api/v1/profile/{session_id}/data` 仅删除单个会话的实时数据，
-不删除独立长期记忆。两种删除均不保证备份、在途模型上下文及外部处理者同步删除。
-详见 [长期记忆文档](docs/cross-task-user-memory.md)。
+The checked-in sample data and knowledge corpus are labeled synthetic and must
+not be used to make real admissions decisions. Deployers who import external
+data are responsible for documented rights, source provenance, accuracy,
+security, access control and deletion. A manifest or hash is traceability
+metadata; it does not itself prove legal authorization or source authenticity.
+
+## Historical Git objects
+
+A removed database remains accessible in an older public Git object, as
+documented in [SECURITY.md](SECURITY.md) and Issue #58. The repository did not
+rewrite published history; current-tree removal is not a history purge.

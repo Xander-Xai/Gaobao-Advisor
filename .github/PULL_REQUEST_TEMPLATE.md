@@ -14,6 +14,7 @@ What changed and why?
 - [ ] Python tests (or docs-only: not applicable)
 - [ ] Frontend tests/build (or docs-only: not applicable)
 - [ ] No-key Docker smoke (or docs-only: not applicable)
+- [ ] Docs changes checked: links/anchors, commands, Mermaid and referenced files (or docs-only: applicable)
 - [ ] No new secrets, real user data, persona corpus or unauthorized material
 - [ ] Default `SYNTHETIC_DEMO` data and RAG boundaries preserved (RAG defaults on against the original synthetic corpus; fail-closed on missing/corrupt corpus)
 

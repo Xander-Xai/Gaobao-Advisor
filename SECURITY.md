@@ -1,114 +1,81 @@
-# Security Policy
+# Security policy
 
-## Reporting
+## Reporting a vulnerability
 
-Please **do not** open a public issue for a vulnerability. Use GitHub's
-private vulnerability reporting ("Security" → "Report a vulnerability") on this
-repository. If that is unavailable, contact the maintainer privately first.
+Please do not disclose suspected vulnerabilities in public Issues, pull
+requests, discussions or screenshots. Use GitHub's private vulnerability
+reporting feature from the repository's **Security → Report a vulnerability**
+page. If private reporting is unavailable, contact the repository maintainer
+privately through a GitHub channel before sharing technical details. This
+repository does not publish a dedicated security-team email or response-time
+commitment.
 
-Please do not include real personal data, working credentials, or exploit
-payloads against any third-party system in a report.
+Do not include real student records, session tokens, API keys or data from
+third-party systems in a report. Share only the minimum sanitized evidence
+needed to reproduce the issue.
 
-## Accepted risk (closed)
+## Supported scope
 
-Issue #58 tracks a historical public Git object containing a removed 72 MiB
-admissions/user-message database. The current tree is clean, but the object is
-still served for a historical commit SHA. Issue #58 was closed on 2026-10-31 as
-**CLOSED / NOT_PLANNED / ACCEPTED_RISK** by owner disposition: administrative
-risk acceptance, not remediation. History rewrite/force-push remains
-intentionally not taken; do not treat the current-tree cleanup or the closure
-as a purge, safety verification, or licensing determination.
+The maintained target is the current default branch (`master`). There is no
+published release-support matrix or guaranteed security-fix SLA. Check the
+live Releases page before assuming that a tag receives ongoing fixes.
 
-## Threat model of this demo
+## Security boundaries
 
-This repository is a **demonstration**, not a production service. Its security
-posture is scoped accordingly.
+Gaobao Advisor is an open-source application example. Automated checks and
+implemented controls do not certify the system or authorize public production
+use. The current architecture includes:
 
-Protected:
-- Session identity (server-issued ids, HMAC-bound bearer tokens)
-- Administrator access: separate HMAC-signed tokens, role hierarchy
-  (`viewer < operator < admin`), environment-injected PBKDF2 password hashes,
-  optimistic-lock review, and redacted operation audit logs
-- Prompt-injection detection on user input
-- Output boundary rules (no fabricated data, source marking)
-- Absence of real data and credentials
+- server-issued anonymous session IDs and HMAC bearer capabilities;
+- separate operator/admin authentication and role checks;
+- source and output validation on consultation responses;
+- session-owned, private research requests with immutable scopes, independent
+  operator approval and a single dedicated Worker path;
+- allowlisted SQL tools and a restricted Docker analysis boundary for approved
+  research; no arbitrary host shell or Docker socket is exposed to public Chat;
+- dependency, secret, redistribution, test and CodeQL gates in GitHub Actions.
 
-Explicitly **not** claimed:
-- No end-user account system; the admin surface is a small, separate RBAC
-  layer, not a full IAM/MFA product
-- No rate limiting that survives a determined attacker at scale
-- No availability or durability guarantees
-- No multi-tenant isolation guarantees
-- No production clearance: TLS, real-data authorization, credential rotation,
-  cross-host HA and capacity/SLO remain open (see the two sections below)
+These controls do not provide a full account/IAM system, multi-tenant
+production isolation, provider-side data protection, production TLS, guaranteed
+availability, or independently measured admission accuracy. The Sandbox is
+bounded to the implemented workload and test matrix; it is not a general-purpose
+OS sandbox certification.
 
-## Running it safely
+## Handling credentials and data
 
-- Set a strong, random `SESSION_SECRET` for anything beyond a local demo.
-  Without it a fresh secret is generated per process, which invalidates tokens
-  across restarts and workers.
-- `SESSION_SECRET` is a bearer-authority secret. Anyone holding it plus a
-  session id can mint that session's token.
-- Do not expose this service to the public internet as-is. There is no
-  multi-tenant isolation and the dataset is synthetic anyway.
-- Generate admin credentials with `python scripts/setup_admin_env.py`; never
-  commit `.env.admin.local`. Production must set `ADMIN_TOKEN_SECRET` and must
-  not use plaintext `ADMIN_PASSWORD`.
-- The in-process login/job limiter is per-worker. A multi-worker deployment
-  should move counters to Redis; this is documented rather than claimed.
+- Keep model API keys and session/admin secrets in local secret stores or
+  permission-restricted environment files; never commit them or place them in
+  images, build contexts, URLs, browser code, logs or artifacts.
+- Do not enable external model calls without explicit authorization, an
+  operator-controlled credential and an understood provider data/cost policy.
+- Treat user input, model/tool output, imported data and persistent state as
+  untrusted. Enforce permissions, scope, budgets and execution boundaries
+  outside model prompts.
+- Demo datasets and CI research fixtures are synthetic. Do not use them as
+  evidence for a real student recommendation.
+- The private research Worker can send approved research content to the
+  configured external model provider. Do not enable it for personal or
+  restricted data until the operator has established authorization and
+  provider/privacy controls.
 
-## Dependency policy
+## Historical repository exposure
 
-The **runtime** dependency set (`requirements.txt` → `requirements.lock`) must
-have **zero known vulnerabilities**. CI enforces this with `pip-audit`; the
-job is a hard gate and a red `Security Audit` means the runtime set is not
-acceptable to ship.
+Issue [#58](https://github.com/Xander-Xai/Gaobao-Advisor/issues/58) documents a
+historical public Git object containing a removed database. The owner recorded
+an accepted-risk disposition and intentionally did not rewrite public history.
+That disposition is not remediation or a purge. Do not treat the current tree's
+redistribution gate as proof that historical Git objects have been erased.
 
-The **development** dependency set is locked separately in `uv.lock` and pinned
-by `[tool.uv] constraint-dependencies` in `pyproject.toml`; the frontend uses
-`npm overrides` for the same reason. These floors exist so a plain
-re-resolution cannot float a package back into an advisory range. Change them
-deliberately, then re-run the audit and the test suite.
+## CI and repository settings
 
-Optional tooling that is not part of the runtime lives in its own file
-(`requirements-legacy-admin.txt` → `requirements-legacy-admin.lock`), is never
-installed by default, never enters the container image and is audited
-separately against an explicit, recorded exception list.
+The default branch has required status checks, required conversation
+resolution, enforced protection and force-push/deletion protections. Private
+vulnerability reporting, secret scanning and push protection are enabled.
+GitHub Actions workflow permissions default to read-only; individual workflows
+request additional permissions only where required. These settings are observed
+repository state and may change; check GitHub directly before relying on them.
+Passing scans only cover their configured rules and checked commits.
 
-The reviewed version pins live in `requirements.lock.constraints`, and the
-current state of the policy — including every exception, its rationale and the
-open decisions — is documented in
-[`docs/dependency-exceptions.md`](docs/dependency-exceptions.md). Regenerate
-the lock with `make lock`; do not hand-edit it and do not re-resolve it
-without the constraints file.
-
-Report a vulnerable dependency the same way as any other issue: privately, not
-in a public issue or pull request.
-
-## Java overlay security posture
-
-The optional Java Gateway + read-only Catalog overlay (merged in PR #89) is
-covered by CI fault-injection, but it is still a demo deployment:
-
-- The catalog runs on a dedicated MySQL account (`gaobao_reader`) whose grants
-  are limited to `SELECT` on `schools`, `admission_scores` and
-  `enrollment_plans`; the session tables, `UPDATE` and `CREATE TABLE` are
-  verified to be denied.
-- The catalog route is protected by a Redis Lua token bucket that **fails
-  closed**: a Redis outage, timeout or script error returns HTTP 503 instead of
-  letting traffic through. The bucket is one global key shared by all
-  anonymous catalog traffic — it is a capacity guard, not a per-user quota.
-- Nginx in the Java overlay strips caller-supplied `X-Forwarded-For` and
-  rewrites it from the real peer, so the limiter key cannot be spoofed.
-- The overlay only ever runs behind HTTP on port 80. TLS, Redis ACL/TLS, key
-  rotation, Java dependency SCA/SBOM and cross-host HA are **not** done.
-
-## Production is not cleared
-
-Zero open Dependabot alerts means no *known* advisory is outstanding for the
-tracked lock files. It is not a statement that the system has no security
-risk. Before any public deployment the following still need to be closed and
-approved separately: TLS/WAF, authorised real data and privacy review,
-dedicated credential management and rotation, cross-host HA, capacity and
-p95/SLO testing, and a penetration test. Code being merged into `master` is
-not approval to serve production traffic.
+Runtime and optional dependency audit policy is documented in
+[`docs/dependency-exceptions.md`](docs/dependency-exceptions.md). Report
+security gaps privately rather than adding exploit details to that public log.

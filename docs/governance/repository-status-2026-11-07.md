@@ -1,7 +1,7 @@
 # 仓库状态与治理收尾（2026-11-07）
 
 > **历史快照（2026-11-07）。** 下文的分支、PR、Issue、告警计数和 CI 结果对应当日基线。
-> 实时状态请从 [仓库状态怎么查](../../README.md#仓库状态怎么查)进入 GitHub 核对。
+> 实时状态请从[项目状态台账](../PROJECT_STATUS.md)进入 GitHub 核对。
 
 - 基线：`master` `1d1ff02`（PR #89 与 #101 已合并）
 - Open PR：0 · Open Issues：0 · Dependabot Open Alerts：0

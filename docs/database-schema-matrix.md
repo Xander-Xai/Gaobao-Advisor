@@ -1,7 +1,7 @@
 # Database Schema Matrix
 
 > Source of truth: `db/models.py`. Generated/verified by `db/schema_contract.py`.
-> Migration history: `20261030_0001` (admin tables) → `20261031_0002` (14 historical tables) → `20261031_0003` (admin token revocation) → `20261031_0004` (audit performance index) → `20261031_0005` (dataset snapshot provenance) → two branches: `20261124_0006` (session compaction cache), `20261120_0006` → `20261124_0007` (user memory vault and monotonic revision); merge head `20261124_0008` (Draft).
+> Migration history: `20261030_0001` (admin tables) → `20261031_0002` (14 historical tables) → `20261031_0003` (admin token revocation) → `20261031_0004` (audit performance index) → `20261031_0005` (dataset snapshot provenance) → `20261124_0006` (session compaction cache) and `20261120_0006` (user memory vault) → `20261124_0007` (memory revision) → `20261124_0008` (merge both branches) → `20261125_0009` (chat turn receipts). The current migration head is `20261125_0009`; confirm with Alembic before migration work.
 > Target: SQLite default + MySQL 8.4.
 
 ## 1. Table inventory
@@ -31,6 +31,7 @@
 | 21 | `session_compaction_snapshots` | 可选会话摘要缓存（非业务事实） | `conversation_id` | `ix_session_compaction_expires`、CAS version、TTL | conversation_id→conversations.id (CASCADE) |
 | 22 | `user_memory_vaults` | 用户显式创建的跨会话凭证摘要 | `id` | `uq_user_mem_token_hash`, `ix_user_mem_vault_token` | — |
 | 23 | `user_memory_entries` | 用户确认偏好、版本号、TTL | `id` | `uq_user_mem_vault_key`, `ix_user_mem_expiry` | vault_id→user_memory_vaults |
+| 24 | `chat_turn_receipts` | 工业会话已提交轮次的幂等回执 | `(conversation_id, key_digest)` | request digest, creation index | conversation_id→conversations.id (CASCADE) |
 
 ## 2. Column/type policy
 
@@ -58,7 +59,8 @@ DATABASE_URL=mysql+pymysql://... python -m db.migrate upgrade
 - `20261124_0006` adds opt-in session-bound compaction snapshots.
 - `20261120_0006` creates the opt-in memory vault and preference tables.
 - `20261124_0007` adds the monotonic vault revision and refuses unreviewed legacy vaults.
-- `20261124_0008` joins both migration paths without changing published revision IDs; single Draft head.
+- `20261124_0008` joins both migration paths without changing published revision IDs.
+- `20261125_0009` adds completed Chat-turn receipts scoped to the owning conversation.
 
 ### Existing database at revision `20261030_0001`
 
@@ -79,8 +81,8 @@ DATABASE_URL=mysql+pymysql://... python -m db.migrate upgrade
 - `adopt-existing` verifies all 18 tables (columns, PK, indexes, unique
   constraints, FKs) before `stamp 20261030_0001`.
 - It never creates/drops tables and refuses an unexpected Alembic revision.
-- Then `upgrade` verifies/skips existing historical tables and advances to
-  `20261124_0008`.
+- Then `upgrade` verifies/skips existing historical tables and advances to the
+  current head `20261125_0009`.
 
 ### Seed after migration
 
