@@ -1,70 +1,99 @@
 # Contributing
 
-Contributions are welcome for engineering quality, safety and
-reproducibility. Contributions that reintroduce restricted content are not.
+Contributions that improve correctness, security, maintainability and
+reproducibility are welcome. Please read [`AGENTS.md`](AGENTS.md),
+[`SECURITY.md`](SECURITY.md) and the current
+[project status](docs/PROJECT_STATUS.md) before changing runtime behavior.
 
-## Hard constraints
+## Before starting
 
-1. **No real data.** Everything shipped must be synthetic or demonstrably
-   redistributable. `tests/test_public_demo_acceptance.py` enforces this against
-   git-tracked files and must stay green.
-2. **No unlicensed third-party content.** Do not add quotation corpora,
-   knowledge bases, prompt libraries or personas you cannot show permission for.
-   The upstream private project's corpus and a named individual's methodology /
-   quotation assets were removed for this reason and must not be restored.
-3. **Disabled means disabled.** If a subsystem is unavailable, expose that
-   state rather than returning an empty-but-successful result.
-   See `server/services/rag.py` and `tests/test_g9_retrieval.py`.
-4. **Fail closed on safety assets.** Removing `skills/gaokao/safety_rules.md`
-   must disable answer generation, not silently drop the rules.
-5. **No outbound scraping by default.** `legacy/gaokao_data.py` must not call a
-   third-party site unless `ENABLE_OUTBOUND_FETCH` is explicitly enabled.
+1. Search existing Issues and pull requests; discuss significant behavior or
+   architecture changes before implementation.
+2. Keep changes within the approved architecture: deterministic, SQL-grounded
+   ordinary consultation; one operator-approved Deep Agents research lifecycle;
+   synthetic benchmark paths isolated from user-facing business routes.
+3. Confirm that all fixtures and documentation use synthetic or demonstrably
+   redistributable data. Do not include real student records, private
+   conversations, private corpora or secrets.
 
-## Development
+## Development setup
+
+Python 3.10 or 3.11 is tested in CI. The standard local full stack also requires
+Docker Engine and Docker Compose v2.
 
 ```bash
-pip install -e ".[dev]"            # or: pip install -r requirements.txt -r requirements-dev.txt
+python -m pip install -e '.[dev]'
 python -m scripts.seed_demo_data --db data/demo.db --reset
-pytest tests -q --no-header
+```
+
+For the standard Java/MySQL/Redis/Worker demo, use the tested setup documented
+in the [README](README.md): `python scripts/setup_full_env.py`
+followed by `python scripts/compose_standard.py up --build -d`.
+
+Optional Deep Agents packages are deliberately separate from ordinary API
+startup. Read `requirements-deepagents.txt` and the approved research runbook
+before installing or running a model-backed Worker.
+
+## Change and test workflow
+
+Create a focused branch from the latest `master`, make the smallest complete
+change and update current docs/contracts. Never overwrite uncommitted user work
+or publish changes based on an unverified historical CI run.
+
+```bash
+# Python
 ruff check . && ruff format --check .
+python -m pytest tests/ -q
 
-cd frontend && npm ci && npx vitest run && npx vite build
+# Frontend (Node.js 20)
+cd frontend
+npm ci
+npm test -- --run
+npm run build
+
+# Optional full-stack integration tests with disposable local services
+cd ..
+make test-integration
 ```
 
-The optional Java services have their own build and unit tests:
+Select additional verification based on risk:
 
-```bash
-mvn -f java-services/pom.xml -B -ntp verify
-```
+- Public API/schema changes: contract tests and generated OpenAPI consistency.
+- Database/migration changes: single Alembic head plus disposable MySQL tests.
+- Auth, session, research, privacy or Sandbox changes: cross-owner, failure,
+  cancellation and negative-path regressions; run applicable MySQL/Redis and
+  Docker checks.
+- Documentation-only changes: validate changed links and anchors, code
+  snippets, local file references and Mermaid; run `git diff --check`.
 
-The runtime dependency set is `requirements.txt` / `requirements.lock`; it must
-have **zero known vulnerabilities** and CI enforces it with `pip-audit`. Do not
-add a dependency to it without running `make audit-deps` — and check
-[`docs/dependency-exceptions.md`](docs/dependency-exceptions.md) first, because
-some packages are deliberately kept out of the runtime (see the policy there).
+Repository CI adds Python 3.10/3.11, Ruff, MySQL/Redis integration, frontend
+tests/build, no-key container and Compose checks, redistribution and secret
+scans, dependency audits, optional Deep Agents no-network smoke and CodeQL.
+Check the workflows and required branch checks for the latest exact PR head.
 
-The development dependency set is locked in `uv.lock` and pinned by
-`[tool.uv] constraint-dependencies` in `pyproject.toml`; the frontend pins the
-same way with `npm overrides`. Those floors keep a plain re-resolution from
-returning a package to an advisory range — change them deliberately, then
-re-run the audit and the tests.
+## Dependencies and data
 
-The optional legacy Streamlit operations dashboard has its own dependency file
-and is never installed by default:
+- Runtime dependency changes require a reason, lock regeneration and dependency
+  audit (`make audit-deps`). Check [`docs/dependency-exceptions.md`](docs/dependency-exceptions.md).
+- The frontend uses `frontend/package-lock.json`; use `npm ci` for validation
+  and update the lockfile with deliberate package changes.
+- Do not add network scraping or provider calls to default startup or CI.
+- Keep external-model usage opt-in and document who authorizes it, where data
+  is sent, what is persisted and how cost is bounded.
 
-```bash
-make install-legacy-admin   # pip install -r requirements-legacy-admin.txt
-make run                    # streamlit run legacy/admin.py
-```
+## Pull requests
 
-CI runs on Python 3.10 and 3.11, plus a frontend gate, a secret scan, a
-no-key container smoke test and a redistribution gate. The `Java Services`
-workflow (`java-unit-tests` + `java-compose-smoke`) runs when Java, overlay or
-benchmark files change, and CodeQL additionally analyses `java-kotlin`.
+- Use the repository [PR template](.github/PULL_REQUEST_TEMPLATE.md).
+- Explain the problem, scope, relevant tests and any known limitation. Link the
+  relevant Issue without closing acceptance work that still lacks external
+  evidence.
+- Report synthetic, model-backed, licensed-data and production results
+  separately. Never claim production readiness, real admissions accuracy,
+  measured cost improvement or model quality without corresponding evidence.
+- Do not bypass required checks or security controls to make a PR mergeable.
 
-The reproducible load benchmark lives in the repository and is not a claim about
-production capacity:
+## Security reports
 
-```bash
-python benchmarks/overview_perf_bench.py --seconds 30 --rounds 3
-```
+Do not report vulnerabilities in a public Issue or PR. Follow the private
+reporting path described in [`SECURITY.md`](SECURITY.md). Do not attach real
+personal data, credentials or third-party exploit payloads.

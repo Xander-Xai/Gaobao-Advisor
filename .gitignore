@@ -24,11 +24,20 @@ logs/
 data/.session_secret
 
 # Python
+.venv/
 __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+
+# Frontend dependencies and generated builds
+frontend/node_modules/
+frontend/dist/
+build/
+dist/
+htmlcov/
 
 # 运行时数据库、导出与备份（自动生成；禁止提交）
 *.db

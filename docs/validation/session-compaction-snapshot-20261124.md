@@ -63,12 +63,12 @@ without FK enforcement and external report/backup erasure are **not proven**.
 the table; MySQL uses Alembic upgrade. Included smoke tests validate
 idempotent migration and schema contract on the latest head.
 
-**Known stacked migration conflict:** unmerged Draft [PR #135](https://github.com/Xander-Xai/Gaobao-Advisor/pull/135)
-defines a *different* revision `20261120_0006`, also descended from
-`20261031_0005`. Both branches **must not be merged blindly**. Once one
-branch is integrated, rebase the other and rewrite its migration parent to
-preserve a **single Alembic head**, then rerun SQLite + MySQL migrations.
-This PR stays Draft until CI and this dependency are resolved.
+The migration conflict recorded at the time of this snapshot was resolved by
+`20261124_0008_merge_memory_heads.py`, which joins the session snapshot and
+preference-vault branches without changing their published revision IDs.
+`20261125_0009_chat_turn_receipts.py` is the current head in the reviewed
+checkout. See the [database schema matrix](../database-schema-matrix.md) and
+verify `alembic heads` before applying migrations.
 
 ## Evaluation
 
@@ -87,9 +87,9 @@ TTL, cleanup and ORM deletion. The results do **not** prove savings on any
 actual provider, multi-worker locks, encryption, real student advice,
 MySQL transaction isolation under load or legal erasure of backups.
 
-The CI run for this Draft feature branch is deliberately separate from a
-real-provider evaluation. Tests and migration checks must be interpreted against
-the exact feature-branch commit, not inherited from #148 or historical green CI.
+The historical feature-branch CI is separate from real-provider evaluation.
+Current tests and migration checks must be interpreted against the exact
+reviewed commit; none of them demonstrate production privacy or model benefit.
 
 CI validation note: the first GitHub Actions lint run flagged an incorrect
 `typing.Callable` import (UP035); the branch now uses `collections.abc.Callable`.
@@ -98,4 +98,4 @@ Use a new workflow run at the updated commit to verify formatting and tests.
 
 ## Current standard deployment update
 
-The local full stack sets `GAOBAO_CHAT_SNAPSHOT_REQUIRE_ENCRYPTION=true`. `setup_full_env.py` generates a 32-byte secret (64 hex characters) and `--add-java-reader` extends older files without replacing existing keys. AES-GCM ciphertext is bound to conversation PK, covered count, prefix digest and policy digest. Wrong key, tampering, cross-session ciphertext and old plaintext in encrypted mode are cache misses; no plaintext fallback. The original dialogue remains canonical. Key rotation invalidates cached summaries; securely destroy old keys/caches and retain backups according to approved policy. This is not a full conversation encryption or production privacy approval. Fresh CI and MySQL runtime verification are required.
+The local full stack sets `GAOBAO_CHAT_SNAPSHOT_REQUIRE_ENCRYPTION=true`. `setup_full_env.py` generates a 32-byte secret (64 hex characters) and `--add-java-reader` extends older files without replacing existing keys. AES-GCM ciphertext is bound to conversation PK, covered count, prefix digest and policy digest. Wrong key, tampering, cross-session ciphertext and old plaintext in encrypted mode are cache misses; no plaintext fallback. The original dialogue remains canonical. Key rotation invalidates cached summaries; securely destroy old keys/caches and retain backups according to approved policy. Mainline CI includes synthetic MySQL/runtime checks; this is not full conversation encryption or production privacy approval.

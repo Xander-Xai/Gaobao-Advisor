@@ -1,6 +1,6 @@
 # Architecture
 
-**增量核查**：#198 已合入 master `2c27d020`，标准 Java/MySQL/Redis 部署、加密快照与独立启动门禁属于主线。[工业招生证据治理](industrial-admissions-evidence.md) 为本分支候选增量。公共工业咨询仅提供指定年份的历史 SQL 数据；演示和私有复杂研究独立。
+**当前状态入口**：实现与验收状态统一维护在 [`docs/PROJECT_STATUS.md`](../PROJECT_STATUS.md)。本架构文档描述仓库代码路径；历史 SHA、CI 快照及候选部署边界不得当作实时状态或生产许可。工业招生证据治理及其 PR 历史见[工业招生证据文档](industrial-admissions-evidence.md)。
 
 This document is the authoritative architecture reference for
 `gaobao-advisor`. It describes the code that ships in this repository, not a
@@ -50,7 +50,7 @@ Managed execution flow: operator submission → immutable spec digest → indepe
 
 Retain existing graph nodes until a behavior-preserving comparison justifies removal. Security scan, profile branching, data validation, source attribution, candidate gate and final persistence are distinct responsibilities; simple sequential edges alone are not evidence that a node is redundant. Any consolidation must preserve the SSE event/refusal contract, hard admissions constraints and single ownership of final persistence.
 
-Acceptance: exact-head CI, API and SSE contracts, deterministic negative cases and one research lifecycle authority; no real model/data calls are implied by this decision. Architecture issue #190 remains open until the structural changes and acceptance have been reviewed; capability additions are deferred.
+Acceptance: exact-head CI, API and SSE contracts, deterministic negative cases and one research lifecycle authority; no real model/data calls are implied by this decision. Architecture convergence Issue #190 is closed; real-model, authorized-data and production acceptance remain separately tracked in [PROJECT_STATUS.md](../PROJECT_STATUS.md).
 
 ## 1. System overview
 

@@ -1,6 +1,6 @@
 # 高报 Agent：工业架构与发布合同
 
-**适用范围**：当前 checkout 的正式架构、工程部署候选和验收门禁。2026-11-25 核查 master 已合并 #198，基线 `2c27d0208095ae8616b6a1e18fc93d47282169ba`。本分支增量见 [工业招生证据治理](industrial-admissions-evidence.md)。本文不是上线许可。
+**适用范围**：当前 checkout 的正式架构、工程部署候选和验收门禁。PR #198–#203 与 #205–#208 所代表的当前工程变更均已进入 reviewed master 基线；2026-11-26 的精确 SHA 与 CI 回执见[项目状态台账](../PROJECT_STATUS.md)。本文不是上线许可。
 
 ## 1. 唯一职责与状态归属
 
@@ -79,9 +79,9 @@ curl -f http://127.0.0.1:8088/api/v1/health/ready
 
 | Gate | Implemented guard / required evidence | 当前状态 |
 |---|---|---|
-| G0 入口 | 一套标准 Java/MySQL/Redis/Python 拓扑，目录/聊天/运营质检 E2E，禁止 API 直通 | 新变更待 exact-head CI；历史 Java synthetic CI 不能替代 |
+| G0 入口 | 一套标准 Java/MySQL/Redis/Python 拓扑，目录/聊天/运营质检 E2E，禁止 API 直通 | 主线 CI/Compose 合成 smoke 已通过；不代表真实环境验收 |
 | G1 数据/Schema | MySQL explicit、独立迁移、唯一 Alembic head、CUSTOM 数据、授权与版本审计 | 启动门禁已实现；真实数据权利/质量仍需审核 |
-| G2 隐私 | 摘要 AES-GCM、TTL 清理、无缓存研究 API、密钥隔离；原对话及备份删除、真实身份与同意 | 新加密实现待 CI；真实个人数据/长期偏好/生产摘要 NO-GO |
+| G2 隐私 | 摘要 AES-GCM、TTL 清理、无缓存研究 API、密钥隔离；原对话及备份删除、真实身份与同意 | 本地合成部署实现已通过当前主线自动化检查；真实个人数据、长期偏好及生产隐私审核仍 NO-GO |
 | G3 可靠性 | API 与 worker 独立启动校验、Redis readiness、外部 MySQL/Redis 断连、Outbox 恢复、备份恢复 | Catalog 与工业 FastAPI HTTP 各有独立 Redis 原子限流；WebSocket 消息与模型配额尚未覆盖。实际候选集群故障注入、SLO 和恢复报告缺失 |
 | G4 研究 | 授权数据、审批、身份/回执绑定、隔离、预算、正确拒答、独立 gold | #196 已合并；真实模型/真实数据/独立 gold/容器与 worker 部署验收未完成 |
 | G5 Eval/优化 | 同模型、同 gold、同预算、完整分母和 Holdout；真实 usage/账单 | 无真实结果，不宣传降本 |
@@ -93,4 +93,4 @@ curl -f http://127.0.0.1:8088/api/v1/health/ready
 
 Industrial FastAPI HTTP admission is documented in [public HTTP admission](../security/industrial-public-http-admission.md). Rate settings and shared identity secret must be consistent across replicas; verify trusted proxy networks and HTTP 429/503 behavior before opening the service.
 
-Authenticated industrial chat continuations may opt into the [completed-turn idempotency contract](industrial-admissions-evidence.md#已认证续轮请求幂等独立候选-pr2026-11-25). The receipt migration must reach the unique head before startup; anonymous and unkeyed retry remain outside the guarantee.
+Authenticated industrial chat continuations may opt into the completed-turn idempotency contract documented in [industrial admissions evidence](industrial-admissions-evidence.md). The receipt migration must reach the unique head before startup; anonymous and unkeyed retry remain outside the guarantee.

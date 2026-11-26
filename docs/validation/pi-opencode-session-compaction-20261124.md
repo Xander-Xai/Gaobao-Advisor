@@ -77,8 +77,10 @@ latency and summarization cost.
    has user/assistant roles, not raw OpenAI tool-call transcripts.
 3. The optional summary can omit constraints or become stale; it is marked
    untrusted and **never** allowed to upgrade admissions data to facts.
-4. Cross-task opted-in user preferences remain in Draft PR #135, with identity,
-   encryption, consent UI and privacy-release gates still unresolved.
+4. Cross-task opted-in user preferences have an implementation in the merged
+   branch (#159), but identity/account binding, preference encryption, consent
+   UI and privacy-release gates remain unresolved; see
+   [cross-task memory boundaries](../cross-task-user-memory.md).
 5. Original conversation data deletion and backup retention are distinct from
    context trimming. This PR does not change storage retention or user identity.
 

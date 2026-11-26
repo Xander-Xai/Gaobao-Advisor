@@ -40,16 +40,18 @@ cannot silently masquerade as demo knowledge.
 
 The statements above describe the **current tree only**. A historical database
 object is still reachable through an older public Git commit; it is not
-synthetic and is not covered by the CC0 grant. The open, redacted remediation
-record is [Issue #58](https://github.com/Xander-Xai/gaobao-advisor/issues/58).
-Nothing in this licence grants rights to that historical object or to any
-third-party admissions data.
+synthetic and is not covered by the CC0 grant. Issue #58 is closed with an
+accepted-risk disposition; see [`SECURITY.md`](SECURITY.md). Nothing in this
+licence grants rights to that historical object or to any third-party
+admissions data.
 
 ## What is deliberately NOT here
 
 The upstream private project contained a knowledge corpus and a quotation
 collection attributed to a named individual, plus production database backups.
-None of it is redistributed here. See README "RAG 能力" and "安全规则资产".
+None of it is redistributed here. See [the project overview](README.md),
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the
+[documentation index](docs/README.md).
 
 If you add a corpus, you must be able to state its licence and provenance and
 must enable RAG only after that corpus passes the integrity check.

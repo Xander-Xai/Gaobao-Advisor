@@ -1,31 +1,69 @@
-# Repository Agent Instructions — Gaobao Advisor
+# Agent guidance — Gaobao Advisor
 
-## Project / employment integrity
-- `Gaobao-Advisor` is the **later project for a different employer**. `Customer-Service-AI-Agent` and `Beauty-Industry-RAG-QA-System` were from an earlier employment period at the same employer. Do not attribute code, metrics or hiring-era implementation from one to another.
-- November 2026 repository improvements and unmerged Draft PRs are distinct from historical production experience. State implementation/CI/real-data validation separately.
-- Resolve default-branch head and PR/Issue/CI status before describing current functionality; historical README claims are not run-time evidence.
+## Project and evidence boundaries
 
-## Context engineering, session snapshots and preferences
-- SQL admissions tables and verified source IDs are the **only authoritative admissions evidence**. Session dialogue, summaries and optional preferences remain lower-trust context and cannot alter admissions-policy facts, permissions, tool approvals or citations.
-- Working memory is the current state and SQL/tool receipts; session memory is bounded recent turns + optional untrusted compaction; snapshots are a versioned, TTL-bound optimization; opted-in cross-task user preferences belong to a separate owner-scoped, revocable feature and are NEVER inferred automatically.
-- Keep the public synchronous, legacy streaming and SSE final-candidate context behavior aligned; prove integration tests call the real construction path rather than merely an unused MemoryManager.
-- Standard local deployment requires both flags, nonproduction APP_ENV and a configured AES-GCM key; worker prunes expired rows. Lightweight smoke remains conservative. Do not enable snapshots or personal memory in production before privacy acceptance. Bind reuse to authenticated session/conversation PK, current committed history-prefix hash, policy/model/provider fingerprint, TTL and CAS version. Never truncate current SQL/RAG evidence to save summary tokens.
-- A stale/failed summary should surface explicit partial-context status; a backend read failure must not turn into a successful empty conversation; do not log raw user text or provider exception bodies.
-- Keep a single Alembic head. Session snapshot #149 and isolated cross-task preference vault #159 are merged; superseded #135 is closed without merge. Keep privacy/production validation separate and preserve the single Alembic head.
-- Synthetic tests or CI passing do not establish provider Token savings, factual answer quality, privacy compliance, or production availability. Validate real-model/no-compaction vs compaction vs snapshot reuse with same cases before making measured claims.
-- See `docs/architecture/memory-engineering-positioning-20261124.md` and `docs/validation/session-compaction-snapshot-20261124.md`.
+- This is a standalone Gaokao-advisor project. Do not attribute implementation,
+  metrics or employment-period claims from `Customer-Service-AI-Agent` or
+  `Beauty-Industry-RAG-QA-System` to this repository.
+- Resolve live default-branch, PR, Issue, Release and exact-SHA CI state before
+  describing current delivery. Distinguish `IMPLEMENTED`, `INTEGRATED`,
+  `VERIFIED`, `MERGED` and `PRODUCTION_VALIDATED`; synthetic tests never prove
+  real model quality, data authorization, privacy compliance or production use.
+- Keep `docs/PROJECT_STATUS.md` as the one current status ledger. Dated reports
+  are immutable snapshots, not live status sources.
 
-## Reporting current project status
+## Workspace and Git safety
 
-1. Read the live repository metadata for the default branch (currently `master`). Resolve its remote head SHA, then read the README, [implementation reference](README.md#仓库状态怎么查), relevant source, tests and [evidence](docs/README.md) at that exact SHA. Report the branch, SHA and check time. A local checkout may lag the remote.
-2. Read current PR and Issue metadata from GitHub when reporting their state. Use the PR's actual base, draft flag and merged status. Verify that a claimed merge is present in the default branch before counting it as delivered. Use PR bodies, archived reports and conversation notes for historical context.
-3. Check Actions for the exact SHA, and state what ran, passed, failed, was skipped or is pending. Report release/tag and deployment evidence separately. When a source is unavailable, say which claim could not be verified.
-4. State the environment and dataset behind each finding. Distinguish implemented code, test evidence, measured results and production validation. Keep public-repository evidence separate from personal or employment history.
-5. When changing a feature or interface, update its current documentation and existing generated contracts in the same PR. Keep dated audits labelled with the snapshot date.
+- Inspect `git status`, remotes and worktrees before acting. Preserve all
+  existing user changes. If the primary checkout is dirty or ambiguous, fetch
+  without altering it and work in a separate worktree from the latest default
+  branch.
+- Never use `reset`, `clean`, destructive checkout, automatic stash, force-push
+  or public-history rewriting to resolve unrelated changes. Do not remove a
+  branch or worktree until its owner and contents are verified.
+- Use focused commits and PRs. Before merge, inspect the complete diff and run
+  the repository's required checks on the exact PR head. If a merge command
+  times out, inspect PR state and default-branch history before retrying.
 
-## Architecture change gate
-- Follow [architecture decision freeze](docs/architecture/README.md#architecture-decision-freeze--2026-11-25). Default chat remains deterministic and SQL-grounded. Native readonly Harness is a reference/eval baseline; Deep Agents is the sole approved complex-research engine, not a second default chat engine. Keep synthetic sandbox fixtures out of public business routes. PRs #192/#193 merged the architecture convergence; do not add parallel task lifecycles, new engines or production sandbox routes. Evidence-only work may proceed within that frozen architecture. See #190 for independent local smoke and #104/#147 for real acceptance.
+## Architecture constraints
 
-- The standard local full deployment is the Java Gateway/Catalog + MySQL + Redis + worker stack. SQLite remains only for smoke and isolated research journal; use the checked-out `scripts/compose_standard.py`. For industrial deployment follow `docs/architecture/industrial-release-contract.md`: no synthetic seed, schema fallback, synthetic RAG, unsafe personal memory or automatic paid calls. Require exact-head CI and independent environment acceptance before claiming production delivery. Do not put credentials into Docker build contexts or logs.
+- Ordinary Chat stays on the deterministic LangGraph consultation path; SQL
+  facts and verified source receipts are authoritative. LLM prose, dialogue,
+  memory and summaries cannot override them.
+- Deep Agents is the single approved complex-research engine. Keep its private
+  journal, immutable scope, independent operator approval and Worker lifecycle
+  separate from synthetic TaskRun fixtures. A user request must not directly
+  invoke a model or sandbox.
+- No parallel engine, journal, queue or public arbitrary-shell path without an
+  approved architecture change. Keep the bounded Sandbox limited to authorized
+  admissions analysis and verify results outside the model.
+- Preserve one Alembic head. Update OpenAPI and user/developer documentation
+  when a public contract or configuration changes.
 
-- Industrial API and quality worker must each independently validate the same profile, schema head, data shape and Redis before processing work; Compose startup order is not authorization. Do not expose the release candidate as production before the [industrial release gates](docs/architecture/industrial-release-contract.md) pass. Catalog Redis throttling is separate from the industrial FastAPI public HTTP Redis token bucket. API replicas must share rate settings, Redis and SESSION_SECRET; do not infer WebSocket or provider quotas from HTTP admission.
+## Data, security and privacy
+
+- Do not add real student records, private conversations, credentials or
+  third-party corpora without documented permission and redistribution rights.
+  Default fixtures and demo data must remain explicitly synthetic.
+- Never log, commit or place API keys in build contexts, URLs, screenshots,
+  fixtures or artifacts. Do not perform external model calls, paid actions or
+  production deployment without explicit authorization.
+- Treat prompts, model/tool output, imported data and persisted state as
+  untrusted. Enforce identity, permissions, budgets and filesystem/network
+  boundaries in code, not through model instructions.
+- Follow [`SECURITY.md`](SECURITY.md) for private vulnerability reporting and
+  [`PRIVACY.md`](PRIVACY.md) for session, snapshot, memory and deletion limits.
+
+## Verification and reporting
+
+- For documentation-only changes, validate links, anchors, commands, Mermaid
+  and file references affected by the diff; run `git diff --check`.
+- For Python/frontend changes, run focused tests and relevant lint/type/build
+  checks. Runtime, schema, permission or Sandbox changes require the applicable
+  integration, contract and security regressions. Prefer existing CI over
+  duplicating broad local checks.
+- Report the exact commands and results. Identify tests not run and their
+  reason. Do not turn a plan, synthetic test, historical CI run or merged PR
+  into a claim of real-world acceptance.
+- Do not create dependencies, features, configuration surfaces or governance
+  files merely to imitate another project; keep changes scoped to the request.

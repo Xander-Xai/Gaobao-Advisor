@@ -2,7 +2,7 @@
 
 > **Historical ledger (2026-10-31).** See the later
 > [2026-11-07 snapshot](repository-status-2026-11-07.md) for that baseline or the
-> [repository lookup](../../README.md#仓库状态怎么查) for live status.
+> See the [project status ledger](../PROJECT_STATUS.md) for live repository status.
 >
 > **Final addendum (2026-10-31, end of day):** the authoritative final report is
 > [`docs/audits/2026-10-31-gaobao-final-governance.md`](../audits/2026-10-31-gaobao-final-governance.md).
