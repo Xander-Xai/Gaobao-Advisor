@@ -44,7 +44,7 @@ python -m benchmarks.model_run_comparison --baseline /tmp/model-baseline.json \
 
 **重要**：若两次模型/数据、工具合同或案例不同，配对会拒绝；Prompt digest 可以不同（这是允许的实验变量），但并不自动证明是唯一改变的因素。真正的可重复 A/B 至少还需要多个独立随机种子/批次、模型服务端版本记录、稳定性检验、人工审定 Ground Truth 和计费记录；4 个 Holdout 案例不能用于统计显著性结论。
 
-## 仍不可作为简历事实
+## 尚无结果支持的评测结论
 
 - 尚无真实模型主动工具调用的实跑 Token/美元费用或质量提升；
 - 尚无合法授权的真实招生业务数据、真实学生反馈、真实招生效果；
@@ -53,7 +53,7 @@ python -m benchmarks.model_run_comparison --baseline /tmp/model-baseline.json \
 
 ## Repeated real-model A/B budget contract (2026-11-24)
 
-Later-employer Gaobao Harness/Eval portfolio increment. No provider calls or measured outcomes are claimed.
+Historical Gaobao Harness/Eval change recorded as of 2026-11-24. No provider calls or measured outcomes are claimed.
 
 The repeated model experiment now exposes per-arm request caps and provider-reported token stop thresholds in the no-network plan, and forwards exactly those settings to every child. New executed runs require matching reconciled provider budget receipts before launching another arm. Offline historical comparisons remain readable but cannot mix legacy and new budget receipts across trials.
 

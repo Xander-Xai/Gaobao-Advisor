@@ -21,7 +21,7 @@
 
 ## Eval 指标口径修正
 
-另修复合成成绩表中一个容易影响求职表达的指标问题：原 `average_tool_calls_per_passing_case` 将**失败任务的工具调用数**也计入成功任务的平均值，导致混合成功/失败集指标失真。现在成功案例均值只统计通过的任务，并另外提供 `tool_calls_per_success_including_failures` 和 `model_decisions_per_success_including_failures`，后者明确把失败尝试的代价摊入每次有效交付。Token 每成功案例成本仍有意保留全部任务消耗。新增混合用例测试防止口径回退。
+另修复合成评测中的指标口径问题：原 `average_tool_calls_per_passing_case` 将**失败任务的工具调用数**也计入成功任务的平均值，导致混合成功/失败集指标失真。现在成功案例均值只统计通过的任务，并另外提供 `tool_calls_per_success_including_failures` 和 `model_decisions_per_success_including_failures`，后者明确把失败尝试的代价摊入每次有效交付。Token 每成功案例成本仍有意保留全部任务消耗。新增混合用例测试防止口径回退。
 
 ## 当前仍未完成的“部分实现”项
 

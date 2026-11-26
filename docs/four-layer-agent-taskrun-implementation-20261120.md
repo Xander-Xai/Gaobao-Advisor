@@ -32,7 +32,7 @@ Vue Admin → FastAPI Admin RBAC → TaskRun Journal (SQLite CAS)
 
 **自主执行**：Deep Agents 只在单独 Worker 且明确允许外部模型时加载。用官方 create_deep_agent / StateBackend / FilesystemMiddleware / Memory-call limit / SKILL.md；LLM 决定下一次业务只读工具，但最后由经过 SQL 校验的 submit_research 收据与服务端 Evidence Gate 决定是否输出历史决策卡。模型自由文本不能写数据库或被当作录取事实。
 
-**工具与沙箱**：仅暴露固定的 major_lookup、admission_lookup、plan_lookup、submit_research、abstain_with_evidence，以及 StateBackend 中的 read_file。注册的 harness profile 显式去掉默认 Shell、文件增删改查（只保留 read_file）、task 子代理和写 Todo 等能力。模型无任意 SQL、外部 HTTP、MCP 或宿主文件访问；自有开发维护脚本仍使用单独的真实 Docker restricted workspace，不向招生研究 Agent 授予这个工具。MCP 是未来跨系统连接可选方案，不为简历关键词强制接入。
+**工具与沙箱**：仅暴露固定的 major_lookup、admission_lookup、plan_lookup、submit_research、abstain_with_evidence，以及 StateBackend 中的 read_file。注册的 harness profile 显式去掉默认 Shell、文件增删改查（只保留 read_file）、task 子代理和写 Todo 等能力。模型无任意 SQL、外部 HTTP、MCP 或宿主文件访问；开发维护脚本使用单独的真实 Docker restricted workspace，不向招生研究 Agent 授予这个工具。MCP 是未来跨系统连接的可选方案，只有明确业务需求和验收条件时才接入。
 
 ## 二、配置与逐步复现
 
@@ -85,7 +85,7 @@ python -m server.agent.taskrun_worker \
 
 ## 四、成果证明 / 不能宣称的内容
 
-适合简历陈述：自己开发了 Vue/FastAPI/Admin RBAC 到持久化任务状态、人工审批与分离 Worker 的工程链路；真实合成 SQL 多步工具和证据引用经 E2E 验收；另有可选实际 Deep Agents SDK 受限工具适配和 Docker 独立沙箱测试。
+**产品实现证据**：Vue/FastAPI/Admin RBAC 已连接持久化任务状态、人工审批与分离 Worker；合成 SQL 多步工具和证据引用有 E2E 验收；另有可选 Deep Agents SDK 受限工具适配和 Docker 独立沙箱测试。
 
 **不能陈述**：真实模型 autonomous success rate、真实 Token 降本、Deep Agents 线上部署、真实考生建议准确性、完整分布式耐久执行、通用 MCP 接入、Claude Code/Pi/DSH 已投入该项目。所有这些在没有实跑数据前为 NOT_MEASURED/NOT_IMPLEMENTED。
 

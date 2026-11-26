@@ -20,6 +20,7 @@
   - `docs/agent-harness-eval-roadmap-20261120.md`
   - `docs/agent-readonly-harness-evidence-20261120.md`
   - `docs/four-layer-agent-taskrun-implementation-20261120.md`
+  - `docs/context-sandbox-governance-20261120.md`
   - `docs/governance/repository-status-2026-11-07.md`
   - `docs/decision-card-step-trace-20261120.md`
   - `docs/governed-synthetic-evidence-memory-20261120.md`

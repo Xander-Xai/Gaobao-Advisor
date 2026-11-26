@@ -35,7 +35,7 @@ ruff check .
 ruff format --check .
 ```
 
-输出仍是 deterministic scripted controller，不调用模型，Prompt/Completion Token 均为 `null`，不是 `0`。只有显式外部 API 授权的 PR #125 模型评测模式才能获取 provider 自报 usage。CI fake client 的 usage 是测试夹具，不能写入简历作为真实模型性能。
+输出仍是 deterministic scripted controller，不调用模型，Prompt/Completion Token 均为 `null`，不是 `0`。只有显式外部 API 授权的 PR #125 模型评测模式才能获取 provider 自报 usage。CI fake client 的 usage 是测试夹具，不能作为真实模型性能证据。
 
 ## 剩余未实现条件
 
