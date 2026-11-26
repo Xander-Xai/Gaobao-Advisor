@@ -2,7 +2,8 @@
 
 > Source of truth: `db/models.py`. Generated/verified by `db/schema_contract.py`.
 > Migration history: `20261030_0001` (admin tables) → `20261031_0002` (14 historical tables) → `20261031_0003` (admin token revocation) → `20261031_0004` (audit performance index) → `20261031_0005` (dataset snapshot provenance) → `20261124_0006` (session compaction cache) and `20261120_0006` (user memory vault) → `20261124_0007` (memory revision) → `20261124_0008` (merge both branches) → `20261125_0009` (chat turn receipts). The current migration head is `20261125_0009`; confirm with Alembic before migration work.
-> Target: SQLite default + MySQL 8.4.
+> Storage scope: SQLite is for lightweight development/smoke and isolated
+> research journals; MySQL 8.4 backs the standard full-stack Compose profile.
 
 ## 1. Table inventory
 

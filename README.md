@@ -190,6 +190,7 @@ docker compose --env-file .env.industrial -f docker-compose.industrial.yml down
 项目提供普通咨询 API 的无 Key 演示。复杂研究路径在默认配置下关闭；没有授权数据、独立审批配置及真实模型授权时，正确结果是请求不可用或停止执行，不会用合成院校伪造招生研究。可在无外部模型调用的前提下复现会话隔离、幂等、审批状态、Worker 回执和私有报告契约：
 
 ```bash
+# 先按开发模式安装 `.[dev]` 测试依赖
 python -m pytest tests/test_chat_research_runs.py -q --no-cov --override-ini addopts=''
 ```
 
