@@ -1,6 +1,6 @@
 # Module Responsibilities and Engineering Acceptance
 
-**Snapshot:** public `master` at `9eef17468933eff515b44321259fe4330fb3cbf9`, checked 2026-11-26.
+**Snapshot:** public `master` at `22d2dc3f01b95cc0d8ae807d7b8673e865fcafae`, checked 2026-11-26.
 
 **Status vocabulary:** `IMPLEMENTED` means source exists; `SCRIPTED_EVAL` means deterministic/fixture checks pass; `VERIFIED_LOCAL` means a specified local integration was exercised; `REAL_MODEL_VERIFIED` and `PRODUCTION_VERIFIED` require separate external evidence.
 
@@ -76,5 +76,6 @@ or LLM-as-Judge score.
 
 - [Product capabilities and architecture boundaries](product-capabilities-and-boundaries.md)
 - [Current architecture](README.md)
+- [Current project status and acceptance ledger](../PROJECT_STATUS.md)
 - [Private research lifecycle](../admissions-research-taskrun.md)
 - [Research evaluation contract](../validation/authorized-research-eval.md)

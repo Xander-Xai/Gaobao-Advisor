@@ -1,8 +1,12 @@
 # Product Capabilities and Architecture Boundaries
 
-**Snapshot:** public `master` at `9eef17468933eff515b44321259fe4330fb3cbf9`, checked 2026-11-26.
+**Snapshot:** public `master` at `22d2dc3f01b95cc0d8ae807d7b8673e865fcafae`, checked 2026-11-26.
 
-**Purpose:** describe the shipped product architecture and distinguish code, synthetic validation, external acceptance, and production readiness.
+**Purpose:** describe the shipped product architecture and distinguish code,
+synthetic validation, external acceptance, and production readiness. The current
+master documentation head is #209; that closeout is documentation-only. Runtime
+and CI evidence below is pinned to the named implementation snapshot and its
+exact Actions runs.
 
 ## Product purpose
 
@@ -134,10 +138,11 @@ prompt, tool grant, or gold standard.
 ## Deployment and release boundary
 
 The standard local stack consists of Vue, Nginx, Java Gateway/Catalog, Python
-FastAPI and worker, MySQL, and Redis. The `master` CI run for the snapshot above
-passed Python tests, frontend quality, MySQL/Redis integration, full synthetic
-Compose E2E, optional Deep Agents SDK construction without provider calls,
-Docker sandbox checks, lint, security audit, secret scan, and CodeQL.
+FastAPI and worker, MySQL, and Redis. The implementation baseline at
+`9eef17468933eff515b44321259fe4330fb3cbf9` passed Python tests, frontend quality,
+MySQL/Redis integration, full synthetic Compose E2E, optional Deep Agents SDK
+construction without provider calls, Docker sandbox checks, lint, security
+audit, secret scan, and CodeQL.
 
 CI uses synthetic data and does not establish real-data rights, real-provider
 quality, user acceptance, privacy approval, public production readiness,
@@ -150,5 +155,6 @@ and current [architecture overview](README.md).
 
 - [Authorized admissions research TaskRun](../admissions-research-taskrun.md)
 - [Authorized research evaluation contract](../validation/authorized-research-eval.md)
+- [Current project status and acceptance ledger](../PROJECT_STATUS.md)
 - [Java Gateway and Catalog responsibilities](../java-microservices.md)
 - [Module responsibilities and engineering acceptance](module-responsibilities-and-acceptance.md)

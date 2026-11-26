@@ -13,7 +13,7 @@ statements; organize each page around product responsibilities and validation.
 
 ## Constraints
 
-- Work from public `master` snapshot `9eef17468933eff515b44321259fe4330fb3cbf9`.
+- Work from public `master` snapshot `22d2dc3f01b95cc0d8ae807d7b8673e865fcafae` (#209, docs-only closeout).
 - Do not overwrite the existing dirty checkout. Implement in the isolated
   `docs/product-doc-governance` worktree.
 - Preserve legitimate product capabilities and data such as career-planning

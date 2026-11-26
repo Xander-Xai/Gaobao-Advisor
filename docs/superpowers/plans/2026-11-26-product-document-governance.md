@@ -4,7 +4,7 @@
 
 **Goal:** Organize public repository documentation around product capabilities, module responsibilities, and verifiable engineering evidence.
 
-**Architecture:** This is a documentation-only change from master snapshot `9eef17468933eff515b44321259fe4330fb3cbf9`. Move two legacy overview/ledger documents to product-named paths under `docs/architecture/`, update README and AGENTS governance language, then align linked engineering evidence with product responsibilities and acceptance. Leave application code, schemas, career guidance, and historical GitHub records unchanged.
+**Architecture:** This is a documentation-only change from master snapshot `22d2dc3f01b95cc0d8ae807d7b8673e865fcafae` (#209, docs-only closeout). Move two legacy overview/ledger documents to product-named paths under `docs/architecture/`, update README and AGENTS governance language, then align linked engineering evidence with product responsibilities and acceptance. Leave application code, schemas, career guidance, and historical GitHub records unchanged.
 
 **Tech Stack:** Markdown, Git, Python 3 for read-only link/content verification; GitHub CLI for live issue/PR/release inspection.
 
