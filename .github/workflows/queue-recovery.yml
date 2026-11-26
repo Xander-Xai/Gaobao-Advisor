@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v7.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v7.1.0
         with:
           python-version: "3.11"
       - run: pip install -e ".[dev,mysql,worker]"
@@ -54,7 +54,7 @@ jobs:
             --load-repeats "${{ github.event.inputs.load_repeats }}" \
             --default-repeats "${{ github.event.inputs.default_repeats }}" \
             --json-out queue-recovery-results.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v7.0.2
         if: always()
         with:
           name: queue-recovery-results
