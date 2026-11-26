@@ -21,6 +21,9 @@ not imply production validation. The application version is maintained in
 - Updated evidence, architecture and release documentation to distinguish
   synthetic verification from real provider, real-data and production
   acceptance.
+- Documented the missing user-facing volunteer-plan audit separately from the
+  synthetic decision-card regression and recorded the 2026-11-26 Harness and
+  business acceptance evidence.
 
 ## Version history
 

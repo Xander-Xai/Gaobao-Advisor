@@ -47,6 +47,7 @@ dated audit records remain historical snapshots and should not be read as live s
 
 - [Benchmark and evaluation entry point](../benchmarks/README.md)
 - [Authorized research evaluation](validation/authorized-research-eval.md)
+- [Harness and business acceptance snapshot, 2026-11-26](validation/harness-business-acceptance-20261126.md)
 - [Context/provider budget evaluation](validation/context-ab-provider-budget.md)
 - [Session snapshot validation](validation/session-compaction-snapshot-20261124.md)
 - [Performance studies](performance/)

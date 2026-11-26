@@ -23,6 +23,7 @@ These states describe separate questions and may coexist:
 | Capability | Code path / business integration | Evidence | Status and boundary |
 |---|---|---|---|
 | Standard consultation | `server/routes/chat.py` → deterministic intent routing → `server/graph/` preparation → SQL/RAG evidence and final-answer gates → persisted SSE response | Python regression suite; CI at the reviewed baseline [`9eef1746`](https://github.com/Xander-Xai/Gaobao-Advisor/commit/9eef17468933eff515b44321259fe4330fb3cbf9) | IMPLEMENTED / INTEGRATED / MERGED / VERIFIED for synthetic behavior; real admissions quality NOT_MEASURED |
+| Dedicated volunteer-plan audit | No user-facing plan submission or audit route | [`tests/test_synthetic_decision_card_e2e.py`](../tests/test_synthetic_decision_card_e2e.py), [`benchmarks/decision_card_business_eval.py`](../benchmarks/decision_card_business_eval.py) cover synthetic decision cards only | NOT IMPLEMENTED as a user workflow; synthetic admin fixture is not user-plan validation or an admissions recommendation; input/output/rule contract required before scope |
 | Data-source manifest and row lineage | Industrial SQL evidence path in `server/services/industrial_admissions.py` and manifest validation | PR #203 and its tests, merged before reviewed baseline | IMPLEMENTED / INTEGRATED / MERGED; real-source authorization remains external |
 | Chat complex-research request | `server/routes/chat.py` → structured form → `server/routes/chat_research_runs.py` → session-owned private journal; request does not execute a model | PRs #205–#208; `tests/test_chat_research_runs.py` | IMPLEMENTED / INTEGRATED / MERGED / VERIFIED in synthetic/injected-worker tests; feature is opt-in, not production validated |
 | Approved research execution | `server/routes/admissions_research_runs.py` → `server/agent/admissions_research_taskrun.py` → dedicated worker → `server/agent/admissions_deepagents.py` | Managed TaskRun, approval and evidence-integrity tests; optional SDK no-network CI smoke | IMPLEMENTED / INTEGRATED; real provider/data and operational deployment NOT_MEASURED |
@@ -34,14 +35,16 @@ These states describe separate questions and may coexist:
 
 ## Verification snapshot
 
-The last reviewed pre-closeout master snapshot was `9eef17468933eff515b44321259fe4330fb3cbf9`
-(2026-11-26 UTC). Its Actions runs were [CI](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45735221624)
-and [CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45735221653);
-both completed successfully. CI included Python 3.10/3.11 tests, Ruff,
-MySQL/Redis smoke, frontend tests/build, no-key container and full Compose
-synthetic checks, redistribution and secret scans, and the optional Deep Agents
-SDK constructor smoke without provider calls. This is a commit-specific
-snapshot, not evidence for later commits or production behavior.
+PR #210 was merged as `b63e9dc5c029b01b25d3c4916aceb965bd42bf15` on
+2026-11-26. Exact-head [master CI](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45783708130)
+and [CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45783708035)
+completed successfully. CI included Python 3.10/3.11 tests, Ruff, MySQL/Redis
+smoke, frontend tests/build, no-key container and full Compose synthetic checks,
+redistribution and secret scans, and optional Deep Agents SDK construction
+without provider calls. A separate local focused suite and synthetic baselines
+are recorded in the [2026-11-26 acceptance snapshot](validation/harness-business-acceptance-20261126.md).
+These checks are synthetic/test evidence, not real-provider or production
+acceptance.
 
 The exact current head and its checks are always obtained from GitHub. Avoid
 copying a SHA into additional documents as a live pointer.

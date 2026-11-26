@@ -11,6 +11,30 @@ database and are not production SLA claims.
   `gaobao:bench:worker:<uuid>` key and never FLUSHDB.
 - Only synthetic data is generated.
 
+## Agent and business evaluation
+
+The no-provider decision-card baseline runs the frozen eight-case synthetic
+suite against an independent SQL oracle and preserves development/Holdout
+results:
+
+```bash
+python -m benchmarks.decision_card_business_eval --out /tmp/gaobao-business-baseline.json
+```
+
+The context harness can run a scripted, no-network contract smoke:
+
+```bash
+python -m benchmarks.context_ab_eval --scripted-smoke --out-dir /tmp/gaobao-context-smoke
+```
+
+Scripted results are not model comparisons: provider tokens, real admissions
+accuracy, billing, and real-user quality remain `NOT_MEASURED`. Real-model
+commands require a separately approved model and explicit budget. Approved
+real-data research receipts are evaluated offline using the [authorized
+research evaluation contract](../docs/validation/authorized-research-eval.md).
+Do not treat the admin synthetic decision-card API as user-facing volunteer-plan
+review.
+
 ## Admin SQL/repository benchmark
 
 ```bash

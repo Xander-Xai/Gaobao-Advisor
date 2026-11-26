@@ -119,6 +119,21 @@ def test_no_rows_or_too_many_rows_never_run(monkeypatch):
             )
 
 
+def test_sandbox_timeout_blocks_report_and_verifies_cleanup(monkeypatch):
+    def timeout(command, **kwargs):
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(sandbox, "_bounded_docker_run", timeout)
+    monkeypatch.setattr(sandbox, "_remove_and_verify_container", lambda name: True)
+    receipt = sandbox.execute_admissions_analysis(
+        ROWS, SCOPE, ("year",), b"print('test')", image_id=IMAGE, approval_ref="approved", authorized=True
+    )
+    assert receipt["status"] == "BLOCKED"
+    assert receipt["error"] == "sandbox_timeout"
+    assert receipt["cleanup_verified"] is True
+    assert "result" not in receipt
+
+
 def test_model_loop_only_sends_schema_and_retries_on_oracle_mismatch(monkeypatch):
     from types import SimpleNamespace
 
