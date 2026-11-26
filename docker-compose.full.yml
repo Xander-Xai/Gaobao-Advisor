@@ -10,7 +10,6 @@ services:
   mysql:
     image: mysql:8.4
     profiles: ["full"]
-    container_name: gaokao-mysql
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-gaobao}
@@ -34,7 +33,6 @@ services:
   redis:
     image: redis:7-alpine
     profiles: ["full"]
-    container_name: gaokao-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     # No host port: API/worker use redis:6379 on the Compose network.
@@ -67,7 +65,6 @@ services:
   worker:
     build: .
     profiles: ["full"]
-    container_name: gaokao-worker
     restart: unless-stopped
     command: python -m server.admin.worker
     env_file: .env.full

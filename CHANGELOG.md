@@ -6,6 +6,15 @@ not imply production validation. The application version is maintained in
 
 ## Unreleased
 
+- Isolated the standard Compose topology by project name, removed fixed
+  container names, and made published HTTP ports configurable for parallel
+  local validation.
+- Migrated GitHub Actions from deprecated Node.js 20 action revisions to
+  current Node.js 24-compatible releases pinned by full commit SHA; upgraded
+  CodeQL Action to v4.
+- Documented that the default `InMemorySaver` does not restore internal model
+  graph state across worker processes; the durable TaskRun journal tracks
+  business lifecycle, not graph checkpoints.
 - Added admissions source manifests and row-level lineage checks for the
   industrial SQL consultation boundary (#203).
 - Added a structured Chat entry for selected complex admissions-research

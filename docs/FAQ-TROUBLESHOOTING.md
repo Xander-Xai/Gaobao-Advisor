@@ -714,28 +714,30 @@ shutil.copy2('/app/data/gaokao.db', '/app/backups/gaokao_backup.db')
 
 **症状**：上线后发现功能异常
 
-**回滚步骤**（5 分钟内完成）：
+**标准本地合成 Compose 演示回滚**：使用已验证的 tag 或完整 SHA，保留同一
+Compose 项目名与命名数据卷。不要猜测 `HEAD~1`，不要运行 `down --volumes`，
+也不要把数据库备份当作代码回滚步骤。
 
 ```bash
-# 1. 停止当前服务
-docker compose -f docker-compose.prod.yml down
+# 当前演示从独立项目名启动；先停服务但保留 MySQL/Redis 数据卷
+PROJECT=gaobao-demo
+python scripts/compose_standard.py --project-name "$PROJECT" down
 
-# 2. 回滚代码
-git checkout HEAD~1
+# 检出经确认的已知良好版本到独立 worktree，不改写当前工作区
+git worktree add ../gaobao-rollback <known-good-tag-or-full-sha>
+install -m 600 .env.full ../gaobao-rollback/.env.full
+cd ../gaobao-rollback
 
-# 3. 恢复数据库备份
-gunzip backups/gaokao_db_LATEST.sql.gz
-cp backups/gaokao_db_LATEST.sql data/gaokao.db
-
-# 4. 重新启动旧版本
-docker compose -f docker-compose.prod.yml --profile nginx up -d --build
-
-# 5. 验证健康
-curl -f http://localhost:8000/api/v1/health
-
-# 6. 通知用户
-# （通过公告或邮件）
+# 使用同一 Compose project 名重建代码并复用同一卷；端口占用时显式换端口
+GAOBAO_HTTP_PORT=18080 python scripts/compose_standard.py \
+  --project-name "$PROJECT" up --build -d
+curl -fsS http://127.0.0.1:18080/api/v1/health/ready
 ```
+
+若数据库 schema 已发生不兼容变化，先按受控部署流程使用已验证的备份/恢复
+方案；不要自动覆盖数据卷。上述过程只说明本地合成演示的版本回退，不是工业
+部署的故障恢复或生产回滚授权。工业候选配置须遵守
+[发布与部署合同](architecture/industrial-release-contract.md)。
 
 ---
 
