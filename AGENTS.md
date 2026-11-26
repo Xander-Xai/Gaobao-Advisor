@@ -2,9 +2,9 @@
 
 ## Project and evidence boundaries
 
-- This is a standalone Gaokao-advisor project. Do not attribute implementation,
-  metrics or employment-period claims from `Customer-Service-AI-Agent` or
-  `Beauty-Industry-RAG-QA-System` to this repository.
+- Attribute implementation and evaluation claims to this repository only when
+  supported by its source history. Keep upstream MIT attribution and the
+  distinction between original implementation and later public maintenance.
 - Resolve live default-branch, PR, Issue, Release and exact-SHA CI state before
   describing current delivery. Distinguish `IMPLEMENTED`, `INTEGRATED`,
   `VERIFIED`, `MERGED` and `PRODUCTION_VALIDATED`; synthetic tests never prove

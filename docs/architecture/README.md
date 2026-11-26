@@ -9,7 +9,7 @@ record why the larger decisions were made.
 
 ## Architecture decision freeze — 2026-11-25
 
-**主架构：确定性在线咨询 + 独立受控复杂招生研究 Harness。** 这是较新、不同任职阶段的项目；当前公开增量与历史交付分开。本仓负责 Harness/Eval/Context、受限执行和全栈业务交付，不重复客服的企业写操作运行时、A2A/MCP 或 Beauty 的多模态知识底座。
+**主架构：确定性在线咨询 + 独立受控复杂招生研究 Harness。** 本仓负责 Harness/Eval/Context、受限执行和全栈业务交付；上游 MIT 代码归属见 `THIRD_PARTY_NOTICES.md`，公开维护增量以当前源码和对应验证记录为准。
 
 | 设计 | 裁决 | 边界 / 验收 |
 |---|---|---|
