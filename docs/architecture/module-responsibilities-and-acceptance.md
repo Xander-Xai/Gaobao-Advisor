@@ -9,6 +9,7 @@
 | Module | Authoritative paths | Responsibility | Current evidence and boundary |
 |---|---|---|---|
 | Deterministic consultation | `server/routes/chat.py`, `server/graph/`, `server/services/` | Chat/SSE, profile and intent flow, SQL/RAG preparation, source and output checks | `SCRIPTED_EVAL`; synthetic data and CI do not establish real-world admissions accuracy |
+| User volunteer-plan audit | No dedicated route or submitted-plan contract | Not currently a user-facing product capability | The admin synthetic decision-card path is a fictional regression/evaluation fixture only; do not present it as plan review |
 | Approved complex research | `server/routes/chat_research_runs.py`, `server/routes/admissions_research_runs.py`, `server/agent/admissions_research_taskrun.py` | Owner-bound request, independent approval, private journal, worker claim/cancel/finalization, private report | Code and fixture lifecycle are integrated; external authorized acceptance remains open under #204 |
 | Deep Agents research | `server/agent/admissions_deepagents.py`, `server/agent/deepagents_adapter.py` | The approved complex-research runtime and the isolated synthetic comparison adapter | SDK constructor and synthetic/fake execution are covered; provider quality and authorized real-data outcomes are not established |
 | Admissions evidence | `server/services/admissions_lineage.py`, `server/agent/portfolio_sql_oracle.py`, `benchmarks/authorized_research_eval.py` | Source manifests, row lineage, bounded SQL evidence, independent aggregate/gold validation | Structural and synthetic checks exist; source rights and independent real-data labels remain external gates |
@@ -79,3 +80,4 @@ or LLM-as-Judge score.
 - [Current project status and acceptance ledger](../PROJECT_STATUS.md)
 - [Private research lifecycle](../admissions-research-taskrun.md)
 - [Research evaluation contract](../validation/authorized-research-eval.md)
+- [Harness and business acceptance snapshot, 2026-11-26](../validation/harness-business-acceptance-20261126.md)

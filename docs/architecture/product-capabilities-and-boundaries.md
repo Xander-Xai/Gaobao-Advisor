@@ -1,10 +1,10 @@
 # Product Capabilities and Architecture Boundaries
 
-**Snapshot:** public `master` at `22d2dc3f01b95cc0d8ae807d7b8673e865fcafae`, checked 2026-11-26.
+**Snapshot:** public `master` at `b63e9dc5c029b01b25d3c4916aceb965bd42bf15`, checked 2026-11-26.
 
 **Purpose:** describe the shipped product architecture and distinguish code,
 synthetic validation, external acceptance, and production readiness. The current
-master documentation head is #209; that closeout is documentation-only. Runtime
+master documentation head is #210; that closeout is documentation-only. Runtime
 and CI evidence below is pinned to the named implementation snapshot and its
 exact Actions runs.
 
@@ -24,6 +24,14 @@ Career planning, employment outlook, and career-direction questions are valid
 product capabilities. They use the product's career scene, knowledge content,
 and available employment data; they are distinct from repository-maintenance
 documentation.
+
+The product does not currently accept a user's completed volunteer-choice plan
+for a dedicated eligibility/risk audit. The management-only synthetic
+decision-card endpoint and its eight-case benchmark exercise fictional fixtures
+and deterministic SQL rules; they are not a user-facing plan-review workflow,
+real admissions validation, or an admission recommendation. A future plan audit
+requires an approved input schema, rule/source coverage, and output contract
+before implementation.
 
 ## Runtime paths
 

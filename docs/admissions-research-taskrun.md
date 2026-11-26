@@ -39,6 +39,11 @@ answers stay deterministic and no free-text complexity classifier starts a
 run. This is an opt-in request/submission path, not production authorization,
 real-model evaluation, real-data acceptance or production deployment.
 
+This research workflow compares bounded historical evidence and returns a
+verified private research report; it does not accept or audit a complete user
+volunteer-choice plan. The separate synthetic decision-card experiment is not
+a substitute for that missing product workflow.
+
 The fixed worker SQL projection joins the school registry and excludes rows
 whose school is marked `SYNTHETIC_DEMO_DATA`. This guard runs again in the
 worker's pre-model admission-history read, so a caller that forges synthetic
