@@ -25,12 +25,11 @@ compose() {
   fi
 }
 
-for container in gaokao-mysql gaokao-redis gaokao-api gaokao-worker gaokao-frontend gaokao-nginx; do
-  if docker inspect "$container" >/dev/null 2>&1; then
-    echo "Refusing to reuse existing container: $container" >&2
-    exit 2
-  fi
-done
+existing_containers="$(docker ps -aq --filter "label=com.docker.compose.project=$COMPOSE_PROJECT_NAME")"
+if [ -n "$existing_containers" ]; then
+  echo "Refusing to reuse containers for Compose project: $COMPOSE_PROJECT_NAME" >&2
+  exit 2
+fi
 
 started_at="$SECONDS"
 cleanup() {
@@ -118,11 +117,16 @@ PY
 echo "Starting complete Compose profile (including all healthchecks)"
 compose up --detach --build --wait --wait-timeout 360
 
-for container in gaokao-mysql gaokao-redis gaokao-api gaokao-worker gaokao-frontend gaokao-nginx; do
-  health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$container")"
-  echo "$container: $health"
+for service in mysql redis api worker frontend nginx; do
+  container_id="$(compose ps -q "$service")"
+  if [ -z "$container_id" ]; then
+    echo "Compose service has no container: $service" >&2
+    exit 1
+  fi
+  health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$container_id")"
+  echo "$service: $health"
   if [ "$health" != healthy ]; then
-    echo "Expected healthy: $container" >&2
+    echo "Expected healthy service: $service" >&2
     exit 1
   fi
 done
@@ -224,6 +228,11 @@ print(json.dumps({
 PY
 
 echo "Container resources (one-shot)"
-docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' \
-  gaokao-mysql gaokao-redis gaokao-api gaokao-worker gaokao-frontend gaokao-nginx || true
+containers=()
+while IFS= read -r container_id; do
+  [ -z "$container_id" ] || containers+=("$container_id")
+done < <(compose ps -q)
+if [ "${#containers[@]}" -gt 0 ]; then
+  docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' "${containers[@]}" || true
+fi
 echo "Full Compose E2E PASS"
