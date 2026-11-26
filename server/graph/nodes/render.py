@@ -85,7 +85,22 @@ def render_reply_node(state: dict[str, Any]) -> dict[str, Any]:
 
         major = data.get("major_info") or structured.get("major_analysis")
         if major and isinstance(major, dict):
-            parts.append(f"\n专业信息：{major.get('description', str(major)[:200])}")
+            description = major.get("description")
+            if isinstance(description, str) and description.strip():
+                major_text = description.strip()[:200]
+            else:
+                name = major.get("name")
+                major_text = name.strip()[:120] if isinstance(name, str) else ""
+                employment_rate = major.get("employment_rate")
+                if (
+                    major_text
+                    and isinstance(employment_rate, (int, float))
+                    and not isinstance(employment_rate, bool)
+                    and 0 <= employment_rate <= 1
+                ):
+                    major_text += f"，就业率{employment_rate * 100:.0f}%"
+            if major_text:
+                parts.append(f"\n专业信息：{major_text}")
 
         sources = structured.get("sources") or []
         if sources:

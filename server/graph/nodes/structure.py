@@ -96,8 +96,14 @@ def _extract_facts(slots: dict, data: dict, reasoning: str) -> list[str]:
             facts.append(f"匹配院校：{', '.join(names)}")
 
     rank_info = data.get("rank_info")
-    if rank_info:
-        facts.append(f"位次分析：{rank_info}")
+    if isinstance(rank_info, dict):
+        rank = rank_info.get("rank")
+        if isinstance(rank, (int, float)) and not isinstance(rank, bool) and 0 <= rank <= 100_000_000:
+            fact = f"位次参考：约{int(rank):,}"
+            confidence = rank_info.get("confidence")
+            if isinstance(confidence, str) and confidence.strip():
+                fact += f"（置信度：{confidence.strip()[:40]}）"
+            facts.append(fact)
 
     major_info = data.get("major_info")
     if major_info and isinstance(major_info, dict):
