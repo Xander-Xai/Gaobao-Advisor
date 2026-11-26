@@ -232,6 +232,7 @@ python -m pytest tests/test_chat_research_runs.py -q --no-cov --override-ini add
 - [快速上手、文档地图与主要入口](docs/README.md)
 - [当前项目状态与验收缺口](docs/PROJECT_STATUS.md)
 - [系统架构、路由与模块职责](docs/architecture/README.md)
+- [产品能力与架构边界](docs/architecture/product-capabilities-and-boundaries.md) · [模块责任与工程验收](docs/architecture/module-responsibilities-and-acceptance.md)
 - [私有复杂研究 TaskRun](docs/admissions-research-taskrun.md) · [Chat 请求与报告](docs/admissions-research-private-report-20261125.md)
 - [开发与贡献](CONTRIBUTING.md) · [测试 / Eval 手册](benchmarks/README.md)
 - [数据库结构](docs/database-schema-matrix.md) · [API/OpenAPI](http://localhost/docs)

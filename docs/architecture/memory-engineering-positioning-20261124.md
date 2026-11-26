@@ -1,9 +1,8 @@
 # Gaobao Advisor — Memory and Context Engineering specialization
 
-> Architecture and delivery status as of 2026-11-24. The repository belongs
-> to a **later, different employer/project** from the earlier employer's Beauty
-> RAG and Customer Service Agent. The dated follow-up commits here must not
-> be retrospectively claimed as features shipped in a previous employment era.
+> Architecture and delivery status as of 2026-11-24. Keep repository attribution
+> and dated follow-up changes tied to source history and verification evidence;
+> do not infer release state from retrospective documentation.
 
 ## Assignment by trust and lifetime
 

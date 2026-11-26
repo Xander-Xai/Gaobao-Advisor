@@ -40,7 +40,7 @@ python -m benchmarks.repeated_model_experiment \
 
 报告路径：`trial-N-baseline.json`、`trial-N-evidence_first.json` 及 `repeated-experiment-summary.json`。没有模型密钥时不得使用 Fake Runner 生成“真实模型”报告；CI 只测合同、模拟负例和默认安全行为。
 
-## 尚未解决，禁止作为成果写入简历
+## 尚未完成的产品评测条件
 
 1. **没有实际真实模型 A/B 数据**：本轮不调用 Provider，不宣称提升比例、真实任务完成率或成本降幅。
 2. **Ground Truth 尚未真人专家审核**：8 个合成案例仍为开发者编写，尽管 Oracle 独立查 SQL，也不代表真实志愿建议正确。

@@ -71,11 +71,12 @@ Java Gateway：`/api/v1/catalog/**` 走 Java Catalog + Redis Lua fail-closed
 - `feat/java-distributed-services` 已在 PR #89 合并后删除（内容已进入
   `master`，无独有工作）。
 
-## 7. 面试口径（真实描述）
+## 7. 产品能力声明边界
 
-强调工程实践：LangGraph 状态机、RAG fail-closed、会话安全、MySQL/Redis
-Worker 队列、Java 网关分布式限流与故障注入验收。不得虚构生产用户、招生
-准确率、性能 SLA 或真实推荐效果；数据边界见 `README.md` 与 `DATA_LICENSE.md`。
+本历史快照中有源码和验收记录支持的实现包括 LangGraph 状态机、RAG
+fail-closed、会话安全、MySQL/Redis Worker 队列、Java 网关限流与故障注入
+验收。不得据此推断生产用户、招生准确率、性能 SLA 或真实推荐效果；数据
+边界见 `README.md` 与 `DATA_LICENSE.md`。
 
 ## 8. 依赖安全治理（2026-11-07）
 

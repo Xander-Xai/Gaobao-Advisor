@@ -1,6 +1,6 @@
 # Gaobao Advisor：Agent Harness 工程化改造证据手册（2026-11-20）
 
-> **状态**：PR #105 待合并；此模块独立于现有 FastAPI 聊天主链路。仅用于 `SYNTHETIC_DEMO` 演示数据库和合成知识语料。参考上一阶段 PR #103 和 Issue #104。
+> **历史状态快照（2026-11-20）**：当时 PR #105 待合并；此模块独立于现有 FastAPI 聊天主链路。仅用于 `SYNTHETIC_DEMO` 演示数据库和合成知识语料。PR #103 和 Issue #104 为当时的关联记录；实时状态以 GitHub 为准。
 
 ## 1. 业务目标先于框架
 
@@ -59,9 +59,9 @@ pytest -q tests/test_readonly_harness.py tests/test_readonly_harness_eval.py --o
 
 数据生成与执行发生在隔离临时数据库，输出仅含 Case ID、状态、工具名、次数、耗时和原因码；不得向日志导出用户原始画像、模型回答、数据库密码或真实学校信息。
 
-## 4. 面试可指认的证据
+## 4. 能力合同与可验证边界
 
-| 招聘方追问 | 真实对应代码 | 能证明什么 | 尚不能证明 |
+| 验收问题 | 对应代码 | 可由证据证明 | 尚不能证明 |
 |---|---|---|---|
 | “你的 Agent 怎么自主选工具？” | `OpenAIJsonPlanner.decide` + `run_readonly_agent` | 有模型可替换接口与 tool/finish/abstain 循环 | 未运行真实模型 benchmark |
 | “工具步长怎么治理？” | `HarnessLimits` 与 `tool_sequence` | 有真实工具调用计数、步数与重复工具阻断 | 未证明真实 Agent 平均工具调用下降 |
@@ -75,12 +75,12 @@ pytest -q tests/test_readonly_harness.py tests/test_readonly_harness_eval.py --o
 1. **真实模型实验**：在显式选择模型及合法费用预算的情况下，以同一固定 case 集测多次，保存参数、模型版本、run-id、provider usage 和逐项失败分类；模型不能使用 `ScriptedController` 结果冒名替代。
 2. **答案真实性**：独立来源与语义核验，对“工具来源存在但结论错”设置负控制；加入拒答误判率与风险引用支持率。
 3. **可靠性深度**：若进入长事务和有副作用工具，再引入 durable run/lease/幂等/HITL 与真正可恢复的工作流；不要为了展示框架滥加写操作。
-4. **Sandbox 与 Coding Agent**：这是**另一个独立实验**。若招聘方明确需要 Claude Code/Pi/DSH，使用受限容器与没有业务凭证的示例仓运行真实软件任务；不是在志愿查询服务内开放 shell。
+4. **Sandbox 与 Coding Agent**：与招生查询是不同的任务边界。若需评估通用编码任务，应在独立的受限容器和无业务凭证的示例仓中验证；不在志愿查询服务内开放 shell。
 5. **优化实验**：针对上下文摘要/工具描述/步数预算进行预注册候选改动，对照真实模型的独立 holdout；未获得显著且可重复的质量-成本收益前不宣传“提升 X%”。
-6. **简历升级 Gate**：只有 merge、CI、可复现报告、真实模型评测结果和证据索引完整后，才能写“模型驱动 Harness 优化”。目前只可描述独立 read-only Harness 实验（合成 30-case CI 验收后）。
+6. **能力发布 Gate**：任何模型驱动优化声明都要求合并源码、精确 SHA 的 CI、可复现报告、真实模型评测和证据索引。当前合成 30-case 验收只支持描述独立只读 Harness 的合成策略合同。
 
 ## Decision-card malformed response accounting (2026-11-24)
 
-Later-employer Gaobao Harness/Eval follow-up. A returned response with missing, malformed or non-object JSON, or a missing/non-string action discriminator, is blocked with `planner_response_invalid`; valid provider-reported usage is preserved. The independent redacted trace validator accepts that terminal failure, and the regression checks zero tool execution and no raw response persistence. Forbidden tools, repeated calls, wrong argument types, premature finish and unsafe abstention also return the same fixed invalid decision, retaining reported usage without tool execution or raw output. Transport failures or missing provider usage remain separately blocked. The tests exercise both malformed and forbidden responses through the synthetic SQL harness. No real provider calls or business success claims.
+As of 2026-11-24, a response with missing, malformed or non-object JSON, or a missing/non-string action discriminator, is blocked with `planner_response_invalid`; valid provider-reported usage is preserved. The independent redacted trace validator accepts that terminal failure, and the regression checks zero tool execution and no raw response persistence. Forbidden tools, repeated calls, wrong argument types, premature finish and unsafe abstention also return the same fixed invalid decision, retaining reported usage without tool execution or raw output. Transport failures or missing provider usage remain separately blocked. The tests exercise both malformed and forbidden responses through the synthetic SQL harness. No real provider calls or business success claims.
 
 Validation: `pytest -q tests/test_decision_card_model_planner.py tests/test_decision_card_trace_eval.py` (CI required).

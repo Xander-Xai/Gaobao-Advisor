@@ -17,6 +17,10 @@ dated audit records remain historical snapshots and should not be read as live s
 
 - [Architecture](architecture/README.md) — routes, module ownership, data flow,
   deployment topology and source map.
+- [Product capabilities and architecture boundaries](architecture/product-capabilities-and-boundaries.md) —
+  consultation, approved research, evidence, Context, Sandbox, and release boundaries.
+- [Module responsibilities and engineering acceptance](architecture/module-responsibilities-and-acceptance.md) —
+  module ownership, evidence classes, invariants, and external acceptance gates.
 - [Industrial release contract](architecture/industrial-release-contract.md) —
   deployment candidate, configuration and release gates; not a production approval.
 - [Approved admissions research TaskRun](admissions-research-taskrun.md) —
