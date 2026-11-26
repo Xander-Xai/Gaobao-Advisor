@@ -35,11 +35,11 @@ explicitly constrained to SQL-backed evidence collection, report submission,
 and optionally the restricted analysis Sandbox. Native Harness remains an
 isolated synthetic comparison baseline; it is not a second business executor.
 
-## Verification performed in the isolated current-head worktree
+## Verification performed in the isolated worktree
 
-The focused suites below were run locally from a worktree based on exact current
-head `b63e9dc`. Runtime code is unchanged by the local governance patch; the
-Sandbox regression adds coverage for timeout handling and verified cleanup.
+The following baseline suites were run locally from a worktree based on exact
+master head `b63e9dc`, before the subsequent offline-answer formatting fix.
+That fix is covered by the additional targeted suite and browser smoke below.
 
 ```text
 python3 -m pytest tests/test_admissions_deepagents.py tests/test_chat_research_runs.py tests/test_admissions_research_taskrun.py tests/test_taskrun_deepagents_worker.py tests/test_deepagents_checkpoint_journal_guard.py tests/test_deepagents_durable_tool_ledger.py tests/test_admissions_analysis_sandbox.py tests/test_authorized_research_eval.py tests/test_context_ab_eval.py tests/test_harness_optimizer.py tests/test_decision_card_business_eval.py -q --no-cov -o addopts=''
@@ -65,6 +65,18 @@ passed Maven verification and Java/MySQL/Redis Compose smoke on
 `1a1f37315c30f0730a6ca33e7f406bcfb488d361`; this is not an exact-`b63e9dc` run.
 No Java toolchain is installed in this local environment.
 
+After the offline-answer formatting fix, these affected-chat suites passed:
+
+```text
+python3 -m pytest tests/test_chat_state_structured.py tests/test_chat_final_answer_integrity.py tests/test_chat_sse.py -q --no-cov -o addopts=''
+36 passed
+
+ruff check server/graph/nodes/render.py server/graph/nodes/structure.py tests/test_chat_state_structured.py
+ruff format --check server/graph/nodes/render.py server/graph/nodes/structure.py tests/test_chat_state_structured.py
+git diff --check
+all passed
+```
+
 A full local `python3 -m pytest tests/ --tb=short` attempt was terminated by the
 execution environment's 240-second command limit at 34% progress and produced
 no pytest summary; this is an incomplete local run, not a test failure or pass.
@@ -78,6 +90,22 @@ admissions accuracy `NOT_MEASURED`. The scripted Context comparison completed
 one no-provider trial over 4 Holdout observations per arm with no scripted
 regression, but was marked `NOT_ELIGIBLE_SCRIPTED`; token reduction, provider
 equality and model effectiveness remain `NOT_MEASURED`.
+
+## Local real-browser smoke (synthetic only)
+
+Firefox 159 exercised the Vue app served by Vite at `127.0.0.1:3080` with the
+FastAPI app directly at `127.0.0.1:8000`, backed by a freshly seeded
+`SYNTHETIC_DEMO` SQLite database under `/tmp` and no provider credentials. The
+Chat flow completed a first-turn profile and structured-card response; the
+rendered major/rank facts contained no raw Python mapping repr after the fix.
+The response formats the major name and available bounded employment-rate fact;
+rank is presented as an approximate reference with the existing confidence.
+The Vue data browser loaded overview, filters, school rows, school detail,
+plans and trends; each
+captured API request returned HTTP 200 and browser-console errors were zero.
+This direct local path bypassed Nginx/Java Gateway because host port 80 was
+occupied; it did not exercise admin operations, a real research approval, or a
+real provider. The synthetic research form remained disabled by default.
 
 Negative-path coverage includes independent-approval failures, cancellation,
 expired TaskRun leases without paid replay, worker/report failure, missing or

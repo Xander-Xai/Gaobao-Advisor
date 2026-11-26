@@ -24,6 +24,8 @@ not imply production validation. The application version is maintained in
 - Documented the missing user-facing volunteer-plan audit separately from the
   synthetic decision-card regression and recorded the 2026-11-26 Harness and
   business acceptance evidence.
+- Formatted offline consultation output from major and rank lookup records as
+  bounded user-facing facts instead of exposing Python dictionary reprs.
 
 ## Version history
 

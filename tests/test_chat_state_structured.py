@@ -210,6 +210,53 @@ def test_template_reply_lists_matched_schools_and_sources():
     assert "数据库位次法（合成）" in reply
 
 
+def test_template_reply_formats_major_lookup_as_user_facing_facts():
+    state = {
+        "scene": "gaokao",
+        "slots": {"province": "示例省·甲", "score": 580, "subject": "物理", "interest": "计算机"},
+        "data_query_results": {
+            "major_info": {
+                "name": "计算机科学与技术（合成）",
+                "category": "工学",
+                "sub_category": "计算机类",
+                "employment_rate": 0.93,
+                "avg_salary": 18500,
+            }
+        },
+        "structured_result": {"sources": ["SYNTHETIC_DEMO 合成演示数据"]},
+        "reasoning": "",
+        "trace": [],
+    }
+
+    reply = render_reply_node(state)["reply"]
+
+    assert "专业信息：计算机科学与技术（合成）" in reply
+    assert "就业率93%" in reply
+    assert "{'name':" not in reply
+    assert "18500" not in reply
+
+
+def test_structured_card_formats_rank_analysis_without_python_dict_repr():
+    state = {
+        "scene": "gaokao",
+        "slots": {"province": "示例省·甲", "score": 580, "subject": "物理", "interest": "计算机"},
+        "data_query_results": {
+            "rank_info": {
+                "rank": 57992,
+                "confidence": "中-低（仅供参考）",
+                "source": "本地数据库（合成数据）",
+            }
+        },
+        "reasoning": "",
+        "trace": [],
+    }
+
+    facts = structure_output_node(state)["structured_result"]["facts"]
+
+    assert "位次参考：约57,992（置信度：中-低（仅供参考））" in facts
+    assert all("{'rank':" not in fact for fact in facts)
+
+
 def test_structured_card_carries_sources():
     state = {
         "scene": "gaokao",
