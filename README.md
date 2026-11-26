@@ -117,14 +117,14 @@ git clone https://github.com/Xander-Xai/Gaobao-Advisor.git
 cd Gaobao-Advisor
 python -m pip install -e .
 python scripts/setup_full_env.py
-python scripts/compose_standard.py up --build -d
+python scripts/compose_standard.py --project-name gaobao-demo up --build -d
 ```
 
 `setup_full_env.py` 会生成权限为 `0600` 的 `.env.full`，并只显示一次本地管理员密码；请自行保存，不要提交该文件。访问：
 
 | 服务 | 地址 |
 |---|---|
-| Web 应用 | <http://localhost> |
+| Web 应用 | <http://localhost>（默认；可用 `GAOBAO_HTTP_PORT` 改端口）|
 | 数据浏览器 | <http://localhost/data> |
 | 运营工作台 | <http://localhost/admin> |
 | 健康状态 | <http://localhost/api/v1/health> |
@@ -151,8 +151,15 @@ curl -N -X POST http://localhost/api/v1/chat \
 首次请求会忽略请求体里的会话 ID，返回服务端签发的 ID 和 Bearer token；该咨询输出只演示软件行为，不是志愿建议。复杂研究短语会被安全路由：默认环境明确拒绝启动研究；在获批、显式启用的非生产环境才显示结构化表单，仍需独立运营审批。停止服务并保留本地数据卷：
 
 ```bash
-python scripts/compose_standard.py down
+python scripts/compose_standard.py --project-name gaobao-demo down
 ```
+
+Compose 项目名用于隔离容器与命名卷；端口 80 若已占用，可在启动时设置
+`GAOBAO_HTTP_PORT=18080 python scripts/compose_standard.py --project-name gaobao-demo up --build -d`，
+访问 `http://localhost:18080`。非 Java 演示拓扑的前端直连端口可通过
+`GAOBAO_FRONTEND_PORT` 调整。`down` 默认保留数据库卷；
+只有明确要删除本项目演示数据时，才使用 `down --volumes`。升级时使用相同项目名
+重新执行 `up --build -d`；本地回滚步骤见[故障排除指南](docs/FAQ-TROUBLESHOOTING.md#9-紧急回滚)。
 
 ### 2. 可选真实模型开发模式
 
