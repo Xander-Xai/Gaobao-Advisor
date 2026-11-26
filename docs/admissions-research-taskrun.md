@@ -39,6 +39,13 @@ answers stay deterministic and no free-text complexity classifier starts a
 run. This is an opt-in request/submission path, not production authorization,
 real-model evaluation, real-data acceptance or production deployment.
 
+The default Deep Agents graph uses LangGraph `InMemorySaver`; it does not
+provide cross-process restoration of model-graph state. The private TaskRun
+journal persists request, approval, lease and terminal business state, but is
+not a promise that an interrupted model graph resumes at its prior internal
+step. Expired paid runs are not automatically replayed. No additional graph
+checkpoint runtime is part of the current product contract.
+
 This research workflow compares bounded historical evidence and returns a
 verified private research report; it does not accept or audit a complete user
 volunteer-choice plan. The separate synthetic decision-card experiment is not
