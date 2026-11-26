@@ -47,7 +47,7 @@ Expected: only personal-purpose or employment-era wording in the listed files; p
 
 - [ ] **Step 2: Replace README personal-purpose sections with product documentation links**
 
-Remove the README link to the interview-positioning document. Change “落到简历” to a product evaluation/reporting criterion. Change the README harness evidence reference so it describes implementation and evidence boundaries rather than interview/résumé use. Link to `docs/architecture/README.md`, `docs/PROJECT_STATUS.md`, and `docs/README.md` only after verifying each path exists on this snapshot.
+Remove the README link to the interview-positioning document. Change “落到简历” to a product evaluation/reporting criterion. Change the README harness evidence reference so it describes implementation and evidence boundaries rather than interview/résumé use. Link to `docs/architecture/README.md` and `docs/README.md` only after verifying each path exists on this snapshot.
 
 - [ ] **Step 3: Rewrite AGENTS integrity rule as repository attribution/evidence policy**
 
