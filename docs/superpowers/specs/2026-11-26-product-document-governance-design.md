@@ -32,14 +32,17 @@ and data-source statements.
 
 ## Content design
 
-1. Replace `docs/portfolio/2026-agent-interview-positioning.md` with a product
-   architecture and capability-boundary document. Describe normal consultation,
-   approved research, deterministic evidence, evaluation, deployment, and
-   remaining external acceptance gates.
-2. Replace `docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md` with a module
-   responsibility and engineering acceptance ledger. Preserve useful module
-   paths, tests, states, and evidence limits; remove job-search framing and
-   résumé-oriented execution advice.
+1. Move `docs/portfolio/2026-agent-interview-positioning.md` to
+   `docs/architecture/product-capabilities-and-boundaries.md` and rewrite it as
+   a product architecture and capability-boundary document. Describe normal
+   consultation, approved research, deterministic evidence, evaluation,
+   deployment, and remaining external acceptance gates.
+2. Move `docs/portfolio/AGENT_V1_OWNERSHIP_AND_ACCEPTANCE.md` to
+   `docs/architecture/module-responsibilities-and-acceptance.md` and rewrite it
+   as a module responsibility and engineering acceptance ledger. Preserve
+   useful module paths, tests, states, and evidence limits; remove job-search
+   framing and résumé-oriented execution advice. Remove `docs/portfolio/` if it
+   becomes empty.
 3. Update `README.md` to remove personal job-use references and links, directing
    readers instead to product architecture, repository status, evaluation, and
    contribution/verification documentation. Keep statements tied to the
@@ -65,6 +68,8 @@ and data-source statements.
   broad substring deletion.
 - Confirm career consultation, employment-direction, and employment-data
   product references remain present.
+- Confirm old portfolio paths and inbound links are absent; the replacement
+  product-architecture paths resolve.
 - Confirm direct personal-purpose hits in the public engineering documents and
   repository instructions have been resolved or explicitly documented as
   historical records that are out of edit scope.
