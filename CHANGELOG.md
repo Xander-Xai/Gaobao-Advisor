@@ -6,6 +6,8 @@ not imply production validation. The application version is maintained in
 
 ## Unreleased
 
+## 3.0.0 Preview — 2026-11-26
+
 - Isolated the standard Compose topology by project name, removed fixed
   container names, and made published HTTP ports configurable for parallel
   local validation.
@@ -39,8 +41,9 @@ not imply production validation. The application version is maintained in
 ## Version history
 
 - `3.0.0` is the current application version declared in
-  `server/__init__.py` and `pyproject.toml`. There is no corresponding formal
-  GitHub Release currently documented; inspect the live Releases and Tags pages
-  before preparing a release.
+  `server/__init__.py` and `pyproject.toml`; GitHub Release `v3.0.0` is published
+  as a prerelease preview at `fbcf979ff22bc8a3746106f99f0217568ba70837`.
+  It distributes source only, uses synthetic demo data, and does not establish
+  real admissions quality or production validation.
 - Prior notable changes are preserved in Git history and dated records under
   `docs/audits/`, `docs/governance/`, `docs/validation/` and `docs/performance/`.

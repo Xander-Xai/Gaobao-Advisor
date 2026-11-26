@@ -22,7 +22,7 @@ These states describe separate questions and may coexist:
 
 | Capability | Code path / business integration | Evidence | Status and boundary |
 |---|---|---|---|
-| Standard consultation | `server/routes/chat.py` → deterministic intent routing → `server/graph/` preparation → SQL/RAG evidence and final-answer gates → persisted SSE response | Python regression suite; CI at the reviewed baseline [`9eef1746`](https://github.com/Xander-Xai/Gaobao-Advisor/commit/9eef17468933eff515b44321259fe4330fb3cbf9) | IMPLEMENTED / INTEGRATED / MERGED / VERIFIED for synthetic behavior; real admissions quality NOT_MEASURED |
+| Standard consultation | `server/routes/chat.py` → deterministic intent routing → `server/graph/` preparation → SQL/RAG evidence and final-answer gates → persisted SSE response | Exact-release SHA CI [`fbcf979f`](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45883688788) | IMPLEMENTED / INTEGRATED / MERGED / VERIFIED for synthetic behavior; real admissions quality NOT_MEASURED |
 | Dedicated volunteer-plan audit | No user-facing plan submission or audit route | [`tests/test_synthetic_decision_card_e2e.py`](../tests/test_synthetic_decision_card_e2e.py), [`benchmarks/decision_card_business_eval.py`](../benchmarks/decision_card_business_eval.py) cover synthetic decision cards only | NOT IMPLEMENTED as a user workflow; synthetic admin fixture is not user-plan validation or an admissions recommendation; input/output/rule contract required before scope |
 | Data-source manifest and row lineage | Industrial SQL evidence path in `server/services/industrial_admissions.py` and manifest validation | PR #203 and its tests, merged before reviewed baseline | IMPLEMENTED / INTEGRATED / MERGED; real-source authorization remains external |
 | Chat complex-research request | `server/routes/chat.py` → structured form → `server/routes/chat_research_runs.py` → session-owned private journal; request does not execute a model | PRs #205–#208; `tests/test_chat_research_runs.py` | IMPLEMENTED / INTEGRATED / MERGED / VERIFIED in synthetic/injected-worker tests; feature is opt-in, not production validated |
@@ -31,20 +31,24 @@ These states describe separate questions and may coexist:
 | Context and session snapshots | `server/agent/chat_context.py`, encrypted SQL snapshot path and explicit opt-in preference vault | Unit/integration regressions and standard local Compose CI | IMPLEMENTED / INTEGRATED; personal-data privacy acceptance and real-user value NOT_MEASURED |
 | Skills and Sandbox | `skills/gaokao/`; bounded admissions analysis sandbox and separate coding fixtures | Synthetic safety tests and CI Docker isolation probes | IMPLEMENTED; bounded test scope VERIFIED; production multi-tenant isolation NOT validated |
 | Agent Eval and optimizer gates | `benchmarks/`, independent SQL/gold checks and review-only optimization registry | CI artifacts are synthetic/scripted, with short retention | IMPLEMENTED / VERIFIED for the stated fixtures; real model outcome, cost and improvement NOT_MEASURED |
-| Full-stack application | Vue 3, FastAPI, Java Gateway/Catalog, MySQL, Redis, Worker and Compose | CI: Python 3.10/3.11, frontend, MySQL/Redis, container and Compose checks | IMPLEMENTED / INTEGRATED / MERGED / VERIFIED in CI; no production deployment claim |
+| Full-stack application | Vue 3, FastAPI, Java Gateway/Catalog, MySQL, Redis, Worker and Compose | Exact-release SHA CI and Java Services workflow; local Java/Gateway standard topology run | IMPLEMENTED / INTEGRATED / MERGED / VERIFIED for synthetic behavior; no production deployment claim |
 
 ## Verification snapshot
 
-PR #210 was merged as `b63e9dc5c029b01b25d3c4916aceb965bd42bf15` on
-2026-11-26. Exact-head [master CI](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45783708130)
-and [CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45783708035)
-completed successfully. CI included Python 3.10/3.11 tests, Ruff, MySQL/Redis
-smoke, frontend tests/build, no-key container and full Compose synthetic checks,
-redistribution and secret scans, and optional Deep Agents SDK construction
-without provider calls. A separate local focused suite and synthetic baselines
-are recorded in the [2026-11-26 acceptance snapshot](validation/harness-business-acceptance-20261126.md).
-These checks are synthetic/test evidence, not real-provider or production
-acceptance.
+PR #213 was merged as `fbcf979ff22bc8a3746106f99f0217568ba70837` on
+2026-11-26. Exact-head [master CI](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45883688788),
+[CodeQL](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45883688638),
+and [Java Services](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/45883688559)
+completed successfully. CI included Python 3.10/3.11, Ruff, MySQL/Redis/Admin,
+frontend tests/build, no-key container and Sandbox checks, full Compose, Java
+Maven/HTTP smoke, security, redistribution and secret scans, and optional Deep
+Agents SDK construction without provider calls. The local standard Java/Gateway
+topology was also built and exercised with synthetic data. These are engineering
+verification results, not real-provider, real-data or production acceptance.
+
+The [v3.0.0 Preview](https://github.com/Xander-Xai/Gaobao-Advisor/releases/tag/v3.0.0)
+is a GitHub prerelease source distribution at the SHA above. It is explicitly a
+synthetic demo; the release does not claim real admissions service readiness.
 
 The exact current head and its checks are always obtained from GitHub. Avoid
 copying a SHA into additional documents as a live pointer.

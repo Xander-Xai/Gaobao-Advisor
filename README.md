@@ -250,4 +250,4 @@ python -m pytest tests/test_chat_research_runs.py -q --no-cov --override-ini add
 
 ## 版本、许可与归属
 
-应用版本由 [`server/__init__.py`](server/__init__.py) 定义（当前 `3.0.0`）；前端包版本 `0.0.0` 是私有构建配置，不代表发布版本。当前没有正式 GitHub Release；仓库存在一个归档用途的非语义化 Tag，不作为产品版本。代码采用 [MIT License](LICENSE)；演示数据与合成语料的授权见 [DATA_LICENSE.md](DATA_LICENSE.md)，第三方及上游代码归属见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。MIT 代码许可不授予再分发使用者导入的第三方招生数据或语料的权利。
+应用版本由 [`server/__init__.py`](server/__init__.py) 定义（当前 `3.0.0`）；GitHub 已发布 [`v3.0.0 Preview`](https://github.com/Xander-Xai/Gaobao-Advisor/releases/tag/v3.0.0) 预发布版本，源码目标 SHA 为 `fbcf979ff22bc8a3746106f99f0217568ba70837`。此预览仅分发源码与合成演示数据，不表示真实招生服务、业务效果验证或生产部署。前端包版本 `0.0.0` 是私有构建配置，不代表发布版本；仓库另有一个归档用途的非语义化 Tag，不作为产品版本。代码采用 [MIT License](LICENSE)；演示数据与合成语料的授权见 [DATA_LICENSE.md](DATA_LICENSE.md)，第三方及上游代码归属见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。MIT 代码许可不授予再分发使用者导入的第三方招生数据或语料的权利。
