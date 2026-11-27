@@ -30,6 +30,9 @@ dated audit records remain historical snapshots and should not be read as live s
 - [API reference](../openapi.yaml) / [JSON schema](../openapi.json) — generated
   OpenAPI contract; a running service also exposes `/docs`.
 - [Database schema matrix](database-schema-matrix.md)
+- [Database reliability review, 2026-11-27](database-reliability-governance-2026-11-27.md)
+- [MySQL backup and restore runbook](mysql-backup-restore.md)
+- [MySQL admissions query benchmark, 2026-11-27](performance/mysql-admissions-history-index-20261127.md)
 - [ADRs](superpowers/adr/) — recorded architecture decisions.
 
 ## Guides and operations

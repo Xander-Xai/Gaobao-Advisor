@@ -1,7 +1,7 @@
 # Database Schema Matrix
 
 > Source of truth: `db/models.py`. Generated/verified by `db/schema_contract.py`.
-> Migration history: `20261030_0001` (admin tables) → `20261031_0002` (14 historical tables) → `20261031_0003` (admin token revocation) → `20261031_0004` (audit performance index) → `20261031_0005` (dataset snapshot provenance) → `20261124_0006` (session compaction cache) and `20261120_0006` (user memory vault) → `20261124_0007` (memory revision) → `20261124_0008` (merge both branches) → `20261125_0009` (chat turn receipts). The current migration head is `20261125_0009`; confirm with Alembic before migration work.
+> Migration history: `20261030_0001` (admin tables) → `20261031_0002` (14 historical tables) → `20261031_0003` (admin token revocation) → `20261031_0004` (audit performance index) → `20261031_0005` (dataset snapshot provenance) → `20261124_0006` (session compaction cache) and `20261120_0006` (user memory vault) → `20261124_0007` (memory revision) → `20261124_0008` (merge both branches) → `20261125_0009` (chat turn receipts) → `20261127_0010` (admissions history scope/rank index). Confirm the current migration head with Alembic before migration work.
 > Storage scope: SQLite is for lightweight development/smoke and isolated
 > research journals; MySQL 8.4 backs the standard full-stack Compose profile.
 
@@ -11,7 +11,7 @@
 |---|---|---|---|---|---|
 | 1 | `schools` | 院校 | `id` | `UNIQUE(name)`, `ix_schools_province`, `ix_schools_level` | — |
 | 2 | `majors` | 专业 | `id` | `UNIQUE(name)`, `ix_majors_category` | — |
-| 3 | `admission_scores` | 录取分数 | `id` | `uq_admission_score`, `ix_adm_lookup`, `ix_adm_dedup`, `ix_adm_year` | school_id→schools, major_id→majors |
+| 3 | `admission_scores` | 录取分数 | `id` | `uq_admission_score`, `ix_adm_lookup`, `ix_adm_dedup`, `ix_adm_history_scope_rank`, `ix_adm_year` | school_id→schools, major_id→majors |
 | 4 | `enrollment_plans` | 招生计划 | `id` | `uq_enrollment_plan` | school_id→schools, major_id→majors |
 | 5 | `subject_rankings` | 学科排名 | `id` | `uq_subject_ranking` | school_id→schools |
 | 6 | `conversations` | 会话 | `id` | unique index `ix_conversations_session_id` | — |
@@ -62,6 +62,7 @@ DATABASE_URL=mysql+pymysql://... python -m db.migrate upgrade
 - `20261124_0007` adds the monotonic vault revision and refuses unreviewed legacy vaults.
 - `20261124_0008` joins both migration paths without changing published revision IDs.
 - `20261125_0009` adds completed Chat-turn receipts scoped to the owning conversation.
+- `20261127_0010` adds `(province, year, subject_type, major_id, min_rank)` for the bounded industrial history query; the historical-baseline verifier tolerates this post-baseline index until revision 0010 applies.
 
 ### Existing database at revision `20261030_0001`
 
@@ -102,6 +103,8 @@ The container entrypoint uses this flag in MySQL mode.
 - `downgrade` of `0002`/`0003` is intentionally refused. The baseline may cover
   pre-existing data; rollback requires a verified backup/restore, not a
   destructive DDL downgrade.
+- `0010` is additive; its downgrade drops only the history lookup index. Verify
+  a backup before production schema changes because MySQL DDL is non-transactional.
 - Fresh databases can be recreated; existing databases must be backed up before
   schema changes.
 - Schema drift examples tested: missing index, missing table, unexpected
@@ -111,11 +114,11 @@ The container entrypoint uses this flag in MySQL mode.
 
 | Scenario | Test |
 |---|---|
-| SQLite fresh upgrade (23 tables) | `tests/test_migrations.py` |
+| SQLite fresh upgrade (24 tables) | `tests/test_migrations.py` |
 | SQLite idempotent upgrade | `tests/test_migrations.py` |
 | SQLite adopt existing + data preservation | `tests/test_migrations.py` |
 | SQLite seed without `create_all` | `tests/test_migrations.py` |
-| MySQL 8.4 fresh upgrade + seed + repeat (23 tables) | `tests/test_mysql_migrations.py` |
+| MySQL 8.4 fresh upgrade + seed + repeat (24 tables) | `tests/test_mysql_migrations.py` |
 | Audit index Before/After | `benchmarks/mysql_admin_benchmark.py`, `docs/performance/mysql-benchmark.md` |
 | MySQL adopt existing + data preservation | `tests/test_mysql_migrations.py` |
 | MySQL index-drift rejection | `tests/test_mysql_migrations.py` |

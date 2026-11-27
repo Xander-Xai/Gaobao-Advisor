@@ -88,7 +88,7 @@ def test_fresh_mysql_upgrade_seed_and_idempotency(mysql_engine):
     assert repeat.returncode == 0, repeat.stderr
     with mysql_engine.connect() as connection:
         assert connection.execute(text("SELECT COUNT(*) FROM schools")).scalar_one() == 8
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261125_0009"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261127_0010"
 
 
 def test_existing_create_all_schema_is_adopted_without_data_loss(mysql_engine):
@@ -109,7 +109,7 @@ def test_existing_create_all_schema_is_adopted_without_data_loss(mysql_engine):
         assert (
             connection.execute(text("SELECT COUNT(*) FROM schools WHERE name='mysql-adopt-marker'")).scalar_one() == 1
         )
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261125_0009"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261127_0010"
     assert verify_tables(mysql_engine, ALL_TABLES) == []
 
 
@@ -120,6 +120,63 @@ def test_adopt_existing_rejects_index_drift(mysql_engine):
     result = _run("-m", "db.migrate", "adopt-existing")
     assert result.returncode != 0
     assert "missing index ix_schools_province" in result.stderr
+
+
+def test_history_lookup_index_is_created_by_migration(mysql_engine):
+    result = _run("-m", "db.migrate", "upgrade")
+    assert result.returncode == 0, result.stderr
+
+    indexes = {item["name"]: item for item in inspect(mysql_engine).get_indexes("admission_scores")}
+    assert indexes["ix_adm_history_scope_rank"]["column_names"] == [
+        "province",
+        "year",
+        "subject_type",
+        "major_id",
+        "min_rank",
+    ]
+
+
+def test_existing_mysql_0009_data_survives_history_index_upgrade(mysql_engine):
+    env = {**os.environ, "DATABASE_URL": MYSQL_URL, "APP_ENV": "development"}
+    prior = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "20261125_0009"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert prior.returncode == 0, prior.stderr
+
+    with mysql_engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO schools (name, province, city, level, school_type) "
+                "VALUES ('migration-preservation-marker', '测试省', '', '普通', '综合')"
+            )
+        )
+        school_id = connection.execute(
+            text("SELECT id FROM schools WHERE name='migration-preservation-marker'")
+        ).scalar_one()
+        connection.execute(
+            text(
+                "INSERT INTO admission_scores "
+                "(school_id, major_id, province, year, batch, subject_type, min_score) "
+                "VALUES (:school_id, NULL, '测试省', 2025, '测试批次', '物理类', 600)"
+            ),
+            {"school_id": school_id},
+        )
+
+    upgraded = _run("-m", "db.migrate", "upgrade")
+    assert upgraded.returncode == 0, upgraded.stderr
+    with mysql_engine.connect() as connection:
+        assert (
+            connection.execute(
+                text("SELECT COUNT(*) FROM admission_scores WHERE school_id=:school_id"),
+                {"school_id": school_id},
+            ).scalar_one()
+            == 1
+        )
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261127_0010"
 
 
 @pytest.fixture
