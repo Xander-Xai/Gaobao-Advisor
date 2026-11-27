@@ -34,19 +34,30 @@ public final class FailClosedCatalogRateLimiterGatewayFilterFactory
             local t = redis.call('TIME')
             local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
             local previous = redis.call('HMGET', key, 'tokens', 'updated')
-            local tokens = tonumber(previous[1]) or capacity
-            local updated = tonumber(previous[2]) or now
-            tokens = math.min(capacity, tokens + math.max(0, now - updated) * rate)
+            local tokens = tonumber(previous[1])
+            local updated = tonumber(previous[2])
+            if previous[1] == false and previous[2] == false then
+                tokens = capacity
+                updated = now
+            elseif not tokens or not updated or tokens < 0 or tokens > capacity or updated < 0 then
+                return redis.error_reply('invalid token bucket state')
+            end
+            local effective_now = math.max(now, updated)
+            local elapsed = math.min(math.max(0, effective_now - updated), capacity / rate)
+            tokens = math.min(capacity, tokens + elapsed * rate)
             local allowed = 0
+            local retrySeconds = 0
             if tokens >= requested then
                 tokens = tokens - requested
                 allowed = 1
+            else
+                retrySeconds = math.max(1, math.ceil((requested - tokens) / rate))
             end
-            redis.call('HSET', key, 'tokens', tokens, 'updated', now)
+            redis.call('HSET', key, 'tokens', tokens, 'updated', effective_now)
             redis.call('PEXPIRE', key, math.max(1000, math.ceil(capacity / rate * 2000)))
-            return allowed
+            return {allowed, retrySeconds}
             """;
-    private static final RedisScript<Long> SCRIPT = RedisScript.of(LUA, Long.class);
+    private static final RedisScript<List> SCRIPT = RedisScript.of(LUA, List.class);
 
     private final ReactiveStringRedisTemplate redis;
     private final int rate;
@@ -57,8 +68,8 @@ public final class FailClosedCatalogRateLimiterGatewayFilterFactory
             @Value("${CATALOG_RATE_PER_SECOND:20}") int rate,
             @Value("${CATALOG_RATE_BURST:40}") int capacity) {
         super(Config.class);
-        if (rate <= 0 || capacity <= 0) {
-            throw new IllegalArgumentException("Catalog rate and burst must be positive");
+        if (rate <= 0 || rate > 10_000 || capacity <= 0 || capacity > 10_000) {
+            throw new IllegalArgumentException("Catalog rate and burst must be positive and <= 10000");
         }
         this.redis = redis;
         this.rate = rate;
@@ -78,11 +89,13 @@ public final class FailClosedCatalogRateLimiterGatewayFilterFactory
                 .next()
                 .switchIfEmpty(Mono.error(new IllegalStateException("Redis limiter returned no decision")))
                 .timeout(Duration.ofSeconds(3))
-                .flatMap(allowed -> {
-                    if (allowed == 1L) {
+                .flatMap(this::parseDecision)
+                .flatMap(decision -> {
+                    if (decision.allowed()) {
                         return chain.filter(exchange);
                     }
                     exchange.getResponse().setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
+                    exchange.getResponse().getHeaders().set("Retry-After", Long.toString(decision.retryAfter()));
                     return exchange.getResponse().setComplete();
                 })
                 // Any Redis outage / timeout / script problem fails CLOSED (503).
@@ -93,5 +106,41 @@ public final class FailClosedCatalogRateLimiterGatewayFilterFactory
                     }
                     return Mono.error(error);
                 });
+    }
+
+    private Mono<Decision> parseDecision(List<?> result) {
+        if (result == null || result.size() != 2) {
+            return Mono.error(new IllegalStateException("Redis limiter returned an invalid decision"));
+        }
+        try {
+            long allowed = exactLong(result.get(0));
+            long retryAfter = exactLong(result.get(1));
+            if ((allowed != 0 && allowed != 1)
+                    || retryAfter < 0
+                    || (allowed == 1 && retryAfter != 0)
+                    || (allowed == 0 && retryAfter < 1)) {
+                return Mono.error(new IllegalStateException("Redis limiter returned an invalid decision"));
+            }
+            return Mono.just(new Decision(allowed == 1, retryAfter));
+        } catch (NumberFormatException | ClassCastException error) {
+            return Mono.error(new IllegalStateException("Redis limiter returned an invalid decision", error));
+        }
+    }
+
+    private static long exactLong(Object value) {
+        if (value instanceof Number number) {
+            long result = number.longValue();
+            if (number.doubleValue() != result) {
+                throw new NumberFormatException("non-integral Redis limiter result");
+            }
+            return result;
+        }
+        if (value instanceof String text) {
+            return Long.parseLong(text);
+        }
+        throw new ClassCastException("unexpected Redis limiter result type");
+    }
+
+    private record Decision(boolean allowed, long retryAfter) {
     }
 }

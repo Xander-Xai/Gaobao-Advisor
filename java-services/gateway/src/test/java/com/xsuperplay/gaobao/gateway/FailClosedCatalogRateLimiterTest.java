@@ -20,7 +20,7 @@ import static org.mockito.Mockito.*;
 
 class FailClosedCatalogRateLimiterTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static ReactiveStringRedisTemplate mockRedis(Flux<Long> result) {
+    private static ReactiveStringRedisTemplate mockRedis(Flux<List<Long>> result) {
         var redis = mock(ReactiveStringRedisTemplate.class);
         when(redis.execute(any(RedisScript.class), anyList(), anyList())).thenReturn((Flux) result);
         return redis;
@@ -42,7 +42,7 @@ class FailClosedCatalogRateLimiterTest {
     void successfulRedisAtomicDecisionForwards() {
         var called = new AtomicBoolean();
         var factory = new FailClosedCatalogRateLimiterGatewayFilterFactory(
-                mockRedis(Flux.just(1L)), 20, 40);
+                mockRedis(Flux.just(List.of(1L, 0L))), 20, 40);
         var exchange = exchange();
         factory.apply(new FailClosedCatalogRateLimiterGatewayFilterFactory.Config())
                 .filter(exchange, chain(called)).block();
@@ -54,19 +54,44 @@ class FailClosedCatalogRateLimiterTest {
     void emptyBucketRejectsWith429() {
         var called = new AtomicBoolean();
         var factory = new FailClosedCatalogRateLimiterGatewayFilterFactory(
-                mockRedis(Flux.just(0L)), 1, 4);
+                mockRedis(Flux.just(List.of(0L, 2L))), 1, 4);
         var exchange = exchange();
         factory.apply(new FailClosedCatalogRateLimiterGatewayFilterFactory.Config())
                 .filter(exchange, chain(called)).block();
         assertFalse(called.get());
         assertEquals(HttpStatus.TOO_MANY_REQUESTS, exchange.getResponse().getStatusCode());
+        assertEquals("2", exchange.getResponse().getHeaders().getFirst("Retry-After"));
+    }
+
+    @Test
+    void malformedRedisDecisionRejectsWith503() {
+        var called = new AtomicBoolean();
+        var factory = new FailClosedCatalogRateLimiterGatewayFilterFactory(
+                mockRedis(Flux.just(List.of(0L))), 1, 4);
+        var exchange = exchange();
+        factory.apply(new FailClosedCatalogRateLimiterGatewayFilterFactory.Config())
+                .filter(exchange, chain(called)).block();
+        assertFalse(called.get());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, exchange.getResponse().getStatusCode());
+    }
+
+    @Test
+    void blockedDecisionWithoutPositiveRetryAfterFailsClosed() {
+        var called = new AtomicBoolean();
+        var factory = new FailClosedCatalogRateLimiterGatewayFilterFactory(
+                mockRedis(Flux.just(List.of(0L, 0L))), 1, 4);
+        var exchange = exchange();
+        factory.apply(new FailClosedCatalogRateLimiterGatewayFilterFactory.Config())
+                .filter(exchange, chain(called)).block();
+        assertFalse(called.get());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, exchange.getResponse().getStatusCode());
     }
 
     @Test
     void redisFailureRejectsWith503RatherThanAdmitting() {
         var called = new AtomicBoolean();
         var factory = new FailClosedCatalogRateLimiterGatewayFilterFactory(
-                mockRedis(Flux.error(new IllegalStateException("redis unavailable"))), 1, 4);
+                mockRedis(Flux.<List<Long>>error(new IllegalStateException("redis unavailable"))), 1, 4);
         var exchange = exchange();
         factory.apply(new FailClosedCatalogRateLimiterGatewayFilterFactory.Config())
                 .filter(exchange, chain(called)).block();
@@ -78,7 +103,7 @@ class FailClosedCatalogRateLimiterTest {
     void emptyRedisDecisionAlsoFailsClosed() {
         var called = new AtomicBoolean();
         var factory = new FailClosedCatalogRateLimiterGatewayFilterFactory(
-                mockRedis(Flux.empty()), 1, 4);
+                mockRedis(Flux.<List<Long>>empty()), 1, 4);
         var exchange = exchange();
         factory.apply(new FailClosedCatalogRateLimiterGatewayFilterFactory.Config())
                 .filter(exchange, chain(called)).block();
@@ -90,7 +115,7 @@ class FailClosedCatalogRateLimiterTest {
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
     void allReplicasUseTheSameBucketDespiteSpoofedForwardedAddresses() {
-        var redis = mockRedis(Flux.just(1L));
+        var redis = mockRedis(Flux.just(List.of(1L, 0L)));
         var factory = new FailClosedCatalogRateLimiterGatewayFilterFactory(redis, 20, 40);
         var filter = factory.apply(new FailClosedCatalogRateLimiterGatewayFilterFactory.Config());
         for (String ip : List.of("1.2.3.4", "8.8.8.8")) {
@@ -106,6 +131,10 @@ class FailClosedCatalogRateLimiterTest {
     @Test
     void invalidLimiterConfigurationIsRejectedAtStartup() {
         assertThrows(IllegalArgumentException.class,
-                () -> new FailClosedCatalogRateLimiterGatewayFilterFactory(mockRedis(Flux.just(1L)), 0, 4));
+                () -> new FailClosedCatalogRateLimiterGatewayFilterFactory(
+                        mockRedis(Flux.just(List.of(1L, 0L))), 0, 4));
+        assertThrows(IllegalArgumentException.class,
+                () -> new FailClosedCatalogRateLimiterGatewayFilterFactory(
+                        mockRedis(Flux.just(List.of(1L, 0L))), 10001, 4));
     }
 }
