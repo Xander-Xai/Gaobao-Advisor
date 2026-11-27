@@ -27,6 +27,7 @@ export COMPOSE_PROJECT_NAME="$PROJECT_NAME"
 export GAOBAO_HTTP_PORT="$HTTP_PORT"
 export GAOBAO_RATE_LIMIT_BASE_URL="http://127.0.0.1:$HTTP_PORT"
 BASE_URL="$GAOBAO_RATE_LIMIT_BASE_URL"
+RATE_LIMIT_RESULTS_DIR="${RATE_LIMIT_RESULTS_DIR:-benchmarks/load/results/$PROJECT_NAME}"
 TMP="$(mktemp -d)"
 
 existing_containers="$(docker ps -aq --filter "label=com.docker.compose.project=$PROJECT_NAME")"
@@ -151,16 +152,16 @@ if [[ "${RUN_LOAD_BENCHMARK:-1}" == "1" ]]; then
   # Amplify only the synthetic CI MySQL dataset; never import real records.
   "${compose[@]}" exec -T api python -m benchmarks.load.seed_scale --schools 500 --confirm-synthetic-only
   python3 scripts/verify_java_distributed_ci.py parity
-  python3 benchmarks/load/run_suite.py --scenario catalog --tiers 50 --duration 8 --label single-gateway --host "$BASE_URL" --informational
+  python3 benchmarks/load/run_suite.py --scenario catalog --tiers 50 --duration 8 --label single-gateway --host "$BASE_URL" --output "$RATE_LIMIT_RESULTS_DIR" --informational
   "${compose[@]}" up --no-deps --detach --scale java-gateway=2 java-gateway
   sleep 5
-  python3 benchmarks/load/run_suite.py --scenario catalog --tiers 50,100,200 --duration 8 --label dual-gateway --host "$BASE_URL" --informational
-  python3 benchmarks/load/run_suite.py --scenario python --tiers 50,100,200 --duration 8 --label dual-gateway --host "$BASE_URL" --informational
+  python3 benchmarks/load/run_suite.py --scenario catalog --tiers 50,100,200 --duration 8 --label dual-gateway --host "$BASE_URL" --output "$RATE_LIMIT_RESULTS_DIR" --informational
+  python3 benchmarks/load/run_suite.py --scenario python --tiers 50,100,200 --duration 8 --label dual-gateway --host "$BASE_URL" --output "$RATE_LIMIT_RESULTS_DIR" --informational
   # All load tiers are observational: no calibrated performance SLO exists.
   # Zero/all-failed/partially-failed samples remain visible in uploaded JSON/CSV.
   # Functional API, SSE, permission and failure-injection checks remain hard gates.
-  python3 benchmarks/load/run_suite.py --scenario python-overview --tiers 50 --duration 8 --label dual-gateway --host "$BASE_URL" --informational
-  python3 benchmarks/load/run_suite.py --scenario chat --tiers 5,10 --duration 8 --label dual-gateway --host "$BASE_URL" --informational
+  python3 benchmarks/load/run_suite.py --scenario python-overview --tiers 50 --duration 8 --label dual-gateway --host "$BASE_URL" --output "$RATE_LIMIT_RESULTS_DIR" --informational
+  python3 benchmarks/load/run_suite.py --scenario chat --tiers 5,10 --duration 8 --label dual-gateway --host "$BASE_URL" --output "$RATE_LIMIT_RESULTS_DIR" --informational
 fi
 
 # Scale the same live cluster to two gateways with a deliberately tiny shared

@@ -118,3 +118,22 @@ snapshot）。同步顺序压测显示进程内线程并发下每次往返被显
 
 零错误；单机线程压测含 GIL 争用。15s 历史观测（优化前 50 并发 median
 239.64ms / p95 332.27ms）保留在上文。
+
+## Distributed rate-limiter performance acceptance (2026-11-28)
+
+**No post-change service load result is claimed.** The Java Gateway source could not be built in this environment: JDK/Maven are absent, and pulling `maven:3.9.11-eclipse-temurin-21` failed with a Docker Registry TLS handshake timeout. The main FastAPI Industrial profile also requires an approved real data manifest and external credentials not supplied to this local run. Therefore there are no valid Java Gateway or approved Industrial API RPS, latency percentiles, limiter-added latency, or under-load Redis CPU/memory measurements for this change.
+
+The disposable Redis reliability probe is correctness/fault evidence only, not a benchmark: it uses FastAPI `TestClient` plus the production `RateLimitMiddleware` and an owned Redis 7.4.9 standalone container. It observed 200, 200, 429 (`Retry-After: 1000`), Redis-stop 503, then after restart with persistence disabled 200, 200, 429. This short status-transition probe has no representative steady-state load and does not report p50/p95/p99 or RPS. Redis `INFO CPU/MEMORY` snapshots from it are operational snapshots, not capacity measurements.
+
+The isolated environment was Docker Engine 29.5.2 / Compose 5.1.4 on Ubuntu 22.04.5 LTS under WSL2 Linux 6.6.87.2 (20 vCPU, 15.54 GiB reported host memory). Redis used a random localhost-only port, no volume, `--save "" --appendonly no`, and a single standalone node. The 18 real-Redis tests passed on Redis 7.4.9; their concurrency checks validate atomic counts, not service capacity. The complete test/fault matrix and exclusions are documented in [public HTTP admission](../security/industrial-public-http-admission.md).
+
+| Requested measurement | Result |
+| --- | --- |
+| Java Catalog / Python Industrial request volume and concurrency | Not measured: updated Java service could not be built; no approved Industrial environment was available. |
+| Admitted / 429 / 503 counts under sustained load | Not measured. The disposable correctness probe status sequence above is not sustained load. |
+| Limiter-added latency and end-to-end P50/P95/P99 | Not measured. |
+| Redis CPU/memory under representative load | Not measured. Probe-only `INFO` snapshots are excluded from capacity claims. |
+| Redis failure recovery | Correctness-only HTTP probe: 503 while stopped, recovered after container restart; restart intentionally lost volatile state. |
+| Sentinel/Cluster or managed asynchronous failover | Not tested; no replica topology was available. |
+
+Before production capacity acceptance, run the existing Locust suite and the rate-limiter scenarios through the actual Nginx ingress against built Java Gateway/Catalog and the approved Industrial FastAPI deployment. Record admitted/429/503 counts, concurrency, RPS, limiter and end-to-end P50/P95/P99, Redis CPU/memory, resource limits, topology, persistence, rates and recovery. Do not substitute the synthetic standard Compose API's process-local bucket for Industrial Redis behavior.

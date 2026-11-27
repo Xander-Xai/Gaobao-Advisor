@@ -52,6 +52,7 @@ dated audit records remain historical snapshots and should not be read as live s
 - [Session snapshot validation](validation/session-compaction-snapshot-20261124.md)
 - [Performance studies](performance/)
 - [Security implementation notes](security/)
+- [Industrial public HTTP admission](security/industrial-public-http-admission.md)
 - [Historical audits](audits/) and [governance snapshots](governance/)
 - [Reference-project governance review](governance/engineering-reference-review-2026-11-26.md)
 
