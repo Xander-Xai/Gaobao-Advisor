@@ -32,6 +32,7 @@ def test_industrial_worker_and_api_share_admission_profile():
     api = services["api"]["environment"]
     worker = services["worker"]["environment"]
     assert api["GAOBAO_RUNTIME_PROFILE"] == "industrial"
+    assert "TRUSTED_PROXIES" in api and "${TRUSTED_PROXIES:?" in api["TRUSTED_PROXIES"]
     assert all(worker.get(key) == value for key, value in api.items())
     assert "env_file" not in services["worker"]
 
