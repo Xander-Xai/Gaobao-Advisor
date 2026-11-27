@@ -504,12 +504,8 @@ def verify_redis_down():
     urls = gateway_urls()
     for base in urls:
         require_status(base + "/actuator/health/readiness", 503, attempts=30)
-        try:
-            code, _, _ = http(base + "/api/v1/catalog/schools?limit=1", timeout=12)
-            assert code >= 500, f"Redis unavailable but gateway returned {code}"
-        except (urllib.error.URLError, TimeoutError, OSError):
-            # Hard failure / closed connection is also fail-closed (never 200).
-            pass
+        code, _, body = http(base + "/api/v1/catalog/schools?limit=1", timeout=12)
+        assert code == 503, f"Redis unavailable must return 503, got {code}: {body[:300]}"
     print("Redis outage: readiness non-200 and catalog rate limit fails closed: PASS")
 
 
