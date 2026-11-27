@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import time
 import urllib.error
@@ -16,11 +17,12 @@ import urllib.request
 from urllib.parse import urlencode
 
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+BASE_URL = os.getenv("GAOBAO_RATE_LIMIT_BASE_URL", "http://127.0.0.1").rstrip("/")
 COMPOSE = [
     "docker",
     "compose",
     "--project-name",
-    "gaobao-java-smoke",
+    os.getenv("GAOBAO_RATE_LIMIT_COMPOSE_PROJECT", "gaobao-java-smoke"),
     "--env-file",
     ".env.full",
     "-f",
@@ -36,10 +38,19 @@ COMPOSE = [
 ]
 
 
-def http(url: str, *, data: dict | None = None, token: str | None = None, timeout: int = 15):
+def http(
+    url: str,
+    *,
+    data: dict | None = None,
+    token: str | None = None,
+    timeout: int = 15,
+    extra_headers: dict[str, str] | None = None,
+):
     headers = {"Content-Type": "application/json"} if data is not None else {}
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
+    if extra_headers is not None:
+        headers.update(extra_headers)
     req = urllib.request.Request(
         url,
         data=json.dumps(data).encode("utf-8") if data is not None else None,
@@ -108,7 +119,7 @@ def require_status(url: str, expected: int, *, attempts: int = 30):
 
 
 def verify_session_sse():
-    base = "http://127.0.0.1"
+    base = BASE_URL
     first = {
         "session_id": "caller-controlled-id",
         "message": "你好",
@@ -146,7 +157,7 @@ def verify_session_sse():
 
 def verify_catalog_api_parity():
     """Compare Java and Python read models against the SAME live MySQL data."""
-    root = "http://127.0.0.1"
+    root = BASE_URL
     fields = (
         "id",
         "name",
@@ -281,7 +292,7 @@ def verify_nginx_replica_ha():
     addrs = {url.removeprefix("http://").removesuffix(":8080") for url in urls}
     assert len(addrs) == 2, urls
     marker = "ha" + str(time.time_ns())
-    base = "http://127.0.0.1"
+    base = BASE_URL
 
     # Load phases leave the Python API briefly unresponsive; gate HA probes on
     # full-stack readiness instead of failing on post-load recovery latency.
@@ -365,14 +376,29 @@ def verify_distributed_rate_limit():
     responses = []
     for i in range(20):
         replica = i % 2
-        code, _, _ = http(urls[replica] + "/api/v1/catalog/schools?limit=1")
-        responses.append((replica, code))
-    assert all(any(r == i and c == 200 for r, c in responses) for i in (0, 1)), responses
-    assert all(any(r == i and c == 429 for r, c in responses) for i in (0, 1)), responses
-    allowed = sum(code == 200 for _, code in responses)
+        code, headers, _ = http(
+            urls[replica] + "/api/v1/catalog/schools?limit=1",
+            extra_headers={"X-Forwarded-For": f"203.0.113.{i + 1}"},
+        )
+        responses.append((replica, code, headers))
+    assert all(any(r == i and c == 200 for r, c, _ in responses) for i in (0, 1)), responses
+    assert all(any(r == i and c == 429 for r, c, _ in responses) for i in (0, 1)), responses
+    allowed = sum(code == 200 for _, code, _ in responses)
     assert 2 <= allowed <= 12, responses
-    assert all(code in (200, 429) for _, code in responses), responses
+    assert all(code in (200, 429) for _, code, _ in responses), responses
+    rejected = [(code, headers) for _, code, headers in responses if code == 429]
+    assert rejected and all(int(headers.get("Retry-After", "0")) >= 1 for _, headers in rejected), rejected
     print(f"Two independent gateway replicas share Redis 429 budget: PASS ({allowed}/20 allowed)")
+
+
+def verify_industrial_ingress():
+    probe = f"rate-limit-ws-{time.time_ns()}"
+    code, _, body = http(BASE_URL + f"/ws/call?probe={probe}", timeout=8)
+    assert code == 404, (code, body[:200])
+    logs = subprocess.check_output(COMPOSE + ["logs", "--no-color", "nginx"], text=True)
+    entries = [line for line in logs.splitlines() if probe in line]
+    assert entries and all("status=404" in line and "upstream_status=-" in line for line in entries), entries
+    print("Industrial Nginx rejects the compatibility WebSocket route without proxying: PASS (404, no upstream)")
 
 
 def verify_redis_down():
@@ -423,7 +449,7 @@ def verify_mysql_down():
         text=True,
     ).strip()
     require_status(f"http://{ip}:8081/actuator/health/readiness", 503, attempts=25)
-    code, _, _ = http("http://127.0.0.1/api/v1/catalog/schools?limit=1", timeout=20)
+    code, _, _ = http(BASE_URL + "/api/v1/catalog/schools?limit=1", timeout=20)
     assert code >= 500, f"Catalog answered successfully during MySQL outage: {code}"
     print("MySQL outage: catalog readiness + public query fail closed: PASS")
 
@@ -442,8 +468,8 @@ def verify_mysql_restored():
         text=True,
     ).strip()
     require_status(f"http://{ip}:8081/actuator/health/readiness", 200, attempts=70)
-    require_status("http://127.0.0.1/api/v1/data/overview", 200, attempts=45)
-    require_status("http://127.0.0.1/api/v1/catalog/schools?limit=1", 200, attempts=45)
+    require_status(BASE_URL + "/api/v1/data/overview", 200, attempts=45)
+    require_status(BASE_URL + "/api/v1/catalog/schools?limit=1", 200, attempts=45)
     print("MySQL restart: Python and Java catalog recover: PASS")
 
 
@@ -455,6 +481,7 @@ def main():
             "sse",
             "parity",
             "reader",
+            "ingress",
             "distributed",
             "ha",
             "redis-down",
@@ -468,6 +495,7 @@ def main():
         "sse": verify_session_sse,
         "parity": verify_catalog_api_parity,
         "reader": verify_reader_privileges,
+        "ingress": verify_industrial_ingress,
         "ha": verify_nginx_replica_ha,
         "distributed": verify_distributed_rate_limit,
         "redis-down": verify_redis_down,

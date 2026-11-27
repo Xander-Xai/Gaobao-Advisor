@@ -76,6 +76,25 @@ def test_generic_trusted_proxies_are_honoured(monkeypatch):
     assert resolve_client_ip(request) == "198.51.100.1"
 
 
+def test_trusted_proxy_chain_uses_nearest_untrusted_hop_not_leftmost_xff(monkeypatch):
+    from starlette.requests import Request
+
+    from server.admin.client_ip import resolve_client_ip
+
+    monkeypatch.delenv("ADMIN_TRUSTED_PROXIES", raising=False)
+    monkeypatch.setenv("TRUSTED_PROXIES", "10.0.0.0/8")
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [(b"x-forwarded-for", b"203.0.113.99, 198.51.100.10, 10.1.2.3")],
+            "client": ("10.2.3.4", 12345),
+        }
+    )
+    assert resolve_client_ip(request) == "198.51.100.10"
+
+
 def test_untrusted_peer_ignores_forwarded_header(monkeypatch):
     from starlette.requests import Request
 

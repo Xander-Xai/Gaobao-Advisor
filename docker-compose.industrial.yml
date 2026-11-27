@@ -15,6 +15,7 @@ services:
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:?explicit managed MySQL required}
       REDIS_URL: ${REDIS_URL:?explicit managed Redis required}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:?exact CIDRs for the Gateway and immediate ingress proxies required}
       GAOBAO_DATA_APPROVAL_REF: ${GAOBAO_DATA_APPROVAL_REF:?data authorization reference required}
       GAOBAO_ADMISSIONS_YEAR: ${GAOBAO_ADMISSIONS_YEAR:?approved historical data year required}
       GAOBAO_ADMISSIONS_MANIFEST_PATH: /run/admissions/manifest.json
@@ -50,6 +51,7 @@ services:
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:?explicit managed MySQL required}
       REDIS_URL: ${REDIS_URL:?explicit managed Redis required}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:?exact CIDRs for the Gateway and immediate ingress proxies required}
       GAOBAO_DATA_APPROVAL_REF: ${GAOBAO_DATA_APPROVAL_REF:?data authorization reference required}
       GAOBAO_ADMISSIONS_YEAR: ${GAOBAO_ADMISSIONS_YEAR:?approved historical data year required}
       GAOBAO_ADMISSIONS_MANIFEST_PATH: /run/admissions/manifest.json

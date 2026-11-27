@@ -5,6 +5,7 @@ This is a release-candidate guard, not evidence of production acceptance.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 from collections.abc import Mapping
@@ -33,6 +34,17 @@ def validate_industrial_config(env: Mapping[str, str]) -> None:
     for name, value in required.items():
         if env.get(name, "").strip().lower() != value:
             raise RuntimeError(f"Industrial profile requires {name}={value}")
+    trusted_proxy_raw = env.get("ADMIN_TRUSTED_PROXIES", "").strip() or env.get("TRUSTED_PROXIES", "").strip()
+    proxy_networks = [item.strip() for item in trusted_proxy_raw.split(",") if item.strip()]
+    if not proxy_networks:
+        raise RuntimeError("Industrial profile requires explicit trusted proxy CIDRs")
+    for network in proxy_networks:
+        try:
+            parsed_network = ipaddress.ip_network(network, strict=False)
+        except ValueError as exc:
+            raise RuntimeError("Industrial profile has an invalid trusted proxy CIDR") from exc
+        if parsed_network.prefixlen == 0:
+            raise RuntimeError("Industrial profile rejects a world-wide trusted proxy CIDR")
     if not env.get("DATABASE_URL", "").startswith(("mysql://", "mysql+pymysql://")):
         raise RuntimeError("Industrial profile requires explicit MySQL DATABASE_URL")
     if not env.get("REDIS_URL", "").startswith(("redis://", "rediss://")):

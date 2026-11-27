@@ -23,6 +23,7 @@ def config():
         "ADMISSIONS_RESEARCH_ENABLED": "false",
         "DATABASE_URL": "mysql+pymysql://user@mysql/gaobao",
         "REDIS_URL": "redis://redis:6379/0",
+        "TRUSTED_PROXIES": "172.28.0.0/24",
         "GAOBAO_DATA_APPROVAL_REF": "internal-review-1",
         "GAOBAO_ADMISSIONS_YEAR": "2025",
         "GAOBAO_ADMISSIONS_MANIFEST_PATH": "/fixture/manifest.json",
@@ -39,6 +40,10 @@ def test_explicit_config(config):
     [
         ("DATABASE_URL", "sqlite:///demo.db"),
         ("REDIS_URL", ""),
+        ("TRUSTED_PROXIES", ""),
+        ("TRUSTED_PROXIES", "not-a-network"),
+        ("TRUSTED_PROXIES", "0.0.0.0/0"),
+        ("TRUSTED_PROXIES", "::/0"),
         ("GAOBAO_DATA_APPROVAL_REF", ""),
         ("GAOBAO_ADMISSIONS_YEAR", ""),
         ("GAOBAO_ADMISSIONS_MANIFEST_PATH", ""),
