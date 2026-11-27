@@ -136,7 +136,12 @@ class RedisTokenBucketLimiter:
             allowed, retry_after = int(result[0]), int(result[1])
         except (TypeError, ValueError) as exc:
             raise SecurityBackendUnavailable("Invalid public rate-limit decision") from exc
-        if allowed not in (0, 1) or retry_after < 0 or (allowed == 1 and retry_after != 0):
+        if (
+            allowed not in (0, 1)
+            or retry_after < 0
+            or (allowed == 1 and retry_after != 0)
+            or (allowed == 0 and retry_after < 1)
+        ):
             raise SecurityBackendUnavailable("Invalid public rate-limit decision")
         return allowed == 1, retry_after
 

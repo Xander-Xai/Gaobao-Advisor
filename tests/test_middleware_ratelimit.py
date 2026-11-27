@@ -220,3 +220,28 @@ def test_industrial_middleware_rejects_malformed_redis_decision(monkeypatch):
 
     with TestClient(app) as client:
         assert client.get("/ping").status_code == 503
+
+
+def test_redis_limiter_rejects_non_actionable_retry_values():
+    import pytest
+
+    from server.admin.limits import SecurityBackendUnavailable
+    from server.middleware.ratelimit import RedisTokenBucketLimiter
+
+    class FakeRedis:
+        def __init__(self, result):
+            self.result = result
+
+        def eval(self, *args):
+            return self.result
+
+    for result in ([0, 0], [0, -1], [1, 1], [2, 1]):
+        limiter = RedisTokenBucketLimiter(
+            url="redis://unused",
+            secret="test-secret",
+            rate=1,
+            capacity=1,
+            client=FakeRedis(result),
+        )
+        with pytest.raises(SecurityBackendUnavailable):
+            limiter.check("198.51.100.1")
