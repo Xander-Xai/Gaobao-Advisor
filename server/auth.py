@@ -127,3 +127,17 @@ def require_session_auth(session_id: str, authorization: str | None) -> None:
         raise HTTPException(status_code=401, detail="Missing session token")
     if not verify_session_token(session_id, token):
         raise HTTPException(status_code=401, detail="Invalid or expired session token")
+
+
+def subject_fingerprint(subject: str) -> str:
+    """Return a stable, non-reversible id for a pseudonymous subject.
+
+    The subject is a client-supplied identifier that separates one person's
+    cross-task memory from another's. It is deliberately *not* a verified
+    identity: the fingerprint only proves that the same subject string was
+    presented again. It is derived with the server secret so that the raw
+    subject never has to be stored.
+    """
+    if not isinstance(subject, str) or not subject.strip():
+        raise ValueError("Subject must be non-empty text")
+    return hmac.new(_get_secret(), subject.strip().encode("utf-8"), hashlib.sha256).hexdigest()

@@ -528,6 +528,7 @@ async def chat(
     request: ChatRequest,
     authorization: str | None = Header(None),
     x_user_memory_token: str | None = Header(None),
+    x_user_memory_subject: str | None = Header(None),
     idempotency_key: str | None = Header(None, alias="Idempotency-Key"),
 ):
     """Anonymous clients get a *new server-owned* session; existing sessions need proof.
@@ -568,8 +569,10 @@ async def chat(
     if x_user_memory_token is not None:
         from server.user_memory import MemoryDisabled, MemoryUnauthorized, list_memories
 
+        if x_user_memory_subject is None:
+            raise HTTPException(status_code=401, detail="Missing memory subject")
         try:
-            memory_items = await asyncio.to_thread(list_memories, x_user_memory_token)
+            memory_items = await asyncio.to_thread(list_memories, x_user_memory_token, x_user_memory_subject)
         except MemoryDisabled as exc:
             raise HTTPException(status_code=503, detail="User memory is not enabled") from exc
         except MemoryUnauthorized as exc:

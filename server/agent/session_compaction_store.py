@@ -42,6 +42,29 @@ def snapshot_encryption_key() -> bytes | None:
     return bytes.fromhex(raw)
 
 
+def snapshot_encryption_keyring() -> list[bytes]:
+    """Return the active snapshot key followed by retired, read-only keys.
+
+    Rotation keeps the retired key in ``GAOBAO_CHAT_SNAPSHOT_PREVIOUS_KEYS`` so
+    that already stored summaries stay readable; new snapshots are always
+    written with the active key.
+    """
+    active = snapshot_encryption_key()
+    if active is None:
+        return []
+    ring = [active]
+    for chunk in os.getenv("GAOBAO_CHAT_SNAPSHOT_PREVIOUS_KEYS", "").split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if not re.fullmatch(r"[a-fA-F0-9]{64}", chunk):
+            raise RuntimeError("Retired snapshot encryption key must contain 64 hex characters")
+        material = bytes.fromhex(chunk)
+        if material not in ring:
+            ring.append(material)
+    return ring
+
+
 def validate_snapshot_startup() -> None:
     enabled = os.getenv("GAOBAO_CHAT_SNAPSHOT_ENABLED", "false").strip().lower()
     if enabled not in {"1", "true", "yes", "on"}:
@@ -96,13 +119,26 @@ class SessionCompactionStore:
     """Inject a Session factory to support SQLite and MySQL without global state."""
 
     def __init__(
-        self, session_factory: Callable[[], Session], *, ttl_hours: int = 24, encryption_key: bytes | None = None
+        self,
+        session_factory: Callable[[], Session],
+        *,
+        ttl_hours: int = 24,
+        encryption_key: bytes | None = None,
+        encryption_keys: list[bytes] | None = None,
     ):
         if type(ttl_hours) is not int or not 1 <= ttl_hours <= 168:
             raise ValueError("Snapshot TTL must be 1..168 hours")
         self.session_factory = session_factory
         self.ttl_hours = ttl_hours
-        self.cipher = AESGCM(encryption_key) if encryption_key is not None else None
+        if encryption_keys:
+            self.ciphers = [AESGCM(key) for key in encryption_keys]
+        else:
+            self.ciphers = [AESGCM(encryption_key)] if encryption_key is not None else []
+
+    @property
+    def cipher(self) -> AESGCM | None:
+        """The active cipher; older snapshots may need a retired key."""
+        return self.ciphers[0] if self.ciphers else None
 
     @staticmethod
     def _aad(conversation_id: int, covered_count: int, covered_sha256: str, policy_sha256: str) -> bytes:
@@ -112,27 +148,34 @@ class SessionCompactionStore:
         ).encode()
 
     def _encode_summary(self, summary: str, aad: bytes) -> str:
-        if self.cipher is None:
+        cipher = self.cipher
+        if cipher is None:
             return summary
         nonce = os.urandom(12)
-        encrypted = self.cipher.encrypt(nonce, summary.encode("utf-8"), aad)
+        encrypted = cipher.encrypt(nonce, summary.encode("utf-8"), aad)
         return _ENCRYPTED_PREFIX + base64.b64encode(nonce + encrypted).decode("ascii")
 
     def _decode_summary(self, row: SessionCompactionSnapshot) -> str | None:
         value = row.summary
         if not isinstance(value, str):
             return None
-        if self.cipher is None:
+        if not self.ciphers:
             return value if not value.startswith(_ENCRYPTED_PREFIX) and 1 <= len(value.strip()) <= 4000 else None
         if not value.startswith(_ENCRYPTED_PREFIX) or len(value) > 25000:
             return None
         try:
             raw = base64.b64decode(value[len(_ENCRYPTED_PREFIX) :], validate=True)
             aad = self._aad(row.conversation_id, row.covered_count, row.covered_sha256, row.policy_sha256)
-            summary = self.cipher.decrypt(raw[:12], raw[12:], aad).decode("utf-8")
-        except (InvalidTag, ValueError):
+        except (ValueError, TypeError):
             return None
-        return summary if 1 <= len(summary.strip()) <= 4000 else None
+        nonce, sealed = raw[:12], raw[12:]
+        for cipher in self.ciphers:
+            try:
+                summary = cipher.decrypt(nonce, sealed, aad).decode("utf-8")
+            except (InvalidTag, ValueError, UnicodeDecodeError):
+                continue
+            return summary if 1 <= len(summary.strip()) <= 4000 else None
+        return None
 
     @staticmethod
     def _check_id(session_id: str) -> None:

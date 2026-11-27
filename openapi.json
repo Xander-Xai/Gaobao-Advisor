@@ -147,6 +147,22 @@
             }
           },
           {
+            "name": "x-user-memory-subject",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Subject"
+            }
+          },
+          {
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
@@ -2893,12 +2909,50 @@
         "summary": "Create Memory Vault",
         "description": "User explicitly creates an independent identity for future tasks.",
         "operationId": "create_memory_vault_api_v1_memory_vault_post",
+        "parameters": [
+          {
+            "name": "x-user-memory-subject",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Subject"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryVaultCreate"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -2925,6 +2979,22 @@
                 }
               ],
               "title": "X-User-Memory-Token"
+            }
+          },
+          {
+            "name": "x-user-memory-subject",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Subject"
             }
           }
         ],
@@ -2972,6 +3042,98 @@
                 }
               ],
               "title": "X-User-Memory-Token"
+            }
+          },
+          {
+            "name": "x-user-memory-subject",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Subject"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memory/audit": {
+      "get": {
+        "tags": [
+          "user-memory"
+        ],
+        "summary": "List Memory Audit",
+        "description": "Owner-visible metadata audit trail (events only; never values).",
+        "operationId": "list_memory_audit_api_v1_memory_audit_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "x-user-memory-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Token"
+            }
+          },
+          {
+            "name": "x-user-memory-subject",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Subject"
             }
           }
         ],
@@ -3028,6 +3190,22 @@
                 }
               ],
               "title": "X-User-Memory-Token"
+            }
+          },
+          {
+            "name": "x-user-memory-subject",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Subject"
             }
           }
         ],
@@ -3104,6 +3282,22 @@
               ],
               "title": "X-User-Memory-Token"
             }
+          },
+          {
+            "name": "x-user-memory-subject",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Subject"
+            }
           }
         ],
         "responses": {
@@ -3150,6 +3344,22 @@
                 }
               ],
               "title": "X-User-Memory-Token"
+            }
+          },
+          {
+            "name": "x-user-memory-subject",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Memory-Subject"
             }
           }
         ],
@@ -6004,6 +6214,19 @@
           "query"
         ],
         "title": "KnowledgeSearchRequest"
+      },
+      "MemoryVaultCreate": {
+        "properties": {
+          "consent": {
+            "type": "boolean",
+            "title": "Consent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "consent"
+        ],
+        "title": "MemoryVaultCreate"
       },
       "MemoryWrite": {
         "properties": {

@@ -88,7 +88,7 @@ def test_fresh_mysql_upgrade_seed_and_idempotency(mysql_engine):
     assert repeat.returncode == 0, repeat.stderr
     with mysql_engine.connect() as connection:
         assert connection.execute(text("SELECT COUNT(*) FROM schools")).scalar_one() == 8
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261125_0009"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261127_0010"
 
 
 def test_existing_create_all_schema_is_adopted_without_data_loss(mysql_engine):
@@ -109,7 +109,7 @@ def test_existing_create_all_schema_is_adopted_without_data_loss(mysql_engine):
         assert (
             connection.execute(text("SELECT COUNT(*) FROM schools WHERE name='mysql-adopt-marker'")).scalar_one() == 1
         )
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261125_0009"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "20261127_0010"
     assert verify_tables(mysql_engine, ALL_TABLES) == []
 
 
@@ -122,6 +122,9 @@ def test_adopt_existing_rejects_index_drift(mysql_engine):
     assert "missing index ix_schools_province" in result.stderr
 
 
+_SUBJECT = "sub_mysql_subject_0001"
+
+
 @pytest.fixture
 def mysql_memory(mysql_engine, monkeypatch):
     """Use only the guarded disposable MySQL schema and real transactions."""
@@ -131,6 +134,7 @@ def mysql_memory(mysql_engine, monkeypatch):
 
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("USER_MEMORY_ENABLED", "true")
+    monkeypatch.setenv("USER_MEMORY_ENCRYPTION_KEY", "33" * 32)
     monkeypatch.setattr(memory, "get_session", sessionmaker(bind=mysql_engine))
     return memory
 
@@ -140,14 +144,14 @@ def test_mysql_concurrent_memory_cas_has_exactly_one_winner(mysql_memory):
     from threading import Barrier
 
     memory = mysql_memory
-    token = memory.create_vault()["memory_token"]
-    initial = memory.put_memory(token, "preferred_regions", "华南", expected_version=0)
+    token = memory.create_vault(_SUBJECT, consent=True)["memory_token"]
+    initial = memory.put_memory(token, "preferred_regions", "华南", subject=_SUBJECT, expected_version=0)
     barrier = Barrier(2, timeout=10)
 
     def attempt(value):
         barrier.wait()
         try:
-            return memory.put_memory(token, "preferred_regions", value, expected_version=initial["version"])
+            return memory.put_memory(token, "preferred_regions", value, subject=_SUBJECT, expected_version=initial["version"])
         except memory.MemoryConflict:
             return None
 
@@ -159,40 +163,40 @@ def test_mysql_concurrent_memory_cas_has_exactly_one_winner(mysql_memory):
     winners = [result for result in results if result is not None]
     assert len(winners) == 1
     assert winners[0]["version"] == initial["version"] + 1
-    assert memory.list_memories(token) == winners
+    assert memory.list_memories(token, _SUBJECT) == winners
 
 
 def test_mysql_rotation_rejects_stale_token_and_preserves_monotonic_revision(mysql_memory):
     memory = mysql_memory
-    old_token = memory.create_vault()["memory_token"]
+    old_token = memory.create_vault(_SUBJECT, consent=True)["memory_token"]
     initial = memory.put_memory(old_token, "preferred_regions", "华南", expected_version=0)
-    token = memory.rotate_token(old_token)["memory_token"]
+    token = memory.rotate_token(old_token, _SUBJECT)["memory_token"]
 
     with pytest.raises(memory.MemoryUnauthorized):
-        memory.put_memory(old_token, "preferred_regions", "华北", expected_version=initial["version"])
+        memory.put_memory(old_token, "preferred_regions", "华北", subject=_SUBJECT, expected_version=initial["version"])
     with pytest.raises(memory.MemoryUnauthorized):
-        memory.delete_memory(old_token, "preferred_regions", expected_version=initial["version"])
+        memory.delete_memory(old_token, "preferred_regions", subject=_SUBJECT, expected_version=initial["version"])
     with pytest.raises(memory.MemoryUnauthorized):
-        memory.erase_vault(old_token)
+        memory.erase_vault(old_token, _SUBJECT)
 
-    memory.delete_memory(token, "preferred_regions", expected_version=initial["version"])
-    recreated = memory.put_memory(token, "preferred_regions", "西南", expected_version=0)
+    memory.delete_memory(token, "preferred_regions", subject=_SUBJECT, expected_version=initial["version"])
+    recreated = memory.put_memory(token, "preferred_regions", "西南", subject=_SUBJECT, expected_version=0)
     assert recreated["version"] > initial["version"]
     with pytest.raises(memory.MemoryConflict):
-        memory.put_memory(token, "preferred_regions", "过时", expected_version=initial["version"])
+        memory.put_memory(token, "preferred_regions", "过时", subject=_SUBJECT, expected_version=initial["version"])
     with pytest.raises(memory.MemoryConflict):
-        memory.delete_memory(token, "preferred_regions", expected_version=initial["version"])
-    assert memory.list_memories(token) == [recreated]
+        memory.delete_memory(token, "preferred_regions", subject=_SUBJECT, expected_version=initial["version"])
+    assert memory.list_memories(token, _SUBJECT) == [recreated]
 
 
 def test_mysql_token_rotation_waits_for_credential_row_lock(mysql_memory, mysql_engine):
     from sqlalchemy.exc import OperationalError
 
     memory = mysql_memory
-    token = memory.create_vault()["memory_token"]
+    token = memory.create_vault(_SUBJECT, consent=True)["memory_token"]
     factory = sessionmaker(bind=mysql_engine)
     with factory() as first, factory() as second:
-        owner = memory._owner(first, token, write=True)
+        owner = memory._owner(first, token, _SUBJECT, write=True)
         try:
             previous = second.execute(text("SELECT @@SESSION.innodb_lock_wait_timeout")).scalar_one()
             second.execute(text("SET SESSION innodb_lock_wait_timeout=1"))
@@ -210,5 +214,5 @@ def test_mysql_token_rotation_waits_for_credential_row_lock(mysql_memory, mysql_
         finally:
             first.rollback()
 
-    rotated = memory.rotate_token(token)["memory_token"]
-    assert memory.put_memory(rotated, "career_goal", "软件工程", expected_version=0)["version"] == 1
+    rotated = memory.rotate_token(token, _SUBJECT)["memory_token"]
+    assert memory.put_memory(rotated, "career_goal", "软件工程", subject=_SUBJECT, expected_version=0)["version"] == 1

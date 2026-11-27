@@ -48,7 +48,7 @@ ADMIN_TABLES: tuple[str, ...] = (
 
 SECURITY_TABLES: tuple[str, ...] = ("admin_token_revocations",)
 METADATA_TABLES: tuple[str, ...] = ("dataset_snapshots", "session_compaction_snapshots")
-USER_MEMORY_TABLES: tuple[str, ...] = ("user_memory_vaults", "user_memory_entries")
+USER_MEMORY_TABLES: tuple[str, ...] = ("user_memory_vaults", "user_memory_entries", "user_memory_audit")
 
 # The legacy baseline that existed before 20261031_0003. ``adopt-existing``
 # must accept older create_all databases that lack the revocation and dataset

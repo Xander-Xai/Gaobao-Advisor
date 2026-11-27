@@ -16,9 +16,13 @@ services:
       SYNTHETIC_TASKRUN_JOURNAL: ${SYNTHETIC_TASKRUN_JOURNAL:-/app/data/synthetic-taskruns.sqlite}
       # Explicit opt-in for preference writes; production still rejects this experimental API.
       USER_MEMORY_ENABLED: ${USER_MEMORY_ENABLED:-false}
+      # Preference values are encrypted at rest; production must set the key explicitly.
+      USER_MEMORY_ENCRYPTION_KEY: ${USER_MEMORY_ENCRYPTION_KEY:-}
+      USER_MEMORY_ENCRYPTION_PREVIOUS_KEYS: ${USER_MEMORY_ENCRYPTION_PREVIOUS_KEYS:-}
       # Summary may use a configured provider; keep it and plaintext snapshots opt-in.
       GAOBAO_CHAT_COMPACTION_ENABLED: ${GAOBAO_CHAT_COMPACTION_ENABLED:-false}
       GAOBAO_CHAT_SNAPSHOT_ENABLED: ${GAOBAO_CHAT_SNAPSHOT_ENABLED:-false}
+      GAOBAO_CHAT_SNAPSHOT_PREVIOUS_KEYS: ${GAOBAO_CHAT_SNAPSHOT_PREVIOUS_KEYS:-}
     volumes:
       # Named volume avoids host-UID/bind-mount permission failures while
       # keeping the synthetic database across container restarts.

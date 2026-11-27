@@ -29,6 +29,10 @@ dated audit records remain historical snapshots and should not be read as live s
   session-owned request and report behavior.
 - [API reference](../openapi.yaml) / [JSON schema](../openapi.json) — generated
   OpenAPI contract; a running service also exposes `/docs`.
+- [Layered memory production governance](architecture/memory-production-governance-20261127.md) —
+  four memory layers, data flow, storage and permission matrices, production gates.
+- [Cross-task user memory contract](cross-task-user-memory.md) — subject-bound
+  vault, encryption, consent, audit and deletion behavior.
 - [Database schema matrix](database-schema-matrix.md)
 - [ADRs](superpowers/adr/) — recorded architecture decisions.
 
@@ -50,6 +54,8 @@ dated audit records remain historical snapshots and should not be read as live s
 - [Harness and business acceptance snapshot, 2026-11-26](validation/harness-business-acceptance-20261126.md)
 - [Context/provider budget evaluation](validation/context-ab-provider-budget.md)
 - [Session snapshot validation](validation/session-compaction-snapshot-20261124.md)
+- [Memory evaluation report, 2026-11-27](evaluation/memory-eval-20261127.md) —
+  four-arm controlled comparison; synthetic evidence only, real-model result NOT_MEASURED.
 - [Performance studies](performance/)
 - [Security implementation notes](security/)
 - [Historical audits](audits/) and [governance snapshots](governance/)

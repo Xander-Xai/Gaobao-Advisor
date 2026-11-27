@@ -29,6 +29,7 @@ These states describe separate questions and may coexist:
 | Approved research execution | `server/routes/admissions_research_runs.py` → `server/agent/admissions_research_taskrun.py` → dedicated worker → `server/agent/admissions_deepagents.py` | Managed TaskRun, approval and evidence-integrity tests; optional SDK no-network CI smoke | IMPLEMENTED / INTEGRATED; real provider/data and operational deployment NOT_MEASURED |
 | SQL/RAG and provenance | MySQL/SQLAlchemy, `server/services/rag.py`, BM25 and optional configured embeddings | CI tests, redistribution gate and source/row-lineage regressions | VERIFIED against bundled synthetic data; genuine data rights and source correctness need external review |
 | Context and session snapshots | `server/agent/chat_context.py`, encrypted SQL snapshot path and explicit opt-in preference vault | Unit/integration regressions and standard local Compose CI | IMPLEMENTED / INTEGRATED; personal-data privacy acceptance and real-user value NOT_MEASURED |
+| Layered memory governance (2026-11-27) | `server/agent/memory_evidence.py`, `server/user_memory_policy.py`, `server/user_memory_crypto.py`, `server/user_memory.py`, `server/routes/user_memory.py` | `tests/test_cross_task_user_memory.py`, `tests/test_memory_evidence_governance.py`, `tests/test_memory_eval_suite.py`, `benchmarks/memory_eval.py`; see [architecture](architecture/memory-production-governance-20261127.md) | IMPLEMENTED / INTEGRATED / VERIFIED for synthetic behavior: subject-bound vault, AES-GCM at rest with key rotation, consent + metadata audit, field allowlist with sensitive-data refusal, worker expiry cleanup, evidence anchors and summary fact quarantine |
 | Skills and Sandbox | `skills/gaokao/`; bounded admissions analysis sandbox and separate coding fixtures | Synthetic safety tests and CI Docker isolation probes | IMPLEMENTED; bounded test scope VERIFIED; production multi-tenant isolation NOT validated |
 | Agent Eval and optimizer gates | `benchmarks/`, independent SQL/gold checks and review-only optimization registry | CI artifacts are synthetic/scripted, with short retention | IMPLEMENTED / VERIFIED for the stated fixtures; real model outcome, cost and improvement NOT_MEASURED |
 | Full-stack application | Vue 3, FastAPI, Java Gateway/Catalog, MySQL, Redis, Worker and Compose | Exact-release SHA CI and Java Services workflow; local Java/Gateway standard topology run | IMPLEMENTED / INTEGRATED / MERGED / VERIFIED for synthetic behavior; no production deployment claim |
@@ -58,7 +59,7 @@ copying a SHA into additional documents as a live pointer.
 | Acceptance | Status | Required evidence / owner dependency |
 |---|---|---|
 | E1: real provider experiment on frozen synthetic business cases | BLOCKED / NOT_MEASURED | Explicit provider/model authorization, operator-managed key and budget; complete runs, usage, failure denominator and independently checked results |
-| E2: Context / Skills / Memory comparison | BLOCKED / NOT_MEASURED | Same approved model/version, frozen independent cases, controlled single-variable arms, complete cost/latency/quality receipts and independent review |
+| E2: Context / Skills / Memory comparison | PARTIAL (synthetic arms) / NOT_MEASURED (real model) | Offline four-arm comparison exists (`docs/evaluation/memory-eval-20261127.md`, SYNTHETIC only). Still required: same approved model/version, complete provider token/cost receipts, human review of the pending worksheet and independent review |
 | E3: authorized real admissions data and independent gold | BLOCKED | Data rights and version manifest, independently prepared/reviewed gold, operator approval and protected data environment |
 | E4: production-like deployment and UAT | BLOCKED | Authorized environment, privacy/security review, TLS/credential controls, backup/restore and failure recovery, actual user acceptance and operational sign-off |
 
@@ -72,6 +73,10 @@ close these gates.
   E3: real-provider business evaluation and authorized admissions evidence.
 - [#147](https://github.com/Xander-Xai/Gaobao-Advisor/issues/147) owns E2 and
   E4: controlled context/harness comparisons and production-like acceptance.
+- The 2026-11-27 memory production audit tracks the remaining memory gates
+  (real identity binding, backup retention, real-model memory effect) in
+  `docs/audits/2026-11-27-memory-production-audit.md`; cross-task user memory
+  stays production-disabled until those gates are closed.
 - [#204](https://github.com/Xander-Xai/Gaobao-Advisor/issues/204) records the
   user-facing research integration; implementation is merged, while enabled
   environment acceptance remains pending and is not a real-model result.

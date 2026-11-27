@@ -1,10 +1,11 @@
 <template>
   <section class="mt-6 space-y-3 border-t border-gray-200 pt-4 text-sm" data-testid="user-memory-panel">
     <h3 class="font-semibold">跨对话偏好记忆</h3>
-    <p class="text-xs text-gray-500">仅保存你主动确认的偏好。不是招生事实，不自动记录聊天。功能默认关闭，需服务端启用。</p>
+    <p class="text-xs text-gray-500">仅保存你主动确认的偏好。不是招生事实，不自动记录聊天，不保存分数、证件或联系方式。功能默认关闭，需服务端启用。</p>
     <p v-if="error" role="alert" class="text-xs text-red-700">{{ error }}</p>
     <template v-if="!credential">
-      <button type="button" :disabled="busy || chat.isStreaming" class="rounded border px-2 py-1" @click="create">创建独立记忆库</button>
+      <label class="flex items-start gap-2 text-xs"><input v-model="consent" type="checkbox" />我同意在本机保存以下偏好，用于后续对话的个性化表达；可随时删除或撤销。</label>
+      <button type="button" :disabled="busy || chat.isStreaming || !consent" class="rounded border px-2 py-1" @click="create">创建独立记忆库</button>
       <label class="block text-xs">已有记忆凭证（仅保留在当前页面内存）
         <input v-model.trim="inputToken" type="password" autocomplete="off" class="w-full rounded border p-2" />
       </label>
@@ -18,7 +19,7 @@
       </details>
       <ul class="space-y-2">
         <li v-for="item in items" :key="item.key" class="rounded border p-2">
-          <p class="text-xs text-gray-500">{{ labels[item.key] || item.key }} · 有效期 {{ item.expires_at }}</p>
+          <p class="text-xs text-gray-500">{{ labels[item.key] || item.key }} · 有效期 {{ item.expires_at }} · {{ item.storage === 'ENCRYPTED' ? '已加密存储' : '历史明文条目' }}</p>
           <p class="break-all">{{ item.value }}</p>
           <button type="button" :disabled="busy || chat.isStreaming" class="text-xs underline" @click="remove(item)">删除该偏好</button>
         </li>
@@ -29,7 +30,7 @@
             <option v-for="(label, id) in labels" :key="id" :value="id">{{ label }}</option>
           </select>
         </label>
-        <label class="block text-xs">偏好内容（不要填写身份证、联系方式或其他敏感资料）
+        <label class="block text-xs">偏好内容（不要填写身份证、联系方式、分数或其他敏感资料）
           <select v-if="key === 'response_style'" v-model="value" class="w-full rounded border p-2">
             <option value="concise">简洁</option><option value="detailed">详细</option><option value="comparison">对比</option>
           </select>
@@ -37,6 +38,12 @@
         </label>
         <button type="submit" :disabled="busy || chat.isStreaming || !value" class="rounded border px-2 py-1">明确保存 / 更新</button>
       </form>
+      <details>
+        <summary class="cursor-pointer text-xs">查看记忆操作记录（不含偏好内容）</summary>
+        <ul class="space-y-1 text-xs text-gray-600">
+          <li v-for="(event, index) in audit" :key="index">{{ event.occurred_at }} · {{ event.event }}{{ event.key ? ' · ' + event.key : '' }}</li>
+        </ul>
+      </details>
       <button type="button" :disabled="busy || chat.isStreaming" class="rounded border px-2 py-1" @click="disconnect">断开（不删除服务端数据）</button>
       <label class="flex items-start gap-2 text-xs"><input v-model="confirmErase" type="checkbox" />确认删除整个在线记忆库并撤销凭证；不包括历史对话、备份或外部处理记录。</label>
       <button type="button" :disabled="busy || chat.isStreaming || !confirmErase" class="rounded border px-2 py-1 text-red-700" @click="erase">删除在线记忆库</button>
@@ -54,12 +61,32 @@ const labels = { preferred_regions: '偏好地区', interested_majors: '感兴�
 const credential = ref(null)
 const inputToken = ref('')
 const items = ref([])
+const audit = ref([])
 const key = ref('preferred_regions')
 const value = ref('')
 const busy = ref(false)
 const error = ref('')
+const consent = ref(false)
 const confirmErase = ref(false)
 let active = true
+
+// The subject is a pseudonymous per-person id, not a credential. It is kept in
+// local storage so cross-session memory keeps working, while the bearer
+// credential itself never leaves page memory.
+const SUBJECT_STORAGE_KEY = 'gaobao.memory.subject'
+function loadSubject() {
+  try {
+    const stored = globalThis.localStorage?.getItem(SUBJECT_STORAGE_KEY)
+    if (stored && /^[A-Za-z0-9_-]{8,128}$/.test(stored)) return stored
+    const bytes = globalThis.crypto?.getRandomValues(new Uint8Array(16))
+    const generated = 'sub_' + Array.from(bytes || new Uint8Array(16), b => b.toString(16).padStart(2, '0')).join('')
+    globalThis.localStorage?.setItem(SUBJECT_STORAGE_KEY, generated)
+    return generated
+  } catch {
+    return 'sub_local_fallback'
+  }
+}
+const subject = loadSubject()
 
 function unwrap(response) {
   if (response.error) throw new Error('记忆服务暂不可用或凭证/版本无效，请检查配置后重试。')
@@ -72,34 +99,46 @@ async function operation(fn) {
   error.value = ''
   try { await fn() } catch (err) {
     if (active) error.value = err instanceof Error ? err.message : '记忆操作失败'
-  } finally { if (active) busy.value = false }
+  } finally { if (busy.value) busy.value = false }
 }
 
 async function connectToken(token) {
   if (!/^mem1_[A-Za-z0-9_-]{64}$/.test(token)) throw new Error('无效的记忆凭证格式')
-  const result = unwrap(await memoryAPI.list(token))
+  const result = unwrap(await memoryAPI.list(token, subject))
   if (!active) return
-  chat.setMemoryCredential(token)
+  chat.setMemoryCredential(token, subject)
   credential.value = token
   items.value = result.items
   inputToken.value = ''
+  await loadAudit(token)
 }
+
+async function loadAudit(token) {
+  try {
+    const result = unwrap(await memoryAPI.audit(token, subject))
+    if (active) audit.value = result.events || []
+  } catch {
+    if (active) audit.value = []
+  }
+}
+
 function create() {
   return operation(async () => {
-    const result = unwrap(await memoryAPI.create())
+    const result = unwrap(await memoryAPI.create(subject, consent.value === true))
     await connectToken(result.memory_token)
   })
 }
 function connect() { return operation(() => connectToken(inputToken.value)) }
 async function reload(token) {
-  const result = unwrap(await memoryAPI.list(token))
+  const result = unwrap(await memoryAPI.list(token, subject))
   if (active && credential.value === token) items.value = result.items
+  await loadAudit(token)
 }
 function save() {
   return operation(async () => {
     const token = credential.value
     const version = items.value.find(item => item.key === key.value)?.version || 0
-    unwrap(await memoryAPI.put(token, key.value, value.value, version))
+    unwrap(await memoryAPI.put(token, subject, key.value, value.value, version))
     await reload(token)
     if (active) value.value = ''
   })
@@ -107,7 +146,7 @@ function save() {
 function remove(item) {
   return operation(async () => {
     const token = credential.value
-    unwrap(await memoryAPI.remove(token, item.key, item.version))
+    unwrap(await memoryAPI.remove(token, subject, item.key, item.version))
     await reload(token)
   })
 }
@@ -117,12 +156,13 @@ function disconnect() {
   inputToken.value = ''
   value.value = ''
   items.value = []
+  audit.value = []
   confirmErase.value = false
 }
 function erase() {
   if (!confirmErase.value) return
   return operation(async () => {
-    const result = unwrap(await memoryAPI.erase(credential.value))
+    const result = unwrap(await memoryAPI.erase(credential.value, subject))
     if (result.live_memory_erased !== true) throw new Error('服务端未确认删除')
     if (active) disconnect()
   })
