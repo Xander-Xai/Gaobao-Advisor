@@ -38,7 +38,9 @@ updated = effective_now
 
 The persisted timestamp never moves backward. A Redis clock rollback therefore cannot later replay the same elapsed interval as refill. Tokens remain bounded by configured capacity; refill calculations may be capped to the time needed to refill the bucket without changing the configured burst. A forward clock discontinuity may still refill up to the configured capacity. While Redis time remains behind a previously stored timestamp, no additional refill occurs until it catches up. These are bounded token-bucket semantics, not a monotonic-clock guarantee.
 
-Lua decisions remain atomic: one script reads Redis time and bucket state, refills, conditionally debits one token, updates state, and refreshes TTL. Redis replication or restart may lose a recent state write depending on the deployment's persistence/replication guarantees. Lost bucket state initializes as a full bucket, allowing up to the configured burst again. Asynchronous failover cannot guarantee a globally strict quota; the supported durability/failover model must be stated by each deployment.
+Lua decisions remain atomic: one script reads Redis time and bucket state, refills, conditionally debits one token, updates state, and refreshes TTL. The administrator sorted-set sliding window has a different state model but will also avoid moving its logical event time backward: before pruning, read the newest sorted-set score and use `window_now = max(redis_now_ms, newest_score)`. Pruning and newly admitted event scores use that effective time, so rollback cannot make a newly recorded attempt appear older than earlier attempts. If the key expires or is lost, its window state resets; expiry and Redis failover remain bounded by Redis clock, persistence, and replication behavior.
+
+Redis replication or restart may lose a recent token-bucket state write depending on the deployment's persistence/replication guarantees. Lost token-bucket state initializes as a full bucket, allowing up to the configured burst again. Asynchronous failover cannot guarantee a globally strict quota; the supported durability/failover model must be stated by each deployment.
 
 Backward-time integration tests will run a test-only variant derived from the production Lua source, replacing only the `TIME` read with a deterministic test argument. The production Lua source and production caller signature will have no clock override. Tests run against a disposable Redis instance and isolated key namespace; they must never alter host or shared Redis system time.
 
@@ -48,7 +50,7 @@ Backward-time integration tests will run a test-only variant derived from the pr
 - Redis error, timeout, malformed/empty decision, or invalid stored state returns HTTP 503 without local fallback.
 - Java and Python token bucket validation will use compatible positive, bounded rate/capacity ranges, and all replicas must use identical Redis, namespace/keying secret where applicable, rate, and capacity configuration.
 - IP resolution trusts forwarding headers only if the direct peer belongs to an explicitly configured trusted proxy network. Otherwise the direct peer is the identity. Invalid forwarding chains do not grant a caller a spoofed identity.
-- Admin sliding-window scopes remain separate from public token-bucket policy; their current Retry-After and 503 contracts are preserved and tested.
+- Admin sliding-window scopes remain separate from public token-bucket policy; their current Retry-After and 503 contracts are preserved, while their Redis-time pruning is guarded against backward timestamps.
 - No new authenticated-user or high-cost per-route buckets are introduced without a concrete identity/quotas contract. The current IP layer is baseline abuse control; GA01 remains responsible for model quotas.
 
 ## Exposure and long-lived connections
@@ -62,7 +64,7 @@ SSE is covered by the normal HTTP request admission but not by an active-connect
 ### Python and Java tests
 
 - Unit tests verify backward timestamps do not regress, recovery after the test clock returns does not mint duplicate tokens, capacity is never exceeded, same-time calls debit atomically, and `Retry-After`/503 behavior is correct.
-- Real Redis 7 tests use a random test-owned namespace and clean only those keys. Cover shared decisions across limiter instances and processes, concurrent debits, refill, capacity, independent client keys, backward/forward controlled time, state deletion, connection timeout/disconnect, recovery, and invalid decisions.
+- Real Redis 7 tests use a random test-owned namespace and clean only those keys. Cover shared decisions across limiter instances and processes, concurrent debits, refill, capacity, independent client keys, backward/forward controlled time for both token buckets and admin windows, state deletion, connection timeout/disconnect, recovery, and invalid decisions.
 - HTTP tests exercise forged `X-Forwarded-For` from untrusted peers, trusted-proxy chain resolution, 429 headers, and fail-closed 503. Gateway tests exercise global-key behavior independent of forwarded caller headers and 429 metadata.
 - No `FLUSHDB`/`FLUSHALL`, shared Redis time manipulation, or production credentials are used.
 
@@ -80,11 +82,11 @@ Update the existing Industrial public HTTP admission and Java/Python performance
 
 ## Acceptance criteria
 
-1. Java and Python token bucket scripts use identical non-regressing timestamp semantics and retain atomic shared state operations.
-2. Redis time rollback followed by recovery does not produce duplicate refill; token count never exceeds configured capacity.
+1. Java and Python token bucket scripts use identical non-regressing timestamp semantics and retain atomic shared state operations; administrator sliding-window event scores also never move backward while the key exists.
+2. Redis time rollback followed by recovery does not produce duplicate token refill or prematurely prune a newly recorded admin attempt; token count never exceeds configured capacity.
 3. Redis errors and malformed decisions remain fail-closed (503); exhaustion is 429 with a valid `Retry-After`.
 4. Untrusted forwarding headers cannot change rate-limit identity; explicitly trusted proxy chains resolve from right to left.
 5. Industrial `/ws/` is not proxied to FastAPI, which continues to reject Industrial WebSocket handshakes.
 6. Real Redis concurrent tests demonstrate cross-instance sharing, atomic debit, refill, capacity, isolation, disconnect/recovery, and test-key loss behavior.
 7. Any load result names its actual environment and has enough observed metrics to be reproducible; unavailable metrics/topologies are recorded as acceptance gaps.
-8. Documentation explicitly states Redis TIME, persistence, replica failover, and active SSE concurrency limitations without claiming absolute monotonicity or asynchronous strong consistency.
+8. Documentation explicitly states Redis TIME, persistence, replica failover, admin-window clock behavior, and active SSE concurrency limitations without claiming absolute monotonicity or asynchronous strong consistency.
