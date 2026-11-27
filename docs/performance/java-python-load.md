@@ -121,22 +121,22 @@ snapshot）。同步顺序压测显示进程内线程并发下每次往返被显
 
 ## Distributed rate-limiter service measurements (2026-11-27 CI run)
 
-The updated source was built and exercised by the `java-services` workflow associated with PR #221 (run [46055411539](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/46055411539); PR head `edc479aa99b9c1da6f0c19ae19779ec03ef73158`, Locust artifact merge-ref SHA `6ccde8a98b73ae9f1cf153a41f8212ffbfcd73e4`). The workflow used a GitHub-hosted `ubuntu-latest` Docker host, synthetic MySQL dataset (scaled to 500 schools), Redis 7, Java Catalog, one then two Gateway replicas, Python API, and Nginx ingress. The load generator and services shared one host. Exact runner CPU/memory limits were not captured in the artifacts, so these results are short-run observations, not capacity/SLA claims.
+The updated source was built and exercised by the `java-services` workflow associated with PR #221 (latest run [46057859459](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/46057859459); PR head `2aa5c9353c3c7ed725f090d83af5717d87216c5c`, Locust artifact merge-ref SHA `e5592627f072cc02ae646229491bd08e600bbdbc`). The workflow used a GitHub-hosted `ubuntu-latest` Docker host, synthetic MySQL dataset (scaled to 500 schools), Redis 7, Java Catalog, one then two Gateway replicas, Python API, and Nginx ingress. The load generator and services shared one host. Exact runner CPU/memory limits were not captured in the artifacts, so these results are short-run observations, not capacity/SLA claims.
 
 During the Locust profiles, the workflow deliberately raised `CATALOG_RATE_PER_SECOND/BURST` and `PUBLIC_API_RATE_PER_SECOND/BURST` to `3000`; these runs exercise the Java Redis Lua path but are below the configured cap and produced no 429s. The Python service used the standard development profile's process-local bucket, not the Industrial Redis per-IP bucket. These Python route measurements describe API service load, not distributed Python limiter performance. After load profiles, the existing fault test restored Java Catalog to 1 token/s and burst 4; the dual Gateway check observed 4/20 allowed and 429s across both replicas. Full details/artifacts: [Actions run 46047930404](https://github.com/Xander-Xai/Gaobao-Advisor/actions/runs/46047930404), artifact `java-python-load-evidence`.
 
 | Route / topology | Users | Requests | RPS | P50 / P95 / P99 | Failures | Redis CPU / memory sampled during profile |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Java Catalog / single Gateway | 50 | 350 | 56.53 | 120 / 200 / 220 ms | 0 (0%) | peak 2.28% / 4.19 MiB |
-| Java Catalog / dual Gateway | 50 | 350 | 56.39 | 110 / 380 / 430 ms | 0 (0%) | peak 0.58% / 4.18 MiB |
-| Java Catalog / dual Gateway | 100 | 700 | 110.19 | 190 / 320 / 330 ms | 0 (0%) | peak 0.80% / 4.21 MiB |
-| Java Catalog / dual Gateway | 200 | 1,400 | 213.85 | 340 / 560 / 620 ms | 0 (0%) | peak 2.79% / 4.23 MiB |
-| Python schools / dual Gateway, development profile | 50 | 350 | 56.17 | 210 / 290 / 310 ms | 0 (0%) | peak 1.98% / 4.37 MiB |
-| Python schools / dual Gateway, development profile | 100 | 700 | 106.92 | 380 / 560 / 610 ms | 0 (0%) | peak 0.31% / 3.98 MiB |
-| Python schools / dual Gateway, development profile | 200 | 1,400 | 203.61 | 640 / 860 / 940 ms | 0 (0%) | peak 2.50% / 3.73 MiB |
-| Python overview, dual Gateway | 50 | 350 | 55.93 | 230 / 370 / 390 ms | 0 (0%) | peak 0.27% / 4.48 MiB |
-| No-key chat SSE, dual Gateway | 5 | 20 | 3.30 | 56 / 180 / 180 ms | 3 (15%) | peak 1.97% / 4.23 MiB |
-| No-key chat SSE, dual Gateway | 10 | 40 | 6.53 | 110 / 150 / 150 ms | 0 (0%) | peak 2.01% / 4.07 MiB |
+| Java Catalog / single Gateway | 50 | 350 | 55.23 | 210 / 350 / 390 ms | 0 (0%) | peak 0.92% / 4.20 MiB |
+| Java Catalog / dual Gateway | 50 | 350 | 55.71 | 150 / 1,000 / 1,100 ms | 0 (0%) | peak 1.04% / 4.21 MiB |
+| Java Catalog / dual Gateway | 100 | 700 | 105.85 | 320 / 560 / 620 ms | 0 (0%) | peak 3.89% / 4.46 MiB |
+| Java Catalog / dual Gateway | 200 | 1,492 | 185.70 | 670 / 1,400 / 1,900 ms | 0 (0%) | peak 2.66% / 4.22 MiB |
+| Python schools / dual Gateway, development profile | 50 | 350 | 54.94 | 310 / 460 / 470 ms | 0 (0%) | peak 0.50% / 3.99 MiB |
+| Python schools / dual Gateway, development profile | 100 | 113 | 10.26 | 10,000 / 10,000 / 10,000 ms | 66 (58.41%) | peak 3.17% / 4.22 MiB |
+| Python schools / dual Gateway, development profile | 200 | 0 | N/A | N/A | No completed samples | Not a capacity sample |
+| Python overview, dual Gateway | 50 | 0 | N/A | N/A | No completed samples | Not a capacity sample |
+| No-key chat SSE, dual Gateway | 5 | 20 | 3.28 | 95 / 120 / 120 ms | 0 (0%) | peak 0.44% / 4.25 MiB |
+| No-key chat SSE, dual Gateway | 10 | 40 | 6.43 | 210 / 320 / 320 ms | 0 (0%) | peak 0.48% / 4.46 MiB |
 
 The separate post-load shared-bucket check used two Java Gateway replicas with `CATALOG_RATE_PER_SECOND=1` and `CATALOG_RATE_BURST=4`: **4 admitted / 16 returned 429** from 20 direct alternating requests. The verifier required integer `Retry-After >= 1` on every 429. The updated Redis-outage check requires exact HTTP 503 and is covered by the latest Java Compose workflow. These are functional checks, not a high-concurrency reject-rate profile.
 
@@ -144,7 +144,7 @@ Docker stats were sampled about every 2 seconds. `peak_container_cpu_pct` in the
 
 The Redis middleware lifecycle probe remains separate correctness evidence: FastAPI `TestClient` + the production `RateLimitMiddleware` and an owned Redis 7.4.9 standalone container observed 200/200/429 (`Retry-After: 1000`), Redis-stop 503, then 200/200/429 after a volatile-state-loss restart. It is not an RPS or latency benchmark. The 18 real-Redis Lua tests validate atomic behavior, not service capacity.
 
-The 100-user Python schools run has 94 failures and P95/P99 at the 10s client timeout; the 200-user run has no completed requests. The overview endpoint also has P95/P99 at 10s. These failures remain visible and are diagnostic, not a pass. The Python public limiter in this standard development Compose stack is in-process, so none of these Python results validates Redis-backed per-IP sharing.
+Across two nearby CI attempts, the short-run results varied materially. The latest 100-user Python schools run has 66 failures (58.41%) and P50/P95/P99 at the 10s client timeout; the 200-user and overview runs have no completed samples. The earlier run also saw a Python overview P95/P99 of 10s. These failures remain visible and diagnostic, not a pass. The Python public limiter in this standard development Compose stack is in-process, so none of these Python results validates Redis-backed per-IP sharing.
 
 **Still not measured:** limiter-added latency in isolation; Python Industrial Redis per-IP service load; sustained/long-duration production workloads; any managed Redis replica/failover behavior; production hardware, resource limits, data, proxy path, or SLA. Local Docker Engine 29.5.2 / Compose 5.1.4 testing used Redis 7.4.9 on Ubuntu 22.04.5 under WSL2 (20 vCPU, 15.54 GiB host memory) only for the standalone Redis probe, not for the CI service load results.
 
