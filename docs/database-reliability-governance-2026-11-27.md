@@ -117,3 +117,14 @@ handshake timeout). Exact-head CI and CodeQL passed for baseline
 PR #213's SHA, not this exact head. Authorized admissions data release, external rights review,
 production privacy approval, TLS ingress and production backup/restore
 acceptance remain separate gates and are not inferred from these checks.
+
+## GitHub tracking snapshot
+
+- Work branch: `fix/database-reliability-governance`, based on `master` at
+  `8b636dbc76c35f85714cb3f6d74294eb9f9a2737`.
+- Review PR: [#215](https://github.com/Xander-Xai/Gaobao-Advisor/pull/215),
+  targeting `master`. It relates to external acceptance #147 but does not close
+  or claim to satisfy that issue.
+- Issues #104, #147 and #204 were open at review time and remain open; this work
+  did not change their status. They continue to track authorized real data,
+  provider evaluation and production-like acceptance.
