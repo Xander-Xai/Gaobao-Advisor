@@ -33,6 +33,10 @@ use. The current architecture includes:
   operator approval and a single dedicated Worker path;
 - allowlisted SQL tools and a restricted Docker analysis boundary for approved
   research; no arbitrary host shell or Docker socket is exposed to public Chat;
+- a disabled-by-default cross-task preference vault that binds a bearer
+  credential to a pseudonymous subject, encrypts values at rest, records
+  consent and mutation events in a metadata-only audit trail, and refuses
+  sensitive personal data and instruction-like text at write time;
 - dependency, secret, redistribution, test and CodeQL gates in GitHub Actions.
 
 These controls do not provide a full account/IAM system, multi-tenant
@@ -57,6 +61,13 @@ OS sandbox certification.
   configured external model provider. Do not enable it for personal or
   restricted data until the operator has established authorization and
   provider/privacy controls.
+- Cross-task user memory is a pseudonymous, opt-in feature and is refused
+  outside an explicit development/test/local environment. Its subject binding
+  is not an identity system: keep it disabled for real users until a verified
+  identity source, an operator retention and backup-deletion schedule, and a
+  privacy review are in place. See
+  [PRIVACY.md](PRIVACY.md) and
+  [the memory governance architecture](docs/architecture/memory-production-governance-20261127.md).
 
 ## Historical repository exposure
 

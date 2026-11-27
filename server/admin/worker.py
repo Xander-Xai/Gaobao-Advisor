@@ -314,6 +314,27 @@ def _prune_snapshots() -> None:
         log_error("worker.snapshot_prune_failed", error=type(exc).__name__)
 
 
+def _prune_user_memory() -> None:
+    """Background cleanup of expired cross-task preferences.
+
+    The vault is opt-in and normally disabled; when it is enabled the worker
+    keeps expired rows from accumulating. The task never runs without an
+    explicit opt-in flag and never touches live rows.
+    """
+    if os.getenv("GAOBAO_USER_MEMORY_MAINTENANCE_ENABLED", "false").lower() != "true":
+        return
+    from server.user_memory import enabled, prune_expired
+
+    if not enabled():
+        # The vault is opt-in; nothing to clean while it is switched off.
+        return
+    try:
+        result = prune_expired(limit=200)
+        log_event("worker.user_memory_prune", deleted=result.get("expired_entries_deleted", 0))
+    except Exception as exc:
+        log_error("worker.user_memory_prune_failed", error=type(exc).__name__)
+
+
 def _worker_loop(
     *,
     queue: Any,
@@ -326,6 +347,7 @@ def _worker_loop(
     """Run recovery and consumption in one testable loop."""
     last_recovery = time.monotonic()
     _prune_snapshots()
+    _prune_user_memory()
     while not stop["flag"]:
         try:
             if time.monotonic() - last_recovery >= recovery_interval:
@@ -337,6 +359,7 @@ def _worker_loop(
                 except Exception:
                     logger.exception("periodic worker recovery failed")
                 _prune_snapshots()
+                _prune_user_memory()
                 last_recovery = time.monotonic()
             result = run_once(timeout=timeout, queue=queue)
             if result.get("job_id"):

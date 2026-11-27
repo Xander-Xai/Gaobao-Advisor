@@ -62,6 +62,7 @@ def _assemble(
     missing_history: bool = False,
     omitted: int = 0,
     max_estimated_tokens: int = 8000,
+    evidence_block: str = "",
 ) -> ChatContext:
     if type(max_estimated_tokens) is not int or not 128 <= max_estimated_tokens <= 200000:
         raise ChatContextError("Invalid input token budget")
@@ -71,6 +72,9 @@ def _assemble(
         raise ChatContextError("Current task must not be empty")
 
     kept = list(history)
+    # The current task and the evidence markers are server-owned: they are
+    # appended to the current prompt and are never truncated away.
+    protected_task = f"{evidence_block}\n\n{current_prompt}" if evidence_block else current_prompt
     # A successful summary represents older messages; it is not a silent loss.
     truncated = missing_history
     summary_item = [{"role": "user", "content": _UNTRUSTED_SUMMARY + summary[:4000]}] if summary else []
@@ -82,7 +86,7 @@ def _assemble(
             *warning,
             *summary_item,
             *kept,
-            {"role": "user", "content": current_prompt},
+            {"role": "user", "content": protected_task},
         ]
 
     while kept and estimate_messages_tokens(render()) > max_estimated_tokens:
@@ -124,13 +128,21 @@ def build_chat_context(
     safe = _validate_history(history)
     keep = keep_recent_rounds * 2
     retained = safe[-keep:]
+    omitted = len(safe) - len(retained)
+    evidence_block = ""
+    if omitted > 0:
+        # The source markers cited by the dropped turns survive verbatim.
+        from server.agent.memory_evidence import extract_evidence_anchors, render_evidence_block
+
+        evidence_block = render_evidence_block(extract_evidence_anchors(safe[:-keep] if keep else safe))
     return _assemble(
         retained,
         system_prompt,
         current_prompt,
-        missing_history=len(safe) > len(retained),
-        omitted=len(safe) - len(retained),
+        missing_history=omitted > 0,
+        omitted=omitted,
         max_estimated_tokens=max_estimated_tokens,
+        evidence_block=evidence_block,
     )
 
 
@@ -167,10 +179,20 @@ async def build_compacted_chat_context(
                 # An arbitrary prefix of a long summary is not a complete
                 # account of the older task. Use explicit partial-history mode.
                 summary = ""
+            else:
+                # A summary is untrusted prose. Admissions-fact shaped claims
+                # and fabricated citations are removed before the summary is
+                # rendered, so it can never look like verified data.
+                from server.agent.memory_evidence import quarantine_summary
+
+                summary, _ = quarantine_summary(summary)
         except Exception as exc:
             logger.warning("Session compaction unavailable (type=%s)", type(exc).__name__)
     if not summary:
         logger.info("Session context incomplete: older messages omitted after compaction failure")
+    from server.agent.memory_evidence import extract_evidence_anchors, render_evidence_block
+
+    evidence_block = render_evidence_block(extract_evidence_anchors(older))
     result = _assemble(
         recent,
         system_prompt,
@@ -179,6 +201,7 @@ async def build_compacted_chat_context(
         missing_history=not bool(summary),
         omitted=len(older),
         max_estimated_tokens=max_estimated_tokens,
+        evidence_block=evidence_block,
     )
     if not summary:
         return ChatContext(result.messages, "COMPACTION_UNAVAILABLE", result.omitted_messages, result.estimated_tokens)

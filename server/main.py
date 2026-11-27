@@ -48,6 +48,10 @@ async def lifespan(app: FastAPI):
 
     validate_snapshot_startup()
 
+    from server.user_memory import validate_startup as validate_user_memory_startup
+
+    validate_user_memory_startup()
+
     from server.industrial_runtime import (
         industrial_enabled,
         validate_industrial_config,

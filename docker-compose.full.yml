@@ -53,9 +53,12 @@ services:
       # Use --env-file .env.full for interpolation and explicitly enable as needed.
       ENABLE_SYNTHETIC_AGENT_EXPERIMENT: ${ENABLE_SYNTHETIC_AGENT_EXPERIMENT:-false}
       USER_MEMORY_ENABLED: ${USER_MEMORY_ENABLED:-false}
+      USER_MEMORY_ENCRYPTION_KEY: ${USER_MEMORY_ENCRYPTION_KEY:-}
+      USER_MEMORY_ENCRYPTION_PREVIOUS_KEYS: ${USER_MEMORY_ENCRYPTION_PREVIOUS_KEYS:-}
       GAOBAO_CHAT_COMPACTION_ENABLED: ${GAOBAO_CHAT_COMPACTION_ENABLED:-true}
       GAOBAO_CHAT_SNAPSHOT_ENABLED: ${GAOBAO_CHAT_SNAPSHOT_ENABLED:-true}
       GAOBAO_CHAT_SNAPSHOT_REQUIRE_ENCRYPTION: "true"
+      GAOBAO_CHAT_SNAPSHOT_PREVIOUS_KEYS: ${GAOBAO_CHAT_SNAPSHOT_PREVIOUS_KEYS:-}
     depends_on:
       mysql:
         condition: service_healthy
@@ -74,6 +77,7 @@ services:
       # concurrent seeders racing on the same empty MySQL database.
       AUTO_SEED_DEMO: "false"
       GAOBAO_CHAT_SNAPSHOT_MAINTENANCE_ENABLED: "true"
+      GAOBAO_USER_MEMORY_MAINTENANCE_ENABLED: ${GAOBAO_USER_MEMORY_MAINTENANCE_ENABLED:-true}
     depends_on:
       api:
         condition: service_healthy

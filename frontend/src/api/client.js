@@ -78,7 +78,7 @@ export const chatAPI = {
    * incrementally instead of waiting for `done`. Caller must read the final
    * `done.session_token` to auth profile/voice.
    */
-  async send(sessionId, message, slots = {}, scene = 'gaokao', token = null, { onEvent, memoryToken, idempotencyKey } = {}) {
+  async send(sessionId, message, slots = {}, scene = 'gaokao', token = null, { onEvent, memoryToken, memorySubject, idempotencyKey } = {}) {
     let response
     try {
       response = await fetch(`${API_BASE}/chat`, {
@@ -87,6 +87,7 @@ export const chatAPI = {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(memoryToken ? { 'X-User-Memory-Token': memoryToken } : {}),
+          ...(memoryToken && memorySubject ? { 'X-User-Memory-Subject': memorySubject } : {}),
           ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
         },
         body: JSON.stringify({ session_id: sessionId, message, slots, scene }),
@@ -435,15 +436,32 @@ export const healthAPI = {
 
 
 // User-approved cross-task preferences. Never use the ordinary session token here.
+// The subject is a pseudonymous per-person id (not a credential): the server
+// binds the vault to it so a stolen token alone cannot read another subject's
+// preferences.
 export const memoryAPI = {
-  create: () => _request('/memory/vault', { method: 'POST' }),
-  list: token => _request('/memory/entries', { headers: { 'X-User-Memory-Token': token } }),
-  put: (token, key, value, version) => _request('/memory/entries/' + encodeURIComponent(key), {
-    method: 'PUT', headers: { 'X-User-Memory-Token': token },
+  create: (subject, consent) => _request('/memory/vault', {
+    method: 'POST',
+    headers: { 'X-User-Memory-Subject': subject },
+    body: { consent },
+  }),
+  list: (token, subject) => _request('/memory/entries', {
+    headers: { 'X-User-Memory-Token': token, 'X-User-Memory-Subject': subject },
+  }),
+  audit: (token, subject) => _request('/memory/audit', {
+    headers: { 'X-User-Memory-Token': token, 'X-User-Memory-Subject': subject },
+  }),
+  put: (token, subject, key, value, version) => _request('/memory/entries/' + encodeURIComponent(key), {
+    method: 'PUT',
+    headers: { 'X-User-Memory-Token': token, 'X-User-Memory-Subject': subject },
     body: { value, expected_version: version },
   }),
-  remove: (token, key, version) => _request('/memory/entries/' + encodeURIComponent(key) + '?expected_version=' + encodeURIComponent(version), {
-    method: 'DELETE', headers: { 'X-User-Memory-Token': token },
+  remove: (token, subject, key, version) => _request('/memory/entries/' + encodeURIComponent(key) + '?expected_version=' + encodeURIComponent(version), {
+    method: 'DELETE',
+    headers: { 'X-User-Memory-Token': token, 'X-User-Memory-Subject': subject },
   }),
-  erase: token => _request('/memory/vault', { method: 'DELETE', headers: { 'X-User-Memory-Token': token } }),
+  erase: (token, subject) => _request('/memory/vault', {
+    method: 'DELETE',
+    headers: { 'X-User-Memory-Token': token, 'X-User-Memory-Subject': subject },
+  }),
 }

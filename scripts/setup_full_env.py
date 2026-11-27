@@ -70,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         f"MYSQL_ROOT_PASSWORD={mysql_root}",
         f"CATALOG_READ_PASSWORD={catalog_password}",
         f"GAOBAO_CHAT_SNAPSHOT_KEY={secrets.token_hex(32)}",
+        f"USER_MEMORY_ENCRYPTION_KEY={secrets.token_hex(32)}",
         f"DATABASE_URL=mysql+pymysql://gaobao:{mysql_password}@mysql:3306/gaobao?charset=utf8mb4",
         "REDIS_URL=redis://redis:6379/0",
         "AUTO_MIGRATE=true",

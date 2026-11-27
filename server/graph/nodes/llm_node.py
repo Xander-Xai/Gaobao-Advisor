@@ -278,7 +278,7 @@ async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
             from server.agent.session_compaction_store import (
                 SessionCompactionStore,
                 policy_digest,
-                snapshot_encryption_key,
+                snapshot_encryption_keyring,
             )
 
             policy = policy_digest(
@@ -292,7 +292,7 @@ async def _build_chat_context_async(state: dict[str, Any], system_prompt: str):
                 history=history,
                 system_prompt=system_prompt,
                 current_prompt=current,
-                store=SessionCompactionStore(get_session, encryption_key=snapshot_encryption_key()),
+                store=SessionCompactionStore(get_session, encryption_keys=snapshot_encryption_keyring()),
                 policy_sha256=policy,
                 summarizer=manager._summarize_history,
                 summary_trigger_tokens=manager.max_token_limit,

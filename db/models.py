@@ -568,7 +568,14 @@ class SessionCompactionSnapshot(Base):
 
 
 class UserMemoryVault(Base):
-    """Independent opt-in cross-task identity; only a SHA-256 token digest is stored."""
+    """Independent opt-in cross-task identity; only a SHA-256 token digest is stored.
+
+    ``subject_hash`` binds the vault to one pseudonymous subject id. It is not a
+    verified real-world identity; it is the smallest isolation primitive the
+    repository can offer without an account system. A vault created before
+    identity binding (``subject_hash IS NULL``) stays read/write locked and can
+    only be destroyed with its credential.
+    """
 
     __tablename__ = "user_memory_vaults"
 
@@ -576,23 +583,35 @@ class UserMemoryVault(Base):
     token_hash = Column(String(64), nullable=False)
     # Monotonic vault-wide revision; never reset when entries expire or are deleted.
     last_version = Column(Integer, nullable=False, default=0)
+    subject_hash = Column(String(64), nullable=True)
+    consent_granted_at = Column(DateTime, nullable=True)
+    consent_version = Column(String(32), nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
 
     __table_args__ = (
         UniqueConstraint("token_hash", name="uq_user_mem_token_hash"),
         Index("ix_user_mem_vault_token", "token_hash"),
+        Index("ix_user_mem_vault_subject", "subject_hash"),
     )
 
 
 class UserMemoryEntry(Base):
-    """User-confirmed preference only; distinct from synthetic task evidence."""
+    """User-confirmed preference only; distinct from synthetic task evidence.
+
+    ``value`` holds an AES-GCM envelope (``enc:v1:<key_id>:<base64>``) bound to
+    ``(vault_id, memory_key)``. Rows written before encryption was introduced
+    keep their plaintext form and are reported as ``LEGACY_PLAINTEXT`` until an
+    operator re-keys them.
+    """
 
     __tablename__ = "user_memory_entries"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     vault_id = Column(String(32), ForeignKey("user_memory_vaults.id"), nullable=False)
     memory_key = Column(String(32), nullable=False)
-    value = Column(String(160), nullable=False)
+    value = Column(Text, nullable=False)
+    key_id = Column(String(16), nullable=True)
+    data_class = Column(String(32), nullable=True)
     version = Column(Integer, nullable=False, default=1)
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, nullable=False, default=_utcnow)
@@ -601,4 +620,28 @@ class UserMemoryEntry(Base):
     __table_args__ = (
         UniqueConstraint("vault_id", "memory_key", name="uq_user_mem_vault_key"),
         Index("ix_user_mem_expiry", "expires_at"),
+    )
+
+
+class UserMemoryAudit(Base):
+    """Metadata-only audit trail for consent, mutation and revocation.
+
+    The table deliberately has no foreign key to ``user_memory_vaults``: a
+    revoked vault must keep its own proof of deletion. Rows never contain a
+    preference value, a credential or a subject identifier.
+    """
+
+    __tablename__ = "user_memory_audit"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    vault_id = Column(String(32), nullable=False)
+    event = Column(String(32), nullable=False)
+    memory_key = Column(String(32), nullable=True)
+    version = Column(Integer, nullable=True)
+    occurred_at = Column(DateTime, nullable=False, default=_utcnow)
+    detail_json = Column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_user_mem_audit_vault", "vault_id"),
+        Index("ix_user_mem_audit_occurred", "occurred_at"),
     )

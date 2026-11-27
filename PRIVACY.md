@@ -31,12 +31,14 @@ identity. Deployment operators are responsible for protecting signing secrets,
 database access, backups and transport.
 
 `DELETE /api/v1/profile/{session_id}/data` removes eligible live session
-records. `DELETE /api/v1/memory/vault` revokes and removes the separately
-opted-in cross-task preference vault. Session deletion does not guarantee
-deletion from database backups, filesystem snapshots, logs, in-flight model
-requests or external providers, and it does not delete the independent memory
-vault. Operators must set retention and backup expiry rules appropriate to
-their deployment.
+records, including the derived session snapshots. `DELETE /api/v1/memory/vault`
+revokes and removes the separately opted-in cross-task preference vault; an
+operator can also erase every vault bound to one subject, which is the
+account-deletion equivalent while the project has no account system. Session
+deletion does not guarantee deletion from database backups, filesystem
+snapshots, logs, in-flight model requests or external providers, and it does
+not delete the independent memory vault. Operators must set retention and
+backup expiry rules appropriate to their deployment.
 
 ## Context snapshots and long-term preferences
 
@@ -48,10 +50,28 @@ encryption does not encrypt every conversation record, database backup, log or
 provider request.
 
 Cross-task preference memory is separate, explicit opt-in and disabled by
-default. The stored credential is hashed, but preference content is not
-currently encrypted at rest by this feature. Do not enable it for real personal
-data until identity binding, encryption, retention and privacy review have been
-completed.
+default. Since 2026-11-27 a vault is bound to a pseudonymous *subject* id as
+well as its bearer credential: both must be presented, and only a server-side
+HMAC fingerprint of the subject is stored. The subject is not a verified
+real-world identity. Preference values are stored as AES-GCM ciphertext bound to
+the vault and memory key, with a rotatable key ring
+(`USER_MEMORY_ENCRYPTION_KEY` plus read-only retired keys); entries written
+before encryption was introduced stay readable as `LEGACY_PLAINTEXT` until an
+operator re-keys them.
+
+Vault creation requires an explicit consent flag, and consent, mutation,
+rotation and revocation events are recorded in a metadata-only audit trail that
+never contains a preference value, a credential or a subject. A field
+allowlist with data classes and a sensitive-value screen refuse exam scores,
+identity documents, contact details, family context, external links and
+instruction-like text; conversation content is never promoted into the vault
+automatically.
+
+This is still not a production approval. The remaining gates are a verified
+identity/account system, an operator retention and backup-deletion schedule,
+and a real-user privacy review. Do not enable it for real personal data until
+those are closed; the feature refuses to run outside an explicit
+development/test/local environment.
 
 ## External model and telemetry processing
 

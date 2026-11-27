@@ -246,7 +246,8 @@ it('sends explicit memory capability across new chats and stops after disconnect
     stream.close()
     return { ok: true, status: 200, body: { getReader: () => stream.reader } }
   })
-  store.setMemoryCredential(token)
+  const subject = 'sub_frontend_test_subject'
+  store.setMemoryCredential(token, subject)
   store.createSession()
   await store.sendMessage('第一次咨询')
   store.createSession()
@@ -256,6 +257,9 @@ it('sends explicit memory capability across new chats and stops after disconnect
   expect(responses[0].options.headers['X-User-Memory-Token']).toBe(token)
   expect(responses[1].options.headers['X-User-Memory-Token']).toBe(token)
   expect(responses[2].options.headers['X-User-Memory-Token']).toBeUndefined()
+  expect(responses[0].options.headers['X-User-Memory-Subject']).toBe(subject)
+  expect(responses[1].options.headers['X-User-Memory-Subject']).toBe(subject)
+  expect(responses[2].options.headers['X-User-Memory-Subject']).toBeUndefined()
   expect(responses[0].options.body).not.toContain(token)
   expect(JSON.stringify(store.$state)).not.toContain(token)
 })

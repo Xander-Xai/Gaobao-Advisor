@@ -19,10 +19,14 @@ export const useChatStore = defineStore('chat', () => {
   const lastError = ref(null)
   // Explicit opt-in capability; never written to local/session storage.
   let memoryCredential = null
+  // Pseudonymous subject id the vault is bound to; not a credential.
+  let memorySubject = null
   const memoryEnabled = ref(false)
-  function setMemoryCredential(token) {
+  function setMemoryCredential(token, subject = null) {
     if (token !== null && !/^mem1_[A-Za-z0-9_-]{64}$/.test(token)) throw new Error('Invalid memory credential')
+    if (token !== null && !/^[A-Za-z0-9_-]{8,128}$/.test(subject || '')) throw new Error('Invalid memory subject')
     memoryCredential = token
+    memorySubject = token === null ? null : subject
     memoryEnabled.value = Boolean(token)
   }
   watch(currentSessionId, id => { sessionToken.value = id ? (sessionTokens.value[id] || null) : null })
@@ -48,6 +52,7 @@ export const useChatStore = defineStore('chat', () => {
     const epoch = viewEpoch
     const isCurrent = () => currentSessionId.value === initiatingId && viewEpoch === epoch
     const memory = memoryCredential
+    const memorySubjectId = memorySubject
     const originalSlots = JSON.parse(JSON.stringify(slots.value))
     const key = credential && !memory && idempotentSessions.has(initiatingId) && globalThis.crypto?.getRandomValues
       ? Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('')
@@ -186,7 +191,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       // Retry only a transport failure or EOF, only with an advertised durable
       // receipt, and only while the initiating view still owns the turn.
-      const options = { onEvent: applyEvent, ...(memory ? { memoryToken: memory } : {}), ...(key ? { idempotencyKey: key } : {}) }
+      const options = { onEvent: applyEvent, ...(memory ? { memoryToken: memory, memorySubject: memorySubjectId } : {}), ...(key ? { idempotencyKey: key } : {}) }
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
           await chatAPI.send(initiatingId, text, originalSlots, 'gaokao', credential, options)

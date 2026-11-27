@@ -1,4 +1,16 @@
-"""Explicit cross-task memory HTTP API; separate from session/profile auth."""
+"""Explicit cross-task memory HTTP API; separate from session/profile auth.
+
+Every request must present two independent credentials:
+
+* ``X-User-Memory-Token`` — the vault bearer capability (never the ordinary
+  chat session token).
+* ``X-User-Memory-Subject`` — the pseudonymous subject id the vault is bound
+  to. It is not a verified identity, but it stops a stolen token from being
+  usable by another subject.
+
+Vault creation additionally requires an explicit ``consent`` flag; it is never
+implied by opening the panel.
+"""
 
 from __future__ import annotations
 
@@ -47,6 +59,10 @@ class MemoryWrite(BaseModel):
     ttl_days: int = Field(default=180, strict=True, ge=1, le=365)
 
 
+class MemoryVaultCreate(BaseModel):
+    consent: bool = Field(..., strict=True)
+
+
 def _no_store(response: Response) -> None:
     response.headers.update(_PRIVATE_HEADERS)
 
@@ -76,28 +92,71 @@ def _require_token(token: str | None) -> str:
     return token
 
 
+def _require_subject(subject: str | None) -> str:
+    if not subject:
+        raise HTTPException(status_code=401, detail="Missing memory subject")
+    return subject
+
+
 @router.post("/vault", status_code=201)
-def create_memory_vault(response: Response):
+def create_memory_vault(
+    body: MemoryVaultCreate,
+    response: Response,
+    x_user_memory_subject: str | None = Header(None),
+):
     """User explicitly creates an independent identity for future tasks."""
     _no_store(response)
-    return _call(memory.create_vault)
+    return _call(memory.create_vault, _require_subject(x_user_memory_subject), consent=body.consent)
 
 
 @router.get("/entries")
-def list_memory_entries(response: Response, x_user_memory_token: str | None = Header(None)):
+def list_memory_entries(
+    response: Response,
+    x_user_memory_token: str | None = Header(None),
+    x_user_memory_subject: str | None = Header(None),
+):
     _no_store(response)
-    items = _call(memory.list_memories, _require_token(x_user_memory_token))
+    items = _call(
+        memory.list_memories,
+        _require_token(x_user_memory_token),
+        _require_subject(x_user_memory_subject),
+    )
     return {"memory_kind": "EXPLICIT_USER", "automatic_capture": False, "items": items, "count": len(items)}
 
 
+@router.get("/audit")
+def list_memory_audit(
+    response: Response,
+    limit: int = Query(20, ge=1, le=50),
+    x_user_memory_token: str | None = Header(None),
+    x_user_memory_subject: str | None = Header(None),
+):
+    """Owner-visible metadata audit trail (events only; never values)."""
+    _no_store(response)
+    events = _call(
+        memory.audit_events,
+        _require_token(x_user_memory_token),
+        _require_subject(x_user_memory_subject),
+        limit=limit,
+    )
+    return {"events": events, "count": len(events)}
+
+
 @router.put("/entries/{key}")
-def write_memory_entry(key: str, body: MemoryWrite, response: Response, x_user_memory_token: str | None = Header(None)):
+def write_memory_entry(
+    key: str,
+    body: MemoryWrite,
+    response: Response,
+    x_user_memory_token: str | None = Header(None),
+    x_user_memory_subject: str | None = Header(None),
+):
     _no_store(response)
     return _call(
         memory.put_memory,
         _require_token(x_user_memory_token),
         key,
         body.value,
+        subject=_require_subject(x_user_memory_subject),
         expected_version=body.expected_version,
         ttl_days=body.ttl_days,
     )
@@ -109,19 +168,42 @@ def delete_memory_entry(
     response: Response,
     expected_version: int = Query(..., ge=1, le=2_147_483_646),
     x_user_memory_token: str | None = Header(None),
+    x_user_memory_subject: str | None = Header(None),
 ):
     _no_store(response)
-    _call(memory.delete_memory, _require_token(x_user_memory_token), key, expected_version=expected_version)
+    _call(
+        memory.delete_memory,
+        _require_token(x_user_memory_token),
+        key,
+        subject=_require_subject(x_user_memory_subject),
+        expected_version=expected_version,
+    )
     return {"deleted": True, "key": key}
 
 
 @router.post("/vault/rotate")
-def rotate_memory_credential(response: Response, x_user_memory_token: str | None = Header(None)):
+def rotate_memory_credential(
+    response: Response,
+    x_user_memory_token: str | None = Header(None),
+    x_user_memory_subject: str | None = Header(None),
+):
     _no_store(response)
-    return _call(memory.rotate_token, _require_token(x_user_memory_token))
+    return _call(
+        memory.rotate_token,
+        _require_token(x_user_memory_token),
+        _require_subject(x_user_memory_subject),
+    )
 
 
 @router.delete("/vault")
-def erase_memory_vault(response: Response, x_user_memory_token: str | None = Header(None)):
+def erase_memory_vault(
+    response: Response,
+    x_user_memory_token: str | None = Header(None),
+    x_user_memory_subject: str | None = Header(None),
+):
     _no_store(response)
-    return _call(memory.erase_vault, _require_token(x_user_memory_token))
+    return _call(
+        memory.erase_vault,
+        _require_token(x_user_memory_token),
+        _require_subject(x_user_memory_subject),
+    )

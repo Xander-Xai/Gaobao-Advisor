@@ -18,6 +18,7 @@ from server.agent.chat_context import (
     build_compacted_chat_context,
 )
 from server.agent.llm_reliability import estimate_messages_tokens
+from server.agent.memory_evidence import extract_evidence_anchors, quarantine_summary, render_evidence_block
 from server.agent.session_compaction_store import SessionCompactionStore
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,14 @@ logger = logging.getLogger(__name__)
 
 def _status(context: ChatContext, label: str) -> ChatContext:
     return ChatContext(context.messages, label, context.omitted_messages, context.estimated_tokens)
+
+
+def _quarantined(summary: str) -> str:
+    """Re-apply the fact quarantine to a stored snapshot summary."""
+    if not summary:
+        return ""
+    clean, _ = quarantine_summary(summary)
+    return clean
 
 
 async def build_durable_chat_context(
@@ -59,6 +68,10 @@ async def build_durable_chat_context(
     if not older or estimate_messages_tokens(older) <= summary_trigger_tokens:
         return _assemble(safe, system_prompt, current_prompt, max_estimated_tokens=max_estimated_tokens)
 
+    # The source markers cited by the compacted-away turns survive verbatim in
+    # a protected block that is never truncated.
+    evidence_block = render_evidence_block(extract_evidence_anchors(older))
+
     try:
         snapshot = await asyncio.to_thread(store.load, session_id, safe, policy_sha256=policy_sha256)
     except Exception as exc:
@@ -72,9 +85,10 @@ async def build_durable_chat_context(
                 delta + recent,
                 system_prompt,
                 current_prompt,
-                summary=snapshot.summary,
+                summary=_quarantined(snapshot.summary),
                 omitted=snapshot.covered_count,
                 max_estimated_tokens=max_estimated_tokens,
+                evidence_block=evidence_block,
             )
             return _status(rendered, "SNAPSHOT_REUSED" if not delta else "SNAPSHOT_REUSED_WITH_DELTA")
         # Incremental summary: the prior summary is explicitly untrusted and
@@ -100,9 +114,10 @@ async def build_durable_chat_context(
                 older[snapshot.covered_count :] + recent,
                 system_prompt,
                 current_prompt,
-                summary=snapshot.summary,
+                summary=_quarantined(snapshot.summary),
                 omitted=snapshot.covered_count,
                 max_estimated_tokens=max_estimated_tokens,
+                evidence_block=evidence_block,
             )
             return _status(context, "SNAPSHOT_REUSED_INPUT_CAP")
         return await build_compacted_chat_context(
@@ -120,6 +135,10 @@ async def build_durable_chat_context(
         summary = generated.strip() if isinstance(generated, str) else ""
         if not 1 <= len(summary) <= 4000:
             summary = ""
+        else:
+            # Store and render only the quarantined summary: an untrusted
+            # summary may not assert admissions facts or fake citations.
+            summary, _ = quarantine_summary(summary)
     except Exception as exc:
         logger.warning("Compaction snapshot update unavailable (type=%s)", type(exc).__name__)
         summary = ""
@@ -130,9 +149,10 @@ async def build_durable_chat_context(
                 older[snapshot.covered_count :] + recent,
                 system_prompt,
                 current_prompt,
-                summary=snapshot.summary,
+                summary=_quarantined(snapshot.summary),
                 omitted=snapshot.covered_count,
                 max_estimated_tokens=max_estimated_tokens,
+                evidence_block=evidence_block,
             )
             return _status(context, "SNAPSHOT_REUSED_UPDATE_FAILED")
         return await build_compacted_chat_context(
@@ -167,5 +187,6 @@ async def build_durable_chat_context(
         summary=summary,
         omitted=len(older),
         max_estimated_tokens=max_estimated_tokens,
+        evidence_block=evidence_block,
     )
     return _status(context, "SNAPSHOT_PUBLISHED" if published else "COMPACTED_NOT_CACHED")

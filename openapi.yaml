@@ -600,6 +600,15 @@ components:
       - query
       title: KnowledgeSearchRequest
       type: object
+    MemoryVaultCreate:
+      properties:
+        consent:
+          title: Consent
+          type: boolean
+      required:
+      - consent
+      title: MemoryVaultCreate
+      type: object
     MemoryWrite:
       properties:
         expected_version:
@@ -3776,6 +3785,14 @@ paths:
           - type: 'null'
           title: X-User-Memory-Token
       - in: header
+        name: x-user-memory-subject
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Subject
+      - in: header
         name: Idempotency-Key
         required: false
         schema:
@@ -4613,6 +4630,51 @@ paths:
       summary: Search Knowledge
       tags:
       - knowledge
+  /api/v1/memory/audit:
+    get:
+      description: Owner-visible metadata audit trail (events only; never values).
+      operationId: list_memory_audit_api_v1_memory_audit_get
+      parameters:
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 20
+          maximum: 50
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: header
+        name: x-user-memory-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Token
+      - in: header
+        name: x-user-memory-subject
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Subject
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Memory Audit
+      tags:
+      - user-memory
   /api/v1/memory/entries:
     get:
       operationId: list_memory_entries_api_v1_memory_entries_get
@@ -4625,6 +4687,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-User-Memory-Token
+      - in: header
+        name: x-user-memory-subject
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Subject
       responses:
         '200':
           content:
@@ -4666,6 +4736,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-User-Memory-Token
+      - in: header
+        name: x-user-memory-subject
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Subject
       responses:
         '200':
           content:
@@ -4698,6 +4776,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-User-Memory-Token
+      - in: header
+        name: x-user-memory-subject
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Subject
       requestBody:
         content:
           application/json:
@@ -4731,6 +4817,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-User-Memory-Token
+      - in: header
+        name: x-user-memory-subject
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Subject
       responses:
         '200':
           content:
@@ -4749,12 +4843,33 @@ paths:
     post:
       description: User explicitly creates an independent identity for future tasks.
       operationId: create_memory_vault_api_v1_memory_vault_post
+      parameters:
+      - in: header
+        name: x-user-memory-subject
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Subject
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryVaultCreate'
+        required: true
       responses:
         '201':
           content:
             application/json:
               schema: {}
           description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
       summary: Create Memory Vault
       tags:
       - user-memory
@@ -4770,6 +4885,14 @@ paths:
           - type: string
           - type: 'null'
           title: X-User-Memory-Token
+      - in: header
+        name: x-user-memory-subject
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-User-Memory-Subject
       responses:
         '200':
           content:

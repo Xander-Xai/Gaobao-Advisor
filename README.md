@@ -214,7 +214,7 @@ python -m pytest tests/test_chat_research_runs.py -q --no-cov --override-ini add
 | Chat 复杂研究入口 | IMPLEMENTED / INTEGRATED / MERGED | 会话归属、请求幂等、审批、Worker、私有报告的合成 HTTP 测试 | 真实数据/模型/生产 UAT 尚未完成 |
 | Deep Agents Harness | IMPLEMENTED / INTEGRATED | 显式授权研究 Worker、受限工具和报告校验；SDK 无外呼构建检查 | 真实模型成功率/费用/延迟 `NOT_MEASURED` |
 | Context / Session Snapshot | IMPLEMENTED / INTEGRATED | 标准本地合成全栈快照与隐私负例 | 用户真实记忆收益、生产隐私验收未完成 |
-| Skills 与长期偏好记忆 | IMPLEMENTED；记忆为 opt-in 实验 | 合成与隔离测试 | 真实用户偏好安全与效果未测 |
+| Skills 与长期偏好记忆 | IMPLEMENTED；记忆为 opt-in 实验（subject 绑定、静态加密、同意与审计、敏感数据拦截） | 合成与隔离测试 | 真实身份、备份保留与真实用户效果未测，生产保持关闭 |
 | Sandbox | IMPLEMENTED / INTEGRATED（研究分析范围） | CI Docker 安全负例与合成描述性分析 | 多租户生产隔离未验证 |
 | Agent Eval / 优化门禁 | IMPLEMENTED；合成 Eval 已集成 CI | 确定性/脚本化 Oracle、预算和回执完整性 | 真实模型配对实验、独立人工 Gold 未完成 |
 | Java / FastAPI / Vue 全栈 | IMPLEMENTED / INTEGRATED / MERGED | 主线 CI 含 Python、Vue、MySQL、Redis、Compose smoke | 真实业务部署、容量/SLO 未验证 |
@@ -228,7 +228,7 @@ python -m pytest tests/test_chat_research_runs.py -q --no-cov --override-ini add
 | 前端 | Vue 3、Vite、Pinia、Vue Router、TypeScript（运营界面） |
 | API 与业务编排 | FastAPI、Pydantic、SSE；LangGraph 确定性咨询图 |
 | 复杂研究 Harness | 可选 Deep Agents SDK，由独立、审批后 Worker 调用 |
-| Context 与 Skills | 受限会话上下文/加密快照；显式 Skills；可选、默认关闭的独立偏好记忆 |
+| Context 与 Skills | 受限会话上下文/加密快照（含来源标记锚点与摘要事实隔离）；显式 Skills；可选、默认关闭的独立偏好记忆（加密 + 审计） |
 | 数据与检索 | MySQL 8.4、SQLAlchemy、Alembic、Redis、BM25；可选 Dense embedding |
 | Sandbox | Docker 隔离分析执行，固定输入与独立结果校验；不是通用 Shell Agent |
 | Eval | Python 合成业务集、独立 SQL/证据 Oracle、配对评测输入契约 |
@@ -242,6 +242,7 @@ python -m pytest tests/test_chat_research_runs.py -q --no-cov --override-ini add
 - [系统架构、路由与模块职责](docs/architecture/README.md)
 - [产品能力与架构边界](docs/architecture/product-capabilities-and-boundaries.md) · [模块责任与工程验收](docs/architecture/module-responsibilities-and-acceptance.md)
 - [私有复杂研究 TaskRun](docs/admissions-research-taskrun.md) · [Chat 请求与报告](docs/admissions-research-private-report-20261125.md)
+- [分层记忆生产化治理架构](docs/architecture/memory-production-governance-20261127.md) · [记忆专项评测](docs/evaluation/memory-eval-20261127.md) · [记忆生产化审计](docs/audits/2026-11-27-memory-production-audit.md)
 - [开发与贡献](CONTRIBUTING.md) · [测试 / Eval 手册](benchmarks/README.md)
 - [数据库结构](docs/database-schema-matrix.md) · [API/OpenAPI](http://localhost/docs)
 - [本地部署与工业候选门禁](docs/architecture/industrial-release-contract.md) · [Java 服务](docs/java-microservices.md)
