@@ -401,6 +401,105 @@ def verify_industrial_ingress():
     print("Industrial Nginx rejects the compatibility WebSocket route without proxying: PASS (404, no upstream)")
 
 
+def verify_public_rate_limit_lifecycle():
+    """Exercise the production middleware against an owned, volatile Redis 7 node."""
+    import socket
+    import uuid
+
+    import redis
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.middleware.ratelimit import RateLimitMiddleware
+
+    name = f"gaobao-public-ratelimit-{uuid.uuid4().hex[:12]}"
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = int(sock.getsockname()[1])
+    subprocess.run(
+        [
+            "docker",
+            "run",
+            "--detach",
+            "--name",
+            name,
+            "--publish",
+            f"127.0.0.1:{port}:6379",
+            "redis:7-alpine",
+            "redis-server",
+            "--save",
+            "",
+            "--appendonly",
+            "no",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    redis_client = None
+    try:
+        redis_url = f"redis://127.0.0.1:{port}/0"
+        os.environ["GAOBAO_RUNTIME_PROFILE"] = "industrial"
+        os.environ["REDIS_URL"] = redis_url
+        os.environ["SESSION_SECRET"] = f"rate-limit-test-{uuid.uuid4().hex}"
+        os.environ.pop("ADMIN_TRUSTED_PROXIES", None)
+        os.environ.pop("TRUSTED_PROXIES", None)
+        redis_client = redis.Redis.from_url(
+            redis_url, decode_responses=True, socket_connect_timeout=0.5, socket_timeout=0.5
+        )
+
+        def wait_for_redis(available: bool, timeout: float = 20) -> None:
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline:
+                try:
+                    if bool(redis_client.ping()) == available:
+                        return
+                except Exception:
+                    if not available:
+                        return
+                time.sleep(0.25)
+            raise TimeoutError(f"owned Redis container availability did not become {available}")
+
+        wait_for_redis(True)
+        app = FastAPI()
+        app.add_middleware(RateLimitMiddleware, rate=0.001, capacity=2)
+
+        @app.get("/probe")
+        def probe():
+            return {"ok": True}
+
+        with TestClient(app, client=("198.51.100.44", 12001)) as http_client:
+            admitted = [
+                http_client.get("/probe", headers={"X-Forwarded-For": f"203.0.113.{index}"}).status_code
+                for index in range(2)
+            ]
+            limited = http_client.get("/probe", headers={"X-Forwarded-For": "203.0.113.99"})
+            assert admitted == [200, 200], admitted
+            assert limited.status_code == 429, limited.status_code
+            assert limited.headers.get("Retry-After") == "1000", limited.headers
+            before = redis_client.info("server")["redis_version"]
+
+            subprocess.run(["docker", "stop", name], check=True, capture_output=True, text=True, timeout=20)
+            wait_for_redis(False)
+            unavailable = http_client.get("/probe")
+            assert unavailable.status_code == 503, unavailable.status_code
+
+            subprocess.run(["docker", "start", name], check=True, capture_output=True, text=True, timeout=20)
+            wait_for_redis(True)
+            recovered = [http_client.get("/probe").status_code for _ in range(3)]
+            assert recovered == [200, 200, 429], recovered
+
+        print(
+            f"Public rate-limit middleware + disposable Redis {before}: "
+            f"allowed={admitted}, throttled={limited.status_code}/{limited.headers['Retry-After']}, "
+            f"outage={unavailable.status_code}, recovered/state-loss={recovered}: PASS"
+        )
+    finally:
+        if redis_client is not None:
+            redis_client.close()
+        subprocess.run(["docker", "rm", "--force", name], check=False, capture_output=True, text=True, timeout=20)
+
+
 def verify_redis_down():
     urls = gateway_urls()
     for base in urls:
@@ -482,6 +581,7 @@ def main():
             "parity",
             "reader",
             "ingress",
+            "public-rate-limit-lifecycle",
             "distributed",
             "ha",
             "redis-down",
@@ -496,6 +596,7 @@ def main():
         "parity": verify_catalog_api_parity,
         "reader": verify_reader_privileges,
         "ingress": verify_industrial_ingress,
+        "public-rate-limit-lifecycle": verify_public_rate_limit_lifecycle,
         "ha": verify_nginx_replica_ha,
         "distributed": verify_distributed_rate_limit,
         "redis-down": verify_redis_down,
