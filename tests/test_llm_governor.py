@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from server.agent.governed_chat_model import govern_chat_model, messages_to_dicts
 from server.services.llm_gateway import (
     ProviderNotConfigured,
     governed_async_client,
@@ -703,3 +704,166 @@ async def test_the_public_sse_path_is_admitted_by_the_governor(monkeypatch: pyte
     answer, degraded = await llm_node.generate_chat_candidate(state)
     assert (answer, degraded) == ("答案", False)
     assert len(provider.calls) == 1
+
+
+class _FakeChatResult:
+    """A LangChain chat result with a provider usage report."""
+
+    def __init__(self, prompt_tokens: int = 10, completion_tokens: int = 5) -> None:
+        self.llm_output = {"token_usage": {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}}
+        self.generations = [[SimpleNamespace(message=SimpleNamespace(usage_metadata=None))]]
+
+
+class _FakeChunk:
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class _FakeChatModel:
+    """The parts of a LangChain chat model the governed wrapper touches."""
+
+    def __init__(self) -> None:
+        self.model_name = "fake-model"
+        self.max_tokens = 64
+        self.calls: list[Any] = []
+        self.fail_with: Exception | None = None
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+        self.calls.append(kwargs)
+        if self.fail_with is not None:
+            raise self.fail_with
+        return _FakeChatResult()
+
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+        # Deliberately independent of _generate: a model that delegates to the
+        # synchronous variant would otherwise be admitted twice.
+        self.calls.append(kwargs)
+        if self.fail_with is not None:
+            raise self.fail_with
+        return _FakeChatResult()
+
+    def _stream(self, messages, stop=None, run_manager=None, **kwargs):
+        self.calls.append(kwargs)
+        for piece in ("a", "b"):
+            yield _FakeChunk(piece)
+
+    async def _astream(self, messages, stop=None, run_manager=None, **kwargs):
+        for piece in ("a", "b"):
+            yield _FakeChunk(piece)
+
+
+class _DelegatingChatModel(_FakeChatModel):
+    """A model whose async variant delegates to the synchronous one.
+
+    The LangChain base implementations do this. Intercepting both variants
+    would admit the same provider request twice, so the wrapper only
+    intercepts the variant the model owns.
+    """
+
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
+        return self._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+
+
+def _chat_model_governor(**quota) -> LLMResourceGovernor:
+    config = GovernanceConfig(
+        enabled=True,
+        namespace="gaobao:test:governed-chat-model",
+        max_wait_seconds=0.0,
+        providers={"openai": ProviderQuota(**quota)},
+    )
+    return LLMResourceGovernor(config, backend=LocalGovernorBackend())
+
+
+# ── The governed LangChain chat model ────────────────────────────────────
+#
+# The Deep Agents engine builds its own chat model, so the framework makes
+# the provider request. The governed chat model intercepts that request
+# instead of replacing the model.
+
+
+def test_the_messages_are_converted_for_the_token_estimate():
+    messages = [
+        SimpleNamespace(type="human", content="你好"),
+        SimpleNamespace(type="ai", content="您好"),
+        SimpleNamespace(type="system", content="规则"),
+    ]
+    assert messages_to_dicts(messages) == [
+        {"role": "user", "content": "你好"},
+        {"role": "assistant", "content": "您好"},
+        {"role": "system", "content": "规则"},
+    ]
+
+
+def test_a_governed_call_is_admitted_and_released():
+    governor = _chat_model_governor(rpm=10, tpm=10000, max_concurrency=1)
+    model = govern_chat_model(_FakeChatModel(), provider="openai", operation="research", governor=governor)
+
+    model._generate([SimpleNamespace(type="human", content="你好")])
+    assert len(model.calls) == 1
+    # The concurrency slot was returned, so a second call is admitted.
+    model._generate([SimpleNamespace(type="human", content="你好")])
+    assert len(model.calls) == 2
+
+
+def test_a_governed_call_beyond_the_budget_never_reaches_the_provider():
+    governor = _chat_model_governor(rpm=1, tpm=10000, max_concurrency=1)
+    model = govern_chat_model(_FakeChatModel(), provider="openai", operation="research", governor=governor)
+
+    model._generate([SimpleNamespace(type="human", content="你好")])
+    with pytest.raises(LLMQuotaExceeded) as excinfo:
+        model._generate([SimpleNamespace(type="human", content="你好")])
+    assert excinfo.value.reason == "rpm"
+    assert len(model.calls) == 1
+
+
+def test_a_failing_governed_call_releases_the_slot():
+    governor = _chat_model_governor(rpm=10, tpm=10000, max_concurrency=1)
+    fake = _FakeChatModel()
+    fake.fail_with = RuntimeError("provider is down")
+    model = govern_chat_model(fake, provider="openai", operation="research", governor=governor)
+
+    with pytest.raises(RuntimeError):
+        model._generate([SimpleNamespace(type="human", content="你好")])
+
+    fake.fail_with = None
+    model._generate([SimpleNamespace(type="human", content="你好")])
+    assert len(fake.calls) == 2
+
+
+def test_a_governed_stream_releases_the_slot():
+    governor = _chat_model_governor(rpm=10, tpm=10000, max_concurrency=1)
+    model = govern_chat_model(_FakeChatModel(), provider="openai", operation="research", governor=governor)
+
+    chunks = list(model._stream([SimpleNamespace(type="human", content="你好")]))
+    assert len(chunks) == 2
+    model._generate([SimpleNamespace(type="human", content="你好")])
+
+
+@pytest.mark.asyncio
+async def test_a_governed_async_stream_releases_the_slot():
+    governor = _chat_model_governor(rpm=10, tpm=10000, max_concurrency=1)
+    model = govern_chat_model(_FakeChatModel(), provider="openai", operation="research", governor=governor)
+
+    chunks = [chunk async for chunk in model._astream([SimpleNamespace(type="human", content="你好")])]
+    assert len(chunks) == 2
+    await model._agenerate([SimpleNamespace(type="human", content="你好")])
+
+
+def test_a_governed_model_is_only_wrapped_once():
+    governor = _chat_model_governor(rpm=10, tpm=10000, max_concurrency=1)
+    model = govern_chat_model(_FakeChatModel(), provider="openai", operation="research", governor=governor)
+    again = govern_chat_model(model, provider="openai", operation="research", governor=governor)
+    assert again is model
+
+
+@pytest.mark.asyncio
+async def test_a_delegating_async_model_is_admitted_once():
+    governor = _chat_model_governor(rpm=10, tpm=10000, max_concurrency=1)
+    fake = _DelegatingChatModel()
+    model = govern_chat_model(fake, provider="openai", operation="research", governor=governor)
+
+    await model._agenerate([SimpleNamespace(type="human", content="你好")])
+    assert len(fake.calls) == 1
+    # The single admission was released, so the next call is admitted too.
+    await model._agenerate([SimpleNamespace(type="human", content="你好")])
+    assert len(fake.calls) == 2

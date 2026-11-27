@@ -18,6 +18,7 @@ usage when it finishes, fails or is cancelled.
 from __future__ import annotations
 
 import logging
+from contextvars import ContextVar
 from typing import Any
 
 from server.agent.llm_reliability import estimate_messages_tokens, estimate_tokens
@@ -88,8 +89,15 @@ def _usage_of(result: Any) -> tuple[int, int]:
     return 0, 0
 
 
-def _acquire(provider: str, model_name: str, operation: str, input_tokens: int, output_tokens: int) -> ResourceLease:
-    return get_governor().acquire(
+def _acquire(
+    governor: Any,
+    provider: str,
+    model_name: str,
+    operation: str,
+    input_tokens: int,
+    output_tokens: int,
+) -> ResourceLease:
+    return governor.acquire(
         provider,
         model=model_name,
         operation=operation,
@@ -98,13 +106,30 @@ def _acquire(provider: str, model_name: str, operation: str, input_tokens: int, 
     )
 
 
-def _settle(lease: ResourceLease, input_tokens: int, output_tokens: int) -> None:
+def _settle(governor: Any, lease: ResourceLease, input_tokens: int, output_tokens: int) -> None:
     from server.metrics import record_governor_tokens
 
-    governor = get_governor()
     counted = governor.reconcile(lease, input_tokens=input_tokens, output_tokens=output_tokens)
     record_governor_tokens(lease.provider, lease.model, reserved=lease.counted_reserved, used=counted)
     governor.release(lease)
+
+
+#: The lease of the provider call that is currently in flight. A framework
+#: model whose async variant delegates to the synchronous variant would
+#: otherwise be admitted twice for one provider request. The context is per
+#: task (async) and per thread (sync), so concurrent calls never share it.
+_active_lease: ContextVar[Any] = ContextVar("gaobao_governed_lease", default=None)
+
+
+def _owns_implementation(model: Any, name: str) -> bool:
+    """True when the model class provides its own implementation of *name*."""
+    implementation = getattr(type(model), name, None)
+    if implementation is None:
+        return False
+    qualname = getattr(implementation, "__qualname__", "")
+    # The LangChain base class implementations delegate to the synchronous
+    # variant, which is already intercepted.
+    return not qualname.startswith("BaseChatModel.")
 
 
 def govern_chat_model(
@@ -113,6 +138,7 @@ def govern_chat_model(
     provider: str = "openai",
     operation: str = "research",
     model_name: str = "",
+    governor: Any = None,
 ) -> Any:
     """Return *model* with its provider calls routed through the governor.
 
@@ -122,6 +148,7 @@ def govern_chat_model(
     if getattr(model, "_gaobao_governed", False):
         return model
 
+    governor = governor or get_governor()
     resolved_name = model_name or str(getattr(model, "model_name", "") or getattr(model, "model", "") or "")
 
     original_generate = getattr(model, "_generate", None)
@@ -129,20 +156,40 @@ def govern_chat_model(
     original_stream = getattr(model, "_stream", None)
     original_astream = getattr(model, "_astream", None)
 
+    # A framework default implementation delegates to the synchronous variant.
+    # Patching both would admit the same provider request twice, so only the
+    # variant the model actually owns is intercepted.
+    if not _owns_implementation(model, "_agenerate"):
+        original_agenerate = None
+    if not _owns_implementation(model, "_astream"):
+        original_astream = None
+
     if original_generate is not None:
 
         def _generate(messages, stop=None, run_manager=None, **kwargs):  # type: ignore[no-untyped-def]
+            if _active_lease.get() is not None:
+                # A nested call of the same provider request: the outer lease
+                # already accounts for it.
+                return original_generate(messages, stop=stop, run_manager=run_manager, **kwargs)
             lease = _acquire(
-                provider, resolved_name, operation, _estimate_input(messages), _output_reservation(model, kwargs)
+                governor,
+                provider,
+                resolved_name,
+                operation,
+                _estimate_input(messages),
+                _output_reservation(model, kwargs),
             )
+            token = _active_lease.set(lease)
             try:
                 result = original_generate(messages, stop=stop, run_manager=run_manager, **kwargs)
             except BaseException:
-                get_governor().reconcile(lease)
-                get_governor().release(lease)
+                governor.reconcile(lease)
+                governor.release(lease)
                 raise
+            finally:
+                _active_lease.reset(token)
             used_in, used_out = _usage_of(result)
-            _settle(lease, used_in, used_out)
+            _settle(governor, lease, used_in, used_out)
             return result
 
         model._generate = _generate
@@ -152,22 +199,28 @@ def govern_chat_model(
         async def _agenerate(messages, stop=None, run_manager=None, **kwargs):  # type: ignore[no-untyped-def]
             import asyncio
 
+            if _active_lease.get() is not None:
+                return await original_agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
             lease = await asyncio.to_thread(
                 _acquire,
+                governor,
                 provider,
                 resolved_name,
                 operation,
                 _estimate_input(messages),
                 _output_reservation(model, kwargs),
             )
+            token = _active_lease.set(lease)
             try:
                 result = await original_agenerate(messages, stop=stop, run_manager=run_manager, **kwargs)
             except BaseException:
-                get_governor().reconcile(lease)
-                get_governor().release(lease)
+                governor.reconcile(lease)
+                governor.release(lease)
                 raise
+            finally:
+                _active_lease.reset(token)
             used_in, used_out = _usage_of(result)
-            _settle(lease, used_in, used_out)
+            _settle(governor, lease, used_in, used_out)
             return result
 
         model._agenerate = _agenerate
@@ -175,20 +228,30 @@ def govern_chat_model(
     if original_stream is not None:
 
         def _stream(messages, stop=None, run_manager=None, **kwargs):  # type: ignore[no-untyped-def]
+            if _active_lease.get() is not None:
+                return original_stream(messages, stop=stop, run_manager=run_manager, **kwargs)
             lease = _acquire(
-                provider, resolved_name, operation, _estimate_input(messages), _output_reservation(model, kwargs)
+                governor,
+                provider,
+                resolved_name,
+                operation,
+                _estimate_input(messages),
+                _output_reservation(model, kwargs),
             )
             chunks: list[str] = []
 
             def _iterator():
+                token = _active_lease.set(lease)
                 try:
                     for chunk in original_stream(messages, stop=stop, run_manager=run_manager, **kwargs):
                         text = getattr(chunk, "content", None)
                         if isinstance(text, str):
                             chunks.append(text)
+                        governor.renew(lease)
                         yield chunk
                 finally:
-                    _settle(lease, 0, estimate_tokens("".join(chunks)))
+                    _active_lease.reset(token)
+                    _settle(governor, lease, 0, estimate_tokens("".join(chunks)))
 
             return _iterator()
 
@@ -197,10 +260,17 @@ def govern_chat_model(
     if original_astream is not None:
 
         async def _astream(messages, stop=None, run_manager=None, **kwargs):  # type: ignore[no-untyped-def]
+            # An async generator function: LangChain iterates the result of
+            # ``_astream`` directly, without awaiting it first.
             import asyncio
 
+            if _active_lease.get() is not None:
+                async for chunk in original_astream(messages, stop=stop, run_manager=run_manager, **kwargs):
+                    yield chunk
+                return
             lease = await asyncio.to_thread(
                 _acquire,
+                governor,
                 provider,
                 resolved_name,
                 operation,
@@ -208,18 +278,17 @@ def govern_chat_model(
                 _output_reservation(model, kwargs),
             )
             chunks: list[str] = []
-
-            async def _iterator():
-                try:
-                    async for chunk in original_astream(messages, stop=stop, run_manager=run_manager, **kwargs):
-                        text = getattr(chunk, "content", None)
-                        if isinstance(text, str):
-                            chunks.append(text)
-                        yield chunk
-                finally:
-                    _settle(lease, 0, estimate_tokens("".join(chunks)))
-
-            return _iterator()
+            token = _active_lease.set(lease)
+            try:
+                async for chunk in original_astream(messages, stop=stop, run_manager=run_manager, **kwargs):
+                    text = getattr(chunk, "content", None)
+                    if isinstance(text, str):
+                        chunks.append(text)
+                    governor.renew(lease)
+                    yield chunk
+            finally:
+                _active_lease.reset(token)
+                _settle(governor, lease, 0, estimate_tokens("".join(chunks)))
 
         model._astream = _astream
 
