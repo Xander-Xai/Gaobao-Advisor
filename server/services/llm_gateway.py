@@ -581,12 +581,16 @@ class _GovernedCompletions:
             model = call.model_for(provider, kwargs)
             request_kwargs = dict(kwargs)
             request_kwargs["model"] = model
+            try:
+                client = call.factory.client_for(provider)
+            except ProviderNotConfigured as exc:
+                # A provider without an endpoint or a credential is skipped
+                # before the admission, so it does not consume the budget.
+                unconfigured = unconfigured or exc
+                break
             for attempt in range(attempts):
                 try:
                     lease = call.acquire(provider, model, input_tokens, output_reservation)
-                except ProviderNotConfigured as exc:
-                    unconfigured = unconfigured or exc
-                    break
                 except LLMQuotaExceeded as exc:
                     # The provider's own budget is exhausted. The call is not
                     # made here; it degrades to the next provider of the chain,
@@ -596,11 +600,7 @@ class _GovernedCompletions:
                     quota_error = quota_error or exc
                     break
                 try:
-                    response = call.factory.client_for(provider).chat.completions.create(**request_kwargs)
-                except ProviderNotConfigured as exc:
-                    call.abandon(lease)
-                    unconfigured = unconfigured or exc
-                    break
+                    response = client.chat.completions.create(**request_kwargs)
                 except BaseException as exc:  # noqa: BLE001 - re-raised below
                     call.abandon(lease)
                     retryable, delay = call.handle_failure(
@@ -649,23 +649,21 @@ class _GovernedEmbeddings:
             model = call.model_for(provider, kwargs)
             request_kwargs = dict(kwargs)
             request_kwargs["model"] = model
+            try:
+                client = call.factory.client_for(provider)
+            except ProviderNotConfigured as exc:
+                unconfigured = unconfigured or exc
+                break
             for attempt in range(attempts):
                 try:
                     lease = call.acquire(provider, model, input_tokens, 0)
-                except ProviderNotConfigured as exc:
-                    unconfigured = unconfigured or exc
-                    break
                 except LLMQuotaExceeded as exc:
                     if exc.reason == "redis_unavailable":
                         raise
                     quota_error = quota_error or exc
                     break
                 try:
-                    response = call.factory.client_for(provider).embeddings.create(**request_kwargs)
-                except ProviderNotConfigured as exc:
-                    call.abandon(lease)
-                    unconfigured = unconfigured or exc
-                    break
+                    response = client.embeddings.create(**request_kwargs)
                 except BaseException as exc:  # noqa: BLE001 - re-raised below
                     call.abandon(lease)
                     retryable, delay = call.handle_failure(
@@ -833,24 +831,23 @@ class _AsyncGovernedCompletions:
             model = call.model_for(provider, kwargs)
             request_kwargs = dict(kwargs)
             request_kwargs["model"] = model
+            try:
+                client = await asyncio.to_thread(call.factory.async_client_for, provider)
+            except ProviderNotConfigured as exc:
+                # A provider without an endpoint or a credential is skipped
+                # before the admission, so it does not consume the budget.
+                unconfigured = unconfigured or exc
+                break
             for attempt in range(attempts):
                 try:
                     lease = await call.acquire_async(provider, model, input_tokens, output_reservation)
-                except ProviderNotConfigured as exc:
-                    unconfigured = unconfigured or exc
-                    break
                 except LLMQuotaExceeded as exc:
                     if exc.reason == "redis_unavailable":
                         raise
                     quota_error = quota_error or exc
                     break
                 try:
-                    client = await asyncio.to_thread(call.factory.async_client_for, provider)
                     response = await client.chat.completions.create(**request_kwargs)
-                except ProviderNotConfigured as exc:
-                    call.abandon(lease)
-                    unconfigured = unconfigured or exc
-                    break
                 except BaseException as exc:  # noqa: BLE001 - re-raised below
                     call.abandon(lease)
                     retryable, delay = call.handle_failure(
@@ -899,24 +896,21 @@ class _AsyncGovernedEmbeddings:
             model = call.model_for(provider, kwargs)
             request_kwargs = dict(kwargs)
             request_kwargs["model"] = model
+            try:
+                client = await asyncio.to_thread(call.factory.async_client_for, provider)
+            except ProviderNotConfigured as exc:
+                unconfigured = unconfigured or exc
+                break
             for attempt in range(attempts):
                 try:
                     lease = await call.acquire_async(provider, model, input_tokens, 0)
-                except ProviderNotConfigured as exc:
-                    unconfigured = unconfigured or exc
-                    break
                 except LLMQuotaExceeded as exc:
                     if exc.reason == "redis_unavailable":
                         raise
                     quota_error = quota_error or exc
                     break
                 try:
-                    client = await asyncio.to_thread(call.factory.async_client_for, provider)
                     response = await client.embeddings.create(**request_kwargs)
-                except ProviderNotConfigured as exc:
-                    call.abandon(lease)
-                    unconfigured = unconfigured or exc
-                    break
                 except BaseException as exc:  # noqa: BLE001 - re-raised below
                     call.abandon(lease)
                     retryable, delay = call.handle_failure(

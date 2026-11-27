@@ -457,6 +457,23 @@ def test_a_fallback_cannot_bypass_the_fallback_provider_budget(provider: FakePro
     assert len(provider.calls) == 2
 
 
+def test_an_unconfigured_provider_does_not_consume_the_budget(provider: FakeProvider):
+    """A provider that cannot be called is skipped before the admission."""
+    governor = make_governor(provider="p1", rpm=1)
+    client = governed_client(
+        "p1",
+        operation="chat",
+        governor=governor,
+        config_override={"p1": {"api_key": "", "base_url": "https://example.invalid/v1"}},
+    )
+    with pytest.raises(ProviderNotConfigured):
+        client.chat.completions.create(model="fake-model", messages=[{"role": "user", "content": "hi"}])
+    # The request budget was not spent on a provider that cannot be called.
+    other = _client(governor)
+    other.chat.completions.create(model="fake-model", messages=[{"role": "user", "content": "hi"}])
+    assert len(provider.calls) == 1
+
+
 def test_a_provider_without_a_credential_is_skipped(provider: FakeProvider):
     governor = make_governor(provider="p1", rpm=5)
     client = governed_client(
