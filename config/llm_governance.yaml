@@ -1,0 +1,141 @@
+# =============================================================================
+# LLM Resource Governor — 资源配置（测试配置 / TEST CONFIGURATION）
+# =============================================================================
+# ⚠️ 重要 / IMPORTANT
+# ⚠️ 下面的所有数值都是【测试配置】，不是任何服务商的真实配额。
+# ⚠️ Every number below is a TEST value and NOT a real provider quota.
+# ⚠️ 生产部署必须按运营方与服务商实际签署的配额合同填写本文件；
+# ⚠️ 真实生产环境请使用 GAOBAO_LLM_GOVERNANCE_CONFIG 指向部署专属文件。
+#
+# 配额维度 / Quota dimensions
+#   rpm              每分钟请求数上限（0 = 不限制）
+#   tpm              每分钟 Token 上限（0 = 不限制）
+#   max_concurrency  同时在途的模型调用数（0 = 不限制）
+#   rpm_window       sliding | fixed —— 滚动窗口 / 按分钟对齐的固定窗口
+#   tpm_window       sliding | fixed
+#   tpm_counting     total | input | output —— 该 Provider 计入 TPM 的 Token 口径
+#   fallback         主 Provider 不可用时的降级链（逗号分隔的 Provider 名）
+#   pool             共享 API 配额池名；同一 pool 下的 Provider 共用一份预算
+#   lease_ttl_seconds  并发租约有效期（秒）；租约过期后槽位自动回收
+#
+# 配置层级 / Configuration layers
+#   pools.<name>     共享配额池（例如同一把 API Key 下的多个 Provider）
+#   providers.<name> 按 Provider 配置额度；未声明的维度取 defaults
+#   models.<model>   某一具体模型的独立额度；只覆盖显式声明的维度
+#
+# 进程级开关 / Process switches (environment)
+#   GAOBAO_LLM_GOVERNOR_ENABLED              true | false
+#   GAOBAO_LLM_GOVERNOR_NAMESPACE             Redis 键前缀
+#   GAOBAO_LLM_GOVERNOR_REDIS_FAILURE_MODE    fail_closed | local_fallback
+#   GAOBAO_LLM_GOVERNOR_MAX_WAIT_SECONDS      等待配额的最长秒数
+#   GAOBAO_LLM_GOVERNOR_LEASE_TTL_SECONDS     并发租约默认有效期
+#   GAOBAO_LLM_GOVERNOR_OUTPUT_RESERVATION    未声明 max_tokens 时的输出预留
+#   GAOBAO_LLM_GOVERNANCE_CONFIG              本配置文件的路径
+#
+# 说明 / Notes
+#   * Redis 不可用时的行为由 redis_failure_mode 决定：fail_closed 直接拒绝模型
+#     调用（由调用方降级为确定性回答），local_fallback 退化为进程内有界治理。
+#     两种模式都不会出现“无界调用”。
+#   * 计数口径必须按服务商合同填写。不同服务商的 RPM/TPM 语义并不一致，
+#     这里的数值是占位测试值，不能直接用于生产。
+
+defaults:
+  enabled: true
+  namespace: "gaobao:llm:v1"
+  redis_failure_mode: "fail_closed"
+  max_wait_seconds: 20
+  lease_ttl_seconds: 120
+  output_reservation: 512
+  rpm: 600
+  tpm: 4000000
+  max_concurrency: 32
+
+providers:
+  openai:
+    rpm: 600
+    tpm: 4000000
+    max_concurrency: 32
+    rpm_window: sliding
+    tpm_window: sliding
+    tpm_counting: total
+    fallback: "agnes-flash-1,agnes-flash-2"
+
+  deepseek:
+    rpm: 600
+    tpm: 4000000
+    max_concurrency: 32
+    rpm_window: sliding
+    tpm_window: sliding
+    tpm_counting: total
+    fallback: "agnes-flash-1"
+
+  glm-4:
+    rpm: 300
+    tpm: 2000000
+    max_concurrency: 16
+    rpm_window: sliding
+    tpm_window: sliding
+    tpm_counting: total
+    fallback: "agnes-flash-1"
+
+  qwen:
+    rpm: 600
+    tpm: 4000000
+    max_concurrency: 32
+    rpm_window: sliding
+    tpm_window: sliding
+    tpm_counting: total
+    fallback: "agnes-flash-1"
+
+  moonshot:
+    rpm: 300
+    tpm: 2000000
+    max_concurrency: 16
+    rpm_window: sliding
+    tpm_window: sliding
+    tpm_counting: total
+    fallback: "agnes-flash-1"
+
+  dashscope:
+    rpm: 600
+    tpm: 4000000
+    max_concurrency: 32
+    rpm_window: sliding
+    tpm_window: sliding
+    tpm_counting: total
+    fallback: ""
+
+  agnes-flash-1:
+    pool: "agnes-shared"
+    fallback: "agnes-flash-2"
+
+  agnes-flash-2:
+    pool: "agnes-shared"
+    fallback: "agnes-flash-1"
+
+  ollama:
+    rpm: 120
+    tpm: 1000000
+    max_concurrency: 4
+    rpm_window: sliding
+    tpm_window: sliding
+    tpm_counting: total
+    fallback: ""
+
+pools:
+  agnes-shared:
+    rpm: 1200
+    tpm: 8000000
+    max_concurrency: 64
+    rpm_window: sliding
+    tpm_window: sliding
+    tpm_counting: total
+
+models:
+  gpt-4o:
+    rpm: 300
+    tpm: 2000000
+    max_concurrency: 16
+    rpm_window: sliding
+    tpm_window: sliding
+    tpm_counting: total

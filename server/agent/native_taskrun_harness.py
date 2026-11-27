@@ -22,13 +22,20 @@ def run_native_harness(profile: DecisionCardProfile, model: str, *, lease_guard:
     requested = model.removeprefix("openai:")
     lease_guard()
     _require_demo_database()
-    from openai import OpenAI
+    from server.services.llm_gateway import governed_client
 
-    with OpenAI(
-        api_key=os.environ["OPENAI_API_KEY"],
-        base_url=os.environ.get("OPENAI_API_BASE") or None,
+    provider = os.getenv("GAOBAO_LLM_RESEARCH_PROVIDER", "openai").strip() or "openai"
+    with governed_client(
+        provider,
+        operation="planner",
         timeout=20.0,
-        max_retries=0,
+        config_override={
+            provider: {
+                "api_key": os.environ["OPENAI_API_KEY"],
+                "base_url": os.environ.get("OPENAI_API_BASE") or "",
+                "model": requested,
+            }
+        },
     ) as client:
         identities: list[str] = []
 

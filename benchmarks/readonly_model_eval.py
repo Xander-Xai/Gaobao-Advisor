@@ -216,13 +216,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not os.environ.get("OPENAI_API_KEY"):
         parser.error("OPENAI_API_KEY required for explicit paid model probe")
-    from openai import OpenAI
+    from server.services.llm_gateway import governed_openai_client
 
-    client = OpenAI(
-        api_key=os.environ["OPENAI_API_KEY"],
-        base_url=os.environ.get("OPENAI_API_BASE") or None,
+    client = governed_openai_client(
+        operation="planner",
         timeout=20.0,
-        max_retries=0,
+        api_key=os.environ["OPENAI_API_KEY"],
+        base_url=os.environ.get("OPENAI_API_BASE") or "",
+        model=args.model,
     )
     planner = OpenAIJsonPlanner(client, args.model, skill_policy=args.skill_policy)
     groundtruth_review = plan["groundtruth_review"]

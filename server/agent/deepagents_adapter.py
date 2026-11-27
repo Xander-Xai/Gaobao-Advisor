@@ -336,6 +336,16 @@ def run_deepagents_research(
             timeout=20,
             max_retries=0,
         )
+        # The framework makes the provider request; route it through the
+        # LLM Resource Governor without replacing the chat model itself.
+        from server.agent.governed_chat_model import govern_chat_model
+
+        model = govern_chat_model(
+            model,
+            provider=os.getenv("GAOBAO_LLM_RESEARCH_PROVIDER", "openai").strip() or "openai",
+            operation="research",
+            model_name=model_id.removeprefix("openai:"),
+        )
         if checkpointer is None:
             checkpointer = InMemorySaver()
         agent = create_deep_agent(

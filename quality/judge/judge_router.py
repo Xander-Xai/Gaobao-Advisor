@@ -11,16 +11,17 @@ import logging
 import math
 from typing import Any
 
-from openai import AsyncOpenAI
-
 from config.loader import load_llm_config
 from quality.judge.dimensions import build_dimension_messages
 from quality.judge.scorecard import DIMENSION_WEIGHTS, DimensionScore
+from server.services.llm_gateway import AsyncGovernedClient, governed_async_client
 
 logger = logging.getLogger(__name__)
 
 # ── 超时和重试常量 ──────────────────────────────────────────────────
 EVALUATE_TIMEOUT_SECONDS = 15
+# The provider retry lives in the governed client: a retry is a new
+# governor admission, so it cannot bypass the provider budget.
 MAX_RETRIES = 1
 RETRY_DELAY_SECONDS = 1.0
 
@@ -78,7 +79,7 @@ class JudgeRouter:
             model_name: 使用的 LLM 模型名称。为 None 时从配置加载。
         """
         self._model_name = model_name
-        self._client: AsyncOpenAI | None = None
+        self._client: AsyncGovernedClient | None = None
 
     @property
     def model_name(self) -> str:
@@ -97,19 +98,17 @@ class JudgeRouter:
         """
         return bool(str(load_llm_config().get("api_key", "")).strip())
 
-    def _get_client(self) -> AsyncOpenAI:
-        """获取或创建异步 OpenAI 客户端。"""
+    def _get_client(self) -> AsyncGovernedClient:
+        """获取或创建受治理的异步客户端。"""
         if self._client is None:
             cfg = load_llm_config()
             api_key = str(cfg.get("api_key", "")).strip()
             if not api_key:
                 raise RuntimeError("LLM_API_KEY is not configured; LLM judge skipped")
-            self._client = AsyncOpenAI(
-                api_key=api_key,
-                base_url=cfg.get("base_url", "https://api.agnes.ai/v1"),
-                timeout=EVALUATE_TIMEOUT_SECONDS,
-                max_retries=MAX_RETRIES,
-            )
+            # The judge runs one call per dimension in parallel, so it is one
+            # of the largest internal consumers of the provider budget. It goes
+            # through the governed client like every other model call.
+            self._client = governed_async_client(operation="judge", timeout=EVALUATE_TIMEOUT_SECONDS)
         return self._client
 
     async def _call_llm(self, messages: list[dict[str, str]]) -> str:

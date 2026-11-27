@@ -187,6 +187,17 @@ def build_deep_agent(model_id: str, tools: list, subagents: list, *, lease_guard
         timeout=20,
         max_retries=0,
     )
+    # The agent calls the model through LangChain, so the provider request is
+    # made by the framework. The chat model itself is kept; only its provider
+    # calls are routed through the LLM Resource Governor.
+    from server.agent.governed_chat_model import govern_chat_model
+
+    model = govern_chat_model(
+        model,
+        provider=os.getenv("GAOBAO_LLM_RESEARCH_PROVIDER", "openai").strip() or "openai",
+        operation="research",
+        model_name=model_id.removeprefix("openai:"),
+    )
 
     class LeaseMiddleware(AgentMiddleware):
         def before_model(self, state, runtime):

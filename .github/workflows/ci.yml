@@ -124,7 +124,7 @@ jobs:
         run: |
           MYSQL_TEST_URL='mysql+pymysql://root:testroot@127.0.0.1:3307/gaobao_test?charset=utf8mb4' \
           REDIS_TEST_URL='redis://127.0.0.1:6380/0' \
-            python -m pytest tests/test_admin_mysql.py tests/test_mysql_migrations.py tests/test_admin_limits_redis.py tests/test_redis_worker.py tests/test_worker_integration.py tests/test_queue_recovery.py \
+            python -m pytest tests/test_admin_mysql.py tests/test_mysql_migrations.py tests/test_admin_limits_redis.py tests/test_redis_worker.py tests/test_worker_integration.py tests/test_queue_recovery.py tests/test_llm_governor_redis.py \
               -q --no-header --no-cov
       - name: Admin login -> quality job -> review -> audit smoke
         run: python scripts/admin_smoke.py

@@ -105,13 +105,14 @@ def main(argv: list[str] | None = None) -> int:
             or os.environ.get("APP_ENV", "development").lower() == "production"
         ):
             parser.error("Model mode requires explicit permit, key, model and nonproduction environment")
-        from openai import OpenAI
+        from server.services.llm_gateway import governed_openai_client
 
-        client = OpenAI(
-            api_key=os.environ["OPENAI_API_KEY"],
-            base_url=os.environ.get("OPENAI_API_BASE") or None,
+        client = governed_openai_client(
+            operation="planner",
             timeout=25.0,
-            max_retries=0,
+            api_key=os.environ["OPENAI_API_KEY"],
+            base_url=os.environ.get("OPENAI_API_BASE") or "",
+            model=args.model,
         )
 
         def factory() -> OpenAIReplanningPolicy:

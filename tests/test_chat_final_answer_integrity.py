@@ -114,7 +114,7 @@ async def test_async_generation_discards_partial_content_on_network_error(monkey
         async def __aexit__(self, *args):
             return None
 
-    monkeypatch.setattr(llm_node, "AsyncOpenAI", lambda **kwargs: FakeClient())
+    monkeypatch.setattr(llm_node, "_get_async_llm_client", lambda: FakeClient())
     monkeypatch.setattr(llm_node, "_get_config", lambda: {"api_key": "sk-test", "model": "fake"})
     monkeypatch.setattr(llm_node, "_load_memory_for_session", lambda session_id: [])
     answer, degraded = await llm_node.generate_chat_candidate(
@@ -310,7 +310,7 @@ async def test_rewrite_opt_in_and_one_provider_call(monkeypatch):
 
     monkeypatch.setenv("CHAT_REWRITE_ENABLED", "false")
     monkeypatch.setattr(chat_repair, "load_llm_config", lambda: {"api_key": "test", "model": "fake"})
-    monkeypatch.setattr(chat_repair, "AsyncOpenAI", Client)
+    monkeypatch.setattr(chat_repair, "governed_async_client", lambda **_kwargs: Client())
     assert await chat_repair.generate_chat_rewrite({"input_text": "问题"}, "666分", ["UNATTRIBUTED_NUMBER"]) is None
     assert fake_calls == []
 
