@@ -1,5 +1,7 @@
 # MySQL backup and restore runbook
 
+> 合成数据范围的公开运行手册模板；非历史私有环境报告，不包含真实部署规模或实际学生数据。
+
 This runbook is for an operator-managed MySQL 8.4/InnoDB business database. It
 does not run automatically and is not evidence of a production backup policy.
 Use an authorized environment, a private client option file and an isolated
