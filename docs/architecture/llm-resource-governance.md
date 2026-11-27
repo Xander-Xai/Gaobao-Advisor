@@ -307,7 +307,16 @@ The Redis tests create a random key namespace and delete only the keys they
 own. They never flush the database and never contact a paid provider: the
 provider is a mock.
 
-## 8. Known limits
+## 8. Coordination with other open changes
+
+The committed file count of the public demo is bounded by
+`tests/test_public_demo_acceptance.py`. That count is a global resource, not
+a per-change one: another governance change was open at the same time and
+also grows it. The bound is therefore set to the value both changes agree on,
+so the merge order does not matter. The committed byte total stays below the
+unchanged 10 MiB cap.
+
+## 9. Known limits
 
 * The shipped quota values are placeholders. Until an operator fills in the
   real contract, the governor enforces a *bounded* budget, not the provider's
