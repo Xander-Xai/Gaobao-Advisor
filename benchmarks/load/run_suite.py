@@ -27,7 +27,7 @@ COMPOSE = [
     "docker",
     "compose",
     "--project-name",
-    "gaobao-java-smoke",
+    os.getenv("GAOBAO_RATE_LIMIT_COMPOSE_PROJECT", "gaobao-java-smoke"),
     "--env-file",
     ".env.full",
     "-f",
@@ -212,7 +212,7 @@ def main() -> None:
     parser.add_argument("--tiers", required=True, help="Comma-separated users, e.g. 50,100,200")
     parser.add_argument("--label", default="dual")
     parser.add_argument("--duration", type=int, default=10)
-    parser.add_argument("--host", default="http://127.0.0.1")
+    parser.add_argument("--host", default=os.getenv("GAOBAO_RATE_LIMIT_BASE_URL", "http://127.0.0.1"))
     parser.add_argument("--output", default="benchmarks/load/results")
     parser.add_argument(
         "--informational",

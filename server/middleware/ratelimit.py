@@ -69,17 +69,28 @@ local capacity = tonumber(ARGV[2])
 local t = redis.call('TIME')
 local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
 local previous = redis.call('HMGET', key, 'tokens', 'updated')
-local tokens = tonumber(previous[1]) or capacity
-local updated = tonumber(previous[2]) or now
-tokens = math.min(capacity, tokens + math.max(0, now - updated) * rate)
+local tokens = tonumber(previous[1])
+local updated = tonumber(previous[2])
+if previous[1] == false and previous[2] == false then
+  tokens = capacity
+  updated = now
+elseif not tokens or not updated or tokens < 0 or tokens > capacity or updated < 0 then
+  return redis.error_reply('invalid token bucket state')
+end
+local effective_now = math.max(now, updated)
+local elapsed = math.min(math.max(0, effective_now - updated), capacity / rate)
+tokens = math.min(capacity, tokens + elapsed * rate)
 local allowed = 0
+local retry_seconds = 0
 if tokens >= 1 then
   tokens = tokens - 1
   allowed = 1
+else
+  retry_seconds = math.max(1, math.ceil((1 - tokens) / rate))
 end
-redis.call('HSET', key, 'tokens', tokens, 'updated', now)
+redis.call('HSET', key, 'tokens', tokens, 'updated', effective_now)
 redis.call('PEXPIRE', key, math.max(1000, math.ceil(capacity / rate * 2000)))
-return allowed
+return {allowed, retry_seconds}
 """
 
 
@@ -114,14 +125,29 @@ class RedisTokenBucketLimiter:
         digest = hmac.new(self.secret, b"public-rate-limit:v1:" + ip.encode(), hashlib.sha256).hexdigest()
         return f"{self.namespace}:{digest}"
 
-    def allow(self, ip: str) -> bool:
+    def check(self, ip: str) -> tuple[bool, int]:
         try:
             result = self.client.eval(_REDIS_TOKEN_BUCKET, 1, self.key_for(ip), str(self.rate), str(self.capacity))
         except Exception as exc:
             raise SecurityBackendUnavailable("Public rate-limit backend unavailable") from exc
-        if result not in (0, 1):
+        if not isinstance(result, (list, tuple)) or len(result) != 2:
             raise SecurityBackendUnavailable("Invalid public rate-limit decision")
-        return result == 1
+        try:
+            allowed, retry_after = int(result[0]), int(result[1])
+        except (TypeError, ValueError) as exc:
+            raise SecurityBackendUnavailable("Invalid public rate-limit decision") from exc
+        if (
+            allowed not in (0, 1)
+            or retry_after < 0
+            or (allowed == 1 and retry_after != 0)
+            or (allowed == 0 and retry_after < 1)
+        ):
+            raise SecurityBackendUnavailable("Invalid public rate-limit decision")
+        return allowed == 1, retry_after
+
+    def allow(self, ip: str) -> bool:
+        """Compatibility helper for callers that only need the admission bit."""
+        return self.check(ip)[0]
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -151,16 +177,19 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if self.shared and request.url.path in {"/api/v1/health/live", "/api/v1/health/ready"}:
             return await call_next(request)
         client_ip = resolve_client_ip(request)
+        retry_after = 1
         try:
-            allowed = (
-                await run_in_threadpool(self.limiter.allow, client_ip) if self.shared else self.limiter.allow(client_ip)
-            )
+            if self.shared:
+                assert isinstance(self.limiter, RedisTokenBucketLimiter)
+                allowed, retry_after = await run_in_threadpool(self.limiter.check, client_ip)
+            else:
+                allowed = self.limiter.allow(client_ip)
         except SecurityBackendUnavailable:
             return JSONResponse(status_code=503, content={"detail": "服务暂不可用，请稍后再试"})
         if not allowed:
             return JSONResponse(
                 status_code=429,
                 content={"detail": "请求过于频繁，请稍后再试"},
-                headers={"Retry-After": "1"},
+                headers={"Retry-After": str(max(1, retry_after))},
             )
         return await call_next(request)

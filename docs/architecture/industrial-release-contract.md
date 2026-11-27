@@ -57,6 +57,7 @@ python scripts/compose_standard.py up --build -d
 
 - DATABASE_URL：已授权 MySQL 应用账号，不使用 root 或迁移账号。
 - REDIS_URL：已配置认证与网络隔离的 Redis。
+- TRUSTED_PROXIES：实际 Java Gateway 与前置 TLS ingress 的精确 IPv4/IPv6 CIDR 列表；XFF 按右至左解析，错误或过宽的信任网段会造成 IP 合并或身份伪造风险。`ADMIN_TRUSTED_PROXIES` 如配置会覆盖该列表，工业启动会验证两者一致。
 - GAOBAO_DATA_APPROVAL_REF：内部授权标识，不等于独立核验许可证。
 - GAOBAO_ADMISSIONS_YEAR：候选配置必须明确审批历史年度；API/worker 检查该年度位次及院校级录取记录存在。
 - GAOBAO_ADMISSIONS_MANIFEST_HOST_PATH、GAOBAO_ADMISSIONS_MANIFEST_SHA256：独立审核清单的私有宿主机路径与 SHA-256 pin，API/worker 只读挂载同一文件。详见 [行级来源合同](industrial-admissions-evidence.md)。没有审核清单不启动。
@@ -82,7 +83,7 @@ curl -f http://127.0.0.1:8088/api/v1/health/ready
 | G0 入口 | 一套标准 Java/MySQL/Redis/Python 拓扑，目录/聊天/运营质检 E2E，禁止 API 直通 | 主线 CI/Compose 合成 smoke 已通过；不代表真实环境验收 |
 | G1 数据/Schema | MySQL explicit、独立迁移、唯一 Alembic head、CUSTOM 数据、授权与版本审计 | 启动门禁已实现；真实数据权利/质量仍需审核 |
 | G2 隐私 | 摘要 AES-GCM、TTL 清理、无缓存研究 API、密钥隔离；原对话及备份删除、真实身份与同意 | 本地合成部署实现已通过当前主线自动化检查；真实个人数据、长期偏好及生产隐私审核仍 NO-GO |
-| G3 可靠性 | API 与 worker 独立启动校验、Redis readiness、外部 MySQL/Redis 断连、Outbox 恢复、备份恢复 | Catalog 与工业 FastAPI HTTP 各有独立 Redis 原子限流；WebSocket 消息与模型配额尚未覆盖。实际候选集群故障注入、SLO 和恢复报告缺失 |
+| G3 可靠性 | API 与 worker 独立启动校验、Redis readiness、外部 MySQL/Redis 断连、Outbox 恢复、备份恢复 | Java Catalog 全局桶、FastAPI IP 桶和管理滑窗有 Redis Lua 回拨防护及 Redis 7 隔离测试；Industrial `/ws/` 在 Nginx 关闭。Java JUnit/完整服务故障矩阵、已批准 Industrial API 压测、托管 Redis 主从故障切换、SSE 并发预算、SLO 和生产恢复报告仍缺 |
 | G4 研究 | 授权数据、审批、身份/回执绑定、隔离、预算、正确拒答、独立 gold | #196 已合并；真实模型/真实数据/独立 gold/容器与 worker 部署验收未完成 |
 | G5 Eval/优化 | 同模型、同 gold、同预算、完整分母和 Holdout；真实 usage/账单 | 无真实结果，不宣传降本 |
 | G6 安全发布 | TLS、专用凭据、镜像/SBOM、轮换、监控告警、容量与回滚 | 无真实生产证据，NO-GO |
@@ -91,6 +92,6 @@ curl -f http://127.0.0.1:8088/api/v1/health/ready
 
 参考：[授权研究 TaskRun](../admissions-research-taskrun.md)、[独立研究 Eval](../validation/authorized-research-eval.md)、[Java 微服务](../java-microservices.md)、[快照机制](../validation/session-compaction-snapshot-20261124.md)。历史审计保留日期，不覆盖原始证据。
 
-Industrial FastAPI HTTP admission is documented in [public HTTP admission](../security/industrial-public-http-admission.md). Rate settings and shared identity secret must be consistent across replicas; verify trusted proxy networks and HTTP 429/503 behavior before opening the service.
+Industrial FastAPI HTTP admission is documented in [public HTTP admission](../security/industrial-public-http-admission.md). Industrial Compose requires an explicit `TRUSTED_PROXIES` CIDR list; configure the exact Java Gateway and upstream ingress hops, and keep `ADMIN_TRUSTED_PROXIES` aligned if used. Rate settings, Redis and shared identity secret must be consistent across replicas. The limiter evidence report distinguishes real Redis tests from unavailable Java/Industrial production acceptance; do not open the service based on those tests alone.
 
 Authenticated industrial chat continuations may opt into the completed-turn idempotency contract documented in [industrial admissions evidence](industrial-admissions-evidence.md). The receipt migration must reach the unique head before startup; anonymous and unkeyed retry remain outside the guarantee.

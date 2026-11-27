@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
+import textwrap
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -13,10 +15,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from server.admin.limits import AdminLimiter, RedisSlidingWindowLimiter, SecurityBackendUnavailable
+from server.admin.limits import _LUA_SLIDING_WINDOW, AdminLimiter, RedisSlidingWindowLimiter, SecurityBackendUnavailable
 from server.admin.routes import _login_limiter
 from server.deps import get_db
 from server.main import app
+from server.middleware.ratelimit import _REDIS_TOKEN_BUCKET, RedisTokenBucketLimiter
 from tests.conftest import auth_header, login
 
 REDIS_TEST_URL = os.getenv("REDIS_TEST_URL", "").strip()
@@ -208,8 +211,6 @@ def test_unreachable_redis_is_explicit():
 
 
 def test_public_token_bucket_atomic_across_instances(redis_client):
-    from server.middleware.ratelimit import RedisTokenBucketLimiter
-
     namespace = f"{TEST_REDIS_ROOT}:public"
     kwargs = {
         "url": REDIS_TEST_URL,
@@ -232,3 +233,147 @@ def test_public_token_bucket_atomic_across_instances(redis_client):
     assert "192.0.2.1" not in key
     assert redis_client.pttl(key) > 0
     assert second.allow("192.0.2.2")
+
+
+def test_admin_window_keeps_attempts_after_clock_rollback(redis_client):
+    time_read = (
+        "local t = redis.call('TIME')\nlocal redis_now_ms = (tonumber(t[1]) * 1000) + math.floor(tonumber(t[2]) / 1000)"
+    )
+    controlled_script = _LUA_SLIDING_WINDOW.replace(time_read, "local redis_now_ms = tonumber(ARGV[4])", 1)
+    assert controlled_script != _LUA_SLIDING_WINDOW
+    key = f"{TEST_REDIS_ROOT}:admin-clock:{uuid.uuid4().hex}"
+
+    def check(now_ms: int, member: str) -> tuple[int, int]:
+        decision = redis_client.eval(controlled_script, 1, key, "2", "60000", member, str(now_ms))
+        return int(decision[0]), int(decision[1])
+
+    assert check(100_000, "before-rollback") == (1, 0)
+    assert check(90_000, "during-rollback") == (1, 0)
+    assert redis_client.zscore(key, "during-rollback") == 100_000
+    assert check(150_001, "after-clock-recovers")[0] == 0
+    assert redis_client.zcard(key) == 2
+    assert check(160_000, "window-expired") == (1, 0)
+
+
+def test_python_and_java_bucket_scripts_do_not_replay_refill_after_clock_rollback(redis_client):
+    import redis
+
+    java_source = (
+        ROOT / "java-services/gateway/src/main/java/com/xsuperplay/gaobao/gateway/"
+        "FailClosedCatalogRateLimiterGatewayFilterFactory.java"
+    ).read_text(encoding="utf-8")
+    match = re.search(r'private static final String LUA = """\n(.*?)\n\s*""";', java_source, re.DOTALL)
+    assert match is not None, "Java Gateway Lua script was not found"
+    java_script = textwrap.dedent(match.group(1))
+
+    time_read = "local t = redis.call('TIME')\nlocal now = tonumber(t[1]) + tonumber(t[2]) / 1000000"
+    scripts = {
+        "python": _REDIS_TOKEN_BUCKET.replace(time_read, "local now = tonumber(ARGV[3])", 1),
+        "java": java_script.replace(time_read, "local now = tonumber(ARGV[3])", 1),
+    }
+    assert scripts["python"] != _REDIS_TOKEN_BUCKET
+    assert scripts["java"] != java_script
+
+    for language, script in scripts.items():
+        key = f"{TEST_REDIS_ROOT}:bucket-clock:{language}:{uuid.uuid4().hex}"
+
+        def run(now: int, bucket_key: str = key, bucket_script: str = script) -> tuple[int, int]:
+            result = redis_client.eval(bucket_script, 1, bucket_key, "1", "4", str(now))
+            return int(result[0]), int(result[1])
+
+        assert [run(1_000)[0] for _ in range(4)] == [1, 1, 1, 1]
+        assert run(1_001) == (1, 0)
+        assert run(900) == (0, 1)
+        assert float(redis_client.hget(key, "updated")) == 1_001
+        assert run(1_001) == (0, 1)
+        assert run(1_002) == (1, 0)
+        assert float(redis_client.hget(key, "tokens")) <= 4
+
+        forward_key = f"{key}:forward"
+        assert run(2_000, forward_key) == (1, 0)
+        assert [run(10_000, forward_key)[0] for _ in range(3)] == [1, 1, 1]
+        assert float(redis_client.hget(forward_key, "tokens")) <= 4
+
+        corrupt_key = f"{key}:corrupt"
+        redis_client.hset(corrupt_key, mapping={"tokens": "5", "updated": "1000"})
+        with pytest.raises(redis.exceptions.ResponseError, match="invalid token bucket state"):
+            redis_client.eval(script, 1, corrupt_key, "1", "4", "1000")
+
+
+def test_real_redis_public_middleware_isolates_ips_and_ignores_forged_forwarding(redis_client, monkeypatch):
+    from fastapi import FastAPI
+
+    from server.middleware.ratelimit import RateLimitMiddleware
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    monkeypatch.setenv("REDIS_URL", REDIS_TEST_URL)
+    monkeypatch.setenv("SESSION_SECRET", f"test-{uuid.uuid4().hex}")
+    monkeypatch.delenv("ADMIN_TRUSTED_PROXIES", raising=False)
+    monkeypatch.delenv("TRUSTED_PROXIES", raising=False)
+    app_with_limiter = FastAPI()
+    app_with_limiter.add_middleware(RateLimitMiddleware, rate=0.001, capacity=1)
+
+    @app_with_limiter.get("/ping")
+    def ping():
+        return {"ok": True}
+
+    first = TestClient(app_with_limiter, client=("198.51.100.1", 12001))
+    second = TestClient(app_with_limiter, client=("198.51.100.2", 12002))
+    try:
+        assert first.get("/ping", headers={"X-Forwarded-For": "203.0.113.8"}).status_code == 200
+        blocked = first.get("/ping", headers={"X-Forwarded-For": "203.0.113.9"})
+        assert blocked.status_code == 429
+        assert blocked.headers["Retry-After"] == "1000"
+        assert second.get("/ping", headers={"X-Forwarded-For": "203.0.113.8"}).status_code == 200
+    finally:
+        first.close()
+        second.close()
+
+
+def test_public_token_bucket_is_shared_by_independent_processes(redis_client):
+    namespace = f"{TEST_REDIS_ROOT}:public-processes:{uuid.uuid4().hex}"
+    code = (
+        "from server.middleware.ratelimit import RedisTokenBucketLimiter;"
+        "import os;"
+        "lim=RedisTokenBucketLimiter(url=os.environ['REDIS_TEST_URL'],secret='shared-test-secret',"
+        "rate=0.001,capacity=5,namespace=os.environ['LIMIT_NS']);"
+        "print('1' if lim.allow('198.51.100.20') else '0')"
+    )
+    env = {**os.environ, "PYTHONPATH": str(ROOT), "REDIS_TEST_URL": REDIS_TEST_URL, "LIMIT_NS": namespace}
+    processes = [
+        subprocess.Popen([sys.executable, "-c", code], cwd=ROOT, env=env, stdout=subprocess.PIPE, text=True)
+        for _ in range(10)
+    ]
+    outputs = [process.communicate(timeout=30)[0].strip() for process in processes]
+    assert all(process.returncode == 0 for process in processes)
+    assert outputs.count("1") == 5
+
+
+def test_lost_public_bucket_key_resets_only_to_configured_burst(redis_client):
+    limiter = RedisTokenBucketLimiter(
+        url=REDIS_TEST_URL,
+        secret="lost-key-test-secret",
+        rate=0.001,
+        capacity=4,
+        namespace=f"{TEST_REDIS_ROOT}:lost-bucket:{uuid.uuid4().hex}",
+        client=redis_client,
+    )
+    for _ in range(4):
+        assert limiter.allow("198.51.100.21")
+    assert not limiter.allow("198.51.100.21")
+    redis_client.delete(limiter.key_for("198.51.100.21"))
+    assert [limiter.allow("198.51.100.21") for _ in range(5)] == [True, True, True, True, False]
+
+
+def test_corrupt_public_bucket_state_fails_closed(redis_client):
+    limiter = RedisTokenBucketLimiter(
+        url=REDIS_TEST_URL,
+        secret="corrupt-state-test-secret",
+        rate=1,
+        capacity=2,
+        namespace=f"{TEST_REDIS_ROOT}:corrupt-bucket:{uuid.uuid4().hex}",
+        client=redis_client,
+    )
+    redis_client.hset(limiter.key_for("198.51.100.22"), mapping={"tokens": "3", "updated": "1000"})
+    with pytest.raises(SecurityBackendUnavailable):
+        limiter.check("198.51.100.22")
