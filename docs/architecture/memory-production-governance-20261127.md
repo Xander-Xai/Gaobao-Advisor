@@ -5,6 +5,9 @@
 > 状态口径遵循 `docs/PROJECT_STATUS.md`：IMPLEMENTED / INTEGRATED / VERIFIED /
 > MERGED / PRODUCTION_VALIDATED 严格区分，合成测试不等于真实模型效果或生产验收。
 
+> 实现：[PR #218](https://github.com/Xander-Xai/Gaobao-Advisor/pull/218)；
+> 剩余门禁跟踪：[Issue #219](https://github.com/Xander-Xai/Gaobao-Advisor/issues/219)。
+
 ## 0. 一句话结论
 
 四层记忆的**工程边界已经成立**：工作记忆以 SQL 证据为权威、会话记忆以不透明摘要降级、

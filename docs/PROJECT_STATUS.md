@@ -73,9 +73,11 @@ close these gates.
   E3: real-provider business evaluation and authorized admissions evidence.
 - [#147](https://github.com/Xander-Xai/Gaobao-Advisor/issues/147) owns E2 and
   E4: controlled context/harness comparisons and production-like acceptance.
-- The 2026-11-27 memory production audit tracks the remaining memory gates
-  (real identity binding, backup retention, real-model memory effect) in
-  `docs/audits/2026-11-27-memory-production-audit.md`; cross-task user memory
+- [#219](https://github.com/Xander-Xai/Gaobao-Advisor/issues/219) tracks the
+  remaining memory production gates (real identity binding, backup retention and
+  deletion, real-model memory effect). Implementation is in
+  [PR #218](https://github.com/Xander-Xai/Gaobao-Advisor/pull/218) with the audit
+  in `docs/audits/2026-11-27-memory-production-audit.md`; cross-task user memory
   stays production-disabled until those gates are closed.
 - [#204](https://github.com/Xander-Xai/Gaobao-Advisor/issues/204) records the
   user-facing research integration; implementation is merged, while enabled

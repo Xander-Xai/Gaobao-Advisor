@@ -7,6 +7,7 @@
 > - **MANUAL_REVIEW_PENDING**：人工复核工作表已生成但**尚未有人签署**，不得当作质量结论。
 >
 > 原始数据：`docs/evaluation/memory-eval-20261127.json`（由 `python3 -m benchmarks.memory_eval --scripted-smoke` 生成）。
+> 实现：[PR #218](https://github.com/Xander-Xai/Gaobao-Advisor/pull/218)；真实模型门禁：[Issue #219](https://github.com/Xander-Xai/Gaobao-Advisor/issues/219)。
 > 用例集：`benchmarks/fixtures/memory_eval_cases.json`（契约 `SYNTHETIC_MEMORY_EVAL_V1`，12 例）。
 
 ## 1. 用例覆盖
