@@ -72,19 +72,24 @@ local limit = tonumber(ARGV[1])
 local window_ms = tonumber(ARGV[2])
 local member = ARGV[3]
 local t = redis.call('TIME')
-local now_ms = (tonumber(t[1]) * 1000) + math.floor(tonumber(t[2]) / 1000)
-local cutoff = now_ms - window_ms
+local redis_now_ms = (tonumber(t[1]) * 1000) + math.floor(tonumber(t[2]) / 1000)
+local newest = redis.call('ZREVRANGE', key, 0, 0, 'WITHSCORES')
+local window_now = redis_now_ms
+if newest[2] then
+  window_now = math.max(window_now, tonumber(newest[2]))
+end
+local cutoff = window_now - window_ms
 redis.call('ZREMRANGEBYSCORE', key, '-inf', cutoff)
 local count = redis.call('ZCARD', key)
 if count >= limit then
   local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
   local retry_ms = 1
   if oldest[2] then
-    retry_ms = math.max(1, (tonumber(oldest[2]) + window_ms) - now_ms)
+    retry_ms = math.max(1, (tonumber(oldest[2]) + window_ms) - window_now)
   end
   return {0, math.max(1, math.ceil(retry_ms / 1000))}
 end
-redis.call('ZADD', key, now_ms, member)
+redis.call('ZADD', key, window_now, member)
 redis.call('PEXPIRE', key, window_ms)
 return {1, 0}
 """
