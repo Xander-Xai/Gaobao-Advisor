@@ -11,10 +11,9 @@ import asyncio
 import logging
 import os
 
-from openai import AsyncOpenAI
-
 from config.loader import load_llm_config
 from server.agent.llm_reliability import build_llm_context
+from server.services.llm_gateway import governed_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +54,9 @@ async def generate_chat_rewrite(state: dict, rejected_draft: str, issues: list[s
     )
 
     try:
-        async with AsyncOpenAI(
-            api_key=key,
-            base_url=cfg.get("base_url"),
+        async with governed_async_client(
+            operation="repair",
             timeout=min(float(cfg.get("timeout") or 30), 30.0),
-            max_retries=0,
         ) as client:
             response = await client.chat.completions.create(
                 model=cfg["model"],

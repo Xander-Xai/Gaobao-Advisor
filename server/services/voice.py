@@ -28,14 +28,25 @@ class VoiceService:
         self.chat_model = os.getenv("DASHSCOPE_CHAT_MODEL", "qwen-plus")
 
     async def render_voice_reply(self, text: str, scene: str = "gaokao") -> str:
-        """Use LLM to rewrite structured reply into oral-style speech."""
+        """Use LLM to rewrite structured reply into oral-style speech.
+
+        The call goes through the governed client, so a voice rendering is
+        charged against the provider budget like every other model call.
+        """
         try:
-            from openai import OpenAI
+            from server.services.llm_gateway import governed_client
 
             style = SCENE_VOICE_STYLES.get(scene, "")
-            client = OpenAI(
-                api_key=self.chat_api_key,
-                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            client = governed_client(
+                "dashscope",
+                operation="voice",
+                config_override={
+                    "dashscope": {
+                        "api_key": self.chat_api_key,
+                        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                        "model": self.chat_model,
+                    }
+                },
             )
             response = client.chat.completions.create(
                 model=self.chat_model,

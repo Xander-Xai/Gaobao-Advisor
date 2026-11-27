@@ -98,13 +98,13 @@ def run_arm(
     if real_model:
         if not 1 <= max_provider_calls <= 64:
             raise ValueError("Context arm call cap must be between 1 and 64")
-        from openai import OpenAI
+        from server.services.llm_gateway import governed_openai_client
 
-        delegate = OpenAI(
-            api_key=os.environ["OPENAI_API_KEY"],
-            base_url=os.environ.get("OPENAI_API_BASE") or None,
+        delegate = governed_openai_client(
+            operation="planner",
             timeout=20.0,
-            max_retries=0,
+            api_key=os.environ["OPENAI_API_KEY"],
+            base_url=os.environ.get("OPENAI_API_BASE") or "",
         ).chat.completions
     else:
         delegate = _FakeCompletions()

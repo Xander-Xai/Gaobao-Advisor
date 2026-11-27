@@ -327,6 +327,34 @@ sequenceDiagram
 Redis, is the state source of truth. Recovery is lease-based (60s delivery /
 600s execution by default), not an exactly-once guarantee.
 
+### Model resource governance
+
+Redis carries a second, independent budget: the provider quota of the
+internal model calls. The public per-IP limiter bounds how many *requests* a
+client may send; it cannot bound how many *model* calls one accepted request
+produces (summary, draft, judge per dimension, repair, embedding, retry,
+provider fallback). The LLM Resource Governor owns that budget:
+
+```mermaid
+flowchart LR
+    R["HTTP request<br/>(per-IP bucket)"] --> G["LLM Resource Governor<br/>RPM · TPM · concurrency"]
+    G -->|lease| C1["chat draft"]
+    G -->|lease| C2["history summary"]
+    G -->|lease| C3["quality judge"]
+    G -->|lease| C4["answer repair"]
+    G -->|lease| C5["embedding batch"]
+    G -->|lease| C6["research engine"]
+    G -->|rejected| F["deterministic fallback answer"]
+```
+
+Every admission is one atomic Redis Lua script, so several API and Worker
+instances share one budget. Concurrency is a lease semaphore with expiry
+reclamation, not a token bucket: a crashed worker cannot hold a slot forever.
+A retry and a provider fallback are new admissions, so neither bypasses the
+budget. The full design, the configuration reference and the model call
+coverage matrix are in
+[LLM Resource Governance](llm-resource-governance.md).
+
 ## 7. Deployment topology
 
 ```mermaid
@@ -370,6 +398,7 @@ host mappings so the gateway cannot be bypassed.
 | Public data catalog | `server/routes/data.py`, `server/services/data_catalog.py`, `server/domain/data_catalog.py` |
 | Admin RBAC / quality / audit | `server/admin/` |
 | Queue and worker | `server/admin/queue.py`, `server/admin/worker.py` |
+| Model resource governance | `server/services/llm_governor.py`, `server/services/llm_gateway.py`, `server/agent/governed_chat_model.py`, `config/llm_governance.yaml` |
 | Persistence / migrations | `db/`, `migrations/versions/` |
 | Demo dataset generator | `scripts/seed_demo_data.py` |
 | Data explorer UI | `frontend/src/views/DataView.vue`, `components/data/` |

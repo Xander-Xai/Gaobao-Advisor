@@ -365,20 +365,39 @@ class EmbeddingProvider:
 
 
 class OpenAIEmbedding(EmbeddingProvider):
-    """通过 OpenAI 兼容 API 计算 embedding。"""
+    """Embedding API 的抽象接口 (OpenAI-compatible, governed)."""
 
-    def __init__(self, model: str = "text-embedding-3-small", api_key: str | None = None, base_url: str | None = None):
-        from openai import OpenAI
+    def __init__(
+        self,
+        model: str = "text-embedding-3-small",
+        api_key: str | None = None,
+        base_url: str | None = None,
+        provider: str = "openai",
+    ):
+        from server.services.llm_gateway import governed_client
 
-        self._client = OpenAI(api_key=api_key, base_url=base_url)
+        self._provider = provider
         self._model = model
+        self._client = governed_client(
+            provider,
+            model=model,
+            operation="embedding",
+            config_override={
+                provider: {
+                    "api_key": api_key,
+                    "base_url": base_url,
+                    "model": model,
+                }
+            },
+        )
 
     def embed(self, texts: list[str]) -> list[np.ndarray]:
         if not texts:
             return []
         all_embeddings: list[np.ndarray] = []
         # Batch size 32: SiliconFlow (and most OpenAI-compatible APIs) cap
-        # the input array length at 32 per request.
+        # the input array length at 32 per request. Every batch is a separate
+        # provider request and therefore a separate governor admission.
         batch_size = 32
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
@@ -434,18 +453,21 @@ def create_embedding_provider(provider: str = "openai", model: str | None = None
             model=model or "text-embedding-3-small",
             api_key=kwargs.get("api_key") or os.getenv("OPENAI_API_KEY"),
             base_url=kwargs.get("base_url"),
+            provider="openai",
         )
     elif provider == "dashscope":
         return OpenAIEmbedding(
             model=model or "text-embedding-v3",
             api_key=kwargs.get("api_key") or os.getenv("DASHSCOPE_API_KEY"),
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            provider="dashscope",
         )
     elif provider == "siliconflow":
         return OpenAIEmbedding(
             model=model or "BAAI/bge-large-zh-v1.5",
             api_key=kwargs.get("api_key") or os.getenv("SILICONFLOW_API_KEY"),
             base_url=kwargs.get("base_url", "https://api.siliconflow.cn/v1"),
+            provider="siliconflow",
         )
     elif provider == "ollama":
         return OllamaEmbedding(

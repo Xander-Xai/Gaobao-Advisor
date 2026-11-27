@@ -58,6 +58,103 @@ RAG_CACHE_MISSES = Counter("rag_cache_misses_total", "Total RAG cache misses")
 # Active sessions
 ACTIVE_SESSIONS = Counter("active_sessions_total", "Total active sessions")
 
+# === LLM Resource Governor ===
+#
+# The governor owns the internal model budget: provider RPM, provider TPM and
+# provider concurrency. Labels are limited to provider/model identifiers that
+# come from configuration, plus a fixed set of outcome codes, so the metric
+# cardinality stays bounded.
+
+LLM_GOVERNOR_REQUESTS = Counter(
+    "llm_governor_requests_total",
+    "Model requests admitted by the LLM resource governor",
+    ["provider", "model", "operation"],
+)
+
+LLM_GOVERNOR_REJECTIONS = Counter(
+    "llm_governor_rejections_total",
+    "Model requests refused by the LLM resource governor",
+    ["provider", "reason"],
+)
+
+LLM_GOVERNOR_ACTIVE_CONCURRENCY = Gauge(
+    "llm_governor_active_concurrency",
+    "In-flight model calls currently holding a provider concurrency slot",
+    ["provider"],
+)
+
+LLM_GOVERNOR_TOKENS_RESERVED = Counter(
+    "llm_governor_tokens_reserved_total",
+    "Tokens reserved at admission (estimated input plus reserved output)",
+    ["provider", "model"],
+)
+
+LLM_GOVERNOR_TOKENS_USED = Counter(
+    "llm_governor_tokens_used_total",
+    "Tokens actually consumed after reconciling the reservation with provider usage",
+    ["provider", "model"],
+)
+
+LLM_GOVERNOR_WAIT = Histogram(
+    "llm_governor_wait_seconds",
+    "Seconds spent waiting for the governor to admit a model call",
+    ["provider"],
+    buckets=[0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0],
+)
+
+LLM_PROVIDER_429 = Counter(
+    "llm_provider_429_total",
+    "Provider rate-limit (429) responses observed by the gateway",
+    ["provider"],
+)
+
+LLM_GOVERNOR_FALLBACK = Counter(
+    "llm_governor_fallback_total",
+    "Times the gateway moved to another provider in the fallback chain",
+    ["provider"],
+)
+
+LLM_GOVERNOR_RETRIES = Counter(
+    "llm_governor_retries_total",
+    "Retried model calls, each of which passes the governor again",
+    ["provider", "reason"],
+)
+
+_GOVERNOR_LABEL_MAX = 64
+_GOVERNOR_REASONS = frozenset(
+    {
+        "rpm",
+        "tpm",
+        "concurrency",
+        "redis_unavailable",
+        "rejected",
+        "unknown",
+        "429",
+        "500",
+        "502",
+        "503",
+        "504",
+        "none",
+    }
+)
+
+
+def _safe_label(value: str | None, *, allowed: frozenset[str] | None = None) -> str:
+    """Bound a Prometheus label value.
+
+    Identifiers come from configuration, but a caller may still pass an
+    arbitrary string, so the value is length bounded and, for reason codes,
+    checked against a fixed set.
+    """
+    text = str(value or "").strip()
+    if allowed is not None:
+        return text if text in allowed else "unknown"
+    if not text:
+        return "unknown"
+    cleaned = "".join(char if (char.isalnum() or char in "._:/-") else "_" for char in text)
+    return cleaned[:_GOVERNOR_LABEL_MAX] or "unknown"
+
+
 # === Quality Metrics ===
 
 QUALITY_ANTI_PATTERN_HITS = Counter(
@@ -265,6 +362,62 @@ def record_judge_score(dimension: str, score: float):
 def record_hallucination(hallucination_type: str):
     """Record a hallucination detection event."""
     QUALITY_HALLUCINATION_DETECTED.labels(hallucination_type=hallucination_type).inc()
+
+
+# === LLM Resource Governor helpers ===
+
+
+def record_governor_admission(provider: str, model: str, operation: str) -> None:
+    """Record one admitted model request."""
+    LLM_GOVERNOR_REQUESTS.labels(
+        provider=_safe_label(provider),
+        model=_safe_label(model),
+        operation=_safe_label(operation),
+    ).inc()
+
+
+def record_governor_rejection(provider: str, reason: str) -> None:
+    """Record one refused model request."""
+    LLM_GOVERNOR_REJECTIONS.labels(
+        provider=_safe_label(provider),
+        reason=_safe_label(reason, allowed=_GOVERNOR_REASONS),
+    ).inc()
+
+
+def record_governor_wait(provider: str, seconds: float) -> None:
+    """Record how long a call waited for admission."""
+    LLM_GOVERNOR_WAIT.labels(provider=_safe_label(provider)).observe(max(0.0, seconds))
+
+
+def record_governor_tokens(provider: str, model: str, *, reserved: int, used: int) -> None:
+    """Record the reserved and the actually consumed token amount."""
+    provider_label = _safe_label(provider)
+    model_label = _safe_label(model)
+    LLM_GOVERNOR_TOKENS_RESERVED.labels(provider=provider_label, model=model_label).inc(max(0, reserved))
+    LLM_GOVERNOR_TOKENS_USED.labels(provider=provider_label, model=model_label).inc(max(0, used))
+
+
+def record_provider_429(provider: str) -> None:
+    """Record a provider rate-limit response."""
+    LLM_PROVIDER_429.labels(provider=_safe_label(provider)).inc()
+
+
+def record_governor_retry(provider: str, reason: str) -> None:
+    """Record a retried model call."""
+    LLM_GOVERNOR_RETRIES.labels(
+        provider=_safe_label(provider),
+        reason=_safe_label(reason, allowed=_GOVERNOR_REASONS),
+    ).inc()
+
+
+def record_governor_fallback(provider: str) -> None:
+    """Record a move to the next provider of the fallback chain."""
+    LLM_GOVERNOR_FALLBACK.labels(provider=_safe_label(provider)).inc()
+
+
+def adjust_governor_concurrency(provider: str, delta: int) -> None:
+    """Track the in-flight model calls of one provider in this process."""
+    LLM_GOVERNOR_ACTIVE_CONCURRENCY.labels(provider=_safe_label(provider)).inc(delta)
 
 
 # === Admin operations ===

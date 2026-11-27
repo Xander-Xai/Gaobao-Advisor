@@ -192,13 +192,16 @@ class DefaultMemoryManager(MemoryManager):
         super().__init__(llm_func=llm_func, **kwargs)
 
     async def _default_llm_summarize(self, messages: list[dict]) -> str:
-        """Use the project's LLM for summarization."""
-        from openai import AsyncOpenAI
+        """Use the project's LLM for summarization through the governed client.
 
+        The summary is a second model call inside one consultation, so it has
+        to obey the same provider budget as the answer itself.
+        """
         from config.loader import load_llm_config
+        from server.services.llm_gateway import governed_async_client
 
         cfg = load_llm_config()
-        client = AsyncOpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"])
+        client = governed_async_client(operation="summary")
 
         response = await client.chat.completions.create(
             model=cfg["model"],

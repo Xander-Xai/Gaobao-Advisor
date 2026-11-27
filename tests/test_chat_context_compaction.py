@@ -197,7 +197,7 @@ async def test_public_async_candidate_uses_compaction_when_opted_in(monkeypatch)
     monkeypatch.setenv("GAOBAO_CHAT_KEEP_RECENT_ROUNDS", "2")
     monkeypatch.setattr(llm_node, "_load_memory_for_session", lambda session_id: history)
     monkeypatch.setattr(llm_node, "_get_config", lambda: {"api_key": "fake-key", "model": "test"})
-    monkeypatch.setattr(llm_node, "AsyncOpenAI", lambda **kwargs: FakeClient())
+    monkeypatch.setattr(llm_node, "_get_async_llm_client", lambda: FakeClient())
     monkeypatch.setattr(DefaultMemoryManager, "_summarize_history", AsyncMock(return_value="历史摘要"))
 
     output, degraded = await llm_node.generate_chat_candidate(

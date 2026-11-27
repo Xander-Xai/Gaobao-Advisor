@@ -1,6 +1,12 @@
 # gaobao-advisor LLM Provider Configuration
 # 环境变量可覆盖此文件中的任何配置项
-# 用法: 设置 LLM_PROVIDER=deepseek 即可快速切换
+# 用法: 设置 LLM_PROVIDER=agnes-flash-1 即可快速切换
+#
+# 默认 Provider 说明：仓库内的极简 YAML 解析器此前会把嵌套映射压平，
+# 导致本文件的 providers/defaults 实际从未生效，运行时一直回落到硬编码的
+# deepseek 默认值。解析器已修复，为避免一次与模型治理无关的隐式行为变更，
+# 这里把 defaults.provider 显式写为 deepseek（与修复前的实际生效值一致）。
+# 切换 Provider 请使用 LLM_PROVIDER 或修改本行。
 
 providers:
   agnes-flash-1:
@@ -52,7 +58,7 @@ providers:
     max_tokens: null
 
 defaults:
-  provider: "agnes-flash-1"
+  provider: "deepseek"
   temperature: 0.7
   enable_search: true
   max_tokens: null

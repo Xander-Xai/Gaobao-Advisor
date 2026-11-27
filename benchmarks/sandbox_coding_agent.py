@@ -339,15 +339,14 @@ def main(argv: list[str] | None = None) -> int:
 
         if not os.getenv("OPENAI_API_KEY"):
             parser.error("OPENAI_API_KEY is required for explicit model calls")
-        from openai import OpenAI
-
         from benchmarks.sandbox_model_planner import JSONCodingPlanner
+        from server.services.llm_gateway import governed_openai_client
 
-        client = OpenAI(
-            api_key=os.environ["OPENAI_API_KEY"],
-            base_url=os.getenv("OPENAI_API_BASE") or None,
+        client = governed_openai_client(
+            operation="sandbox",
             timeout=20.0,
-            max_retries=0,
+            api_key=os.environ["OPENAI_API_KEY"],
+            base_url=os.getenv("OPENAI_API_BASE") or "",
         )
         reports = [
             run_repair(

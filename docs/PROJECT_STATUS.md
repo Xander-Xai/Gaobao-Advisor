@@ -32,6 +32,7 @@ These states describe separate questions and may coexist:
 | Skills and Sandbox | `skills/gaokao/`; bounded admissions analysis sandbox and separate coding fixtures | Synthetic safety tests and CI Docker isolation probes | IMPLEMENTED; bounded test scope VERIFIED; production multi-tenant isolation NOT validated |
 | Agent Eval and optimizer gates | `benchmarks/`, independent SQL/gold checks and review-only optimization registry | CI artifacts are synthetic/scripted, with short retention | IMPLEMENTED / VERIFIED for the stated fixtures; real model outcome, cost and improvement NOT_MEASURED |
 | Full-stack application | Vue 3, FastAPI, Java Gateway/Catalog, MySQL, Redis, Worker and Compose | Exact-release SHA CI and Java Services workflow; local Java/Gateway standard topology run | IMPLEMENTED / INTEGRATED / MERGED / VERIFIED for synthetic behavior; no production deployment claim |
+| Internal model resource governance | `server/services/llm_governor.py` (provider RPM, TPM, lease-based concurrency, Redis Lua admission) → `server/services/llm_gateway.py` (the only provider request path) → every model call site; `server/agent/governed_chat_model.py` for the framework-internal Deep Agents calls | [`tests/test_llm_governor.py`](../tests/test_llm_governor.py), [`tests/test_llm_governor_redis.py`](../tests/test_llm_governor_redis.py) (real Redis 7), [`tests/test_llm_governance_coverage.py`](../tests/test_llm_governance_coverage.py); design and coverage matrix in [`docs/architecture/llm-resource-governance.md`](architecture/llm-resource-governance.md) | IMPLEMENTED / INTEGRATED / VERIFIED for synthetic behaviour with a mock provider; the shipped quota values are a **TEST configuration**, not a real provider contract — real quota admission, provider 429 behaviour and multi-instance production behaviour are NOT_MEASURED |
 
 ## Verification snapshot
 
@@ -75,6 +76,10 @@ close these gates.
 - [#204](https://github.com/Xander-Xai/Gaobao-Advisor/issues/204) records the
   user-facing research integration; implementation is merged, while enabled
   environment acceptance remains pending and is not a real-model result.
+- [#216](https://github.com/Xander-Xai/Gaobao-Advisor/issues/216) owns the
+  real-provider acceptance of the LLM Resource Governor: the shipped quota
+  values are a test configuration, and the admission, the degradation under a
+  real 429 and the shared budget across two instances are not yet measured.
 
 Keep all three open until their explicitly scoped acceptance criteria are met;
 do not count old Draft PR or historical SHA state as current evidence.

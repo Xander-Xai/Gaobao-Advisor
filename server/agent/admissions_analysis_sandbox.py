@@ -379,9 +379,21 @@ def main(argv: list[str] | None = None) -> int:
             with get_session() as session:
                 rows = collect_admissions_rows(session, scope)
             if args.model:
-                from openai import OpenAI
+                from server.services.llm_gateway import governed_client
 
-                client = OpenAI(timeout=30.0, max_retries=0)
+                provider = os.getenv("GAOBAO_LLM_RESEARCH_PROVIDER", "openai").strip() or "openai"
+                client = governed_client(
+                    provider,
+                    operation="sandbox",
+                    timeout=30.0,
+                    config_override={
+                        provider: {
+                            "api_key": os.environ.get("OPENAI_API_KEY", ""),
+                            "base_url": os.environ.get("OPENAI_API_BASE") or "",
+                            "model": args.model,
+                        }
+                    },
+                )
                 try:
                     receipt = run_analysis_agent(
                         rows,

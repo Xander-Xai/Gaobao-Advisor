@@ -6,6 +6,24 @@ not imply production validation. The application version is maintained in
 
 ## Unreleased
 
+- Added an LLM Resource Governor for the internal model calls: provider level
+  RPM, TPM and concurrency, with an atomic Redis Lua admission that several API
+  and Worker instances share. Concurrency uses a lease semaphore with expiry
+  reclamation, so a crashed worker cannot hold a provider slot forever.
+- Routed every model call path through one governed gateway, including the
+  history summary, the quality judge, the rejected-answer repair, the
+  embedding batches, the voice rendering and the Deep Agents framework
+  internal calls. A retry and a provider fallback are new admissions, so
+  neither bypasses the provider budget.
+- Added token reservation and reconciliation with the real provider usage, and
+  an explicit Redis failure policy that fails closed by default instead of
+  allowing unbounded calls.
+- Added Prometheus metrics for model requests, refusals, concurrency, reserved
+  and consumed tokens, admission wait, provider 429s, retries and fallbacks.
+- Fixed the minimal YAML loader, which flattened nested mappings and therefore
+  silently ignored `config/llm_providers.yaml`. The effective default provider
+  is unchanged.
+
 ## 3.0.0 Preview — 2026-11-26
 
 - Isolated the standard Compose topology by project name, removed fixed

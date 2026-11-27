@@ -218,6 +218,7 @@ python -m pytest tests/test_chat_research_runs.py -q --no-cov --override-ini add
 | Sandbox | IMPLEMENTED / INTEGRATED（研究分析范围） | CI Docker 安全负例与合成描述性分析 | 多租户生产隔离未验证 |
 | Agent Eval / 优化门禁 | IMPLEMENTED；合成 Eval 已集成 CI | 确定性/脚本化 Oracle、预算和回执完整性 | 真实模型配对实验、独立人工 Gold 未完成 |
 | Java / FastAPI / Vue 全栈 | IMPLEMENTED / INTEGRATED / MERGED | 主线 CI 含 Python、Vue、MySQL、Redis、Compose smoke | 真实业务部署、容量/SLO 未验证 |
+| 模型资源治理（RPM / TPM / 并发） | IMPLEMENTED / INTEGRATED | 真实 Redis 下的共享配额、并发上限、租约回收、重试与降级不绕过限流、流式取消释放；Mock Provider 集成测试 | 随仓配额为**测试配置**而非服务商真实配额；真实配额下的准入与 429 行为未测 |
 
 唯一动态状态入口为 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)，其中记录当前边界、证据链接及实时 GitHub 查询方式。当前分支、Issue、PR、CI、Release 等可能变化的信息请以 GitHub 为准。
 
@@ -232,6 +233,7 @@ python -m pytest tests/test_chat_research_runs.py -q --no-cov --override-ini add
 | 数据与检索 | MySQL 8.4、SQLAlchemy、Alembic、Redis、BM25；可选 Dense embedding |
 | Sandbox | Docker 隔离分析执行，固定输入与独立结果校验；不是通用 Shell Agent |
 | Eval | Python 合成业务集、独立 SQL/证据 Oracle、配对评测输入契约 |
+| 模型资源治理 | Provider 级 RPM / TPM / 并发（Redis Lua 原子准入、租约信号量）；所有内部模型调用统一经过治理网关 |
 | 基础设施与观测 | Java 21/Spring Gateway 与只读 Catalog、Docker Compose、Nginx、Prometheus、可选 Sentry |
 | 质量与安全 | pytest、Vitest、Ruff、CodeQL、gitleaks、pip-audit、npm audit |
 

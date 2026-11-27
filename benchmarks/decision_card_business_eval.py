@@ -429,15 +429,14 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("Model evaluation requires --model and --permit-external-model")
         if not os.environ.get("OPENAI_API_KEY"):
             parser.error("OPENAI_API_KEY must be configured for explicit model evaluation")
-        from openai import OpenAI
-
         from server.agent.decision_card_model_planner import DecisionCardModelPlanner, prompt_for_variant
+        from server.services.llm_gateway import governed_openai_client
 
-        client = OpenAI(
-            api_key=os.environ["OPENAI_API_KEY"],
-            base_url=os.environ.get("OPENAI_API_BASE") or None,
+        client = governed_openai_client(
+            operation="planner",
             timeout=20.0,
-            max_retries=0,
+            api_key=os.environ["OPENAI_API_KEY"],
+            base_url=os.environ.get("OPENAI_API_BASE") or "",
         )
 
         budget = ProviderBudget(

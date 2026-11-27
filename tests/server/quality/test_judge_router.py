@@ -22,7 +22,7 @@ class TestJudgeNoKeyFailClosed:
         def _must_not_construct(*args, **kwargs):
             raise AssertionError("judge must not construct an LLM client without an API key")
 
-        monkeypatch.setattr(judge_router, "AsyncOpenAI", _must_not_construct)
+        monkeypatch.setattr(judge_router, "governed_async_client", _must_not_construct)
 
         router = judge_router.JudgeRouter()
         scores = await router.evaluate_all("query", "reply")
@@ -39,7 +39,7 @@ class TestJudgeNoKeyFailClosed:
         def _must_not_construct(*args, **kwargs):
             raise AssertionError("judge must not construct an LLM client without an API key")
 
-        monkeypatch.setattr(judge_router, "AsyncOpenAI", _must_not_construct)
+        monkeypatch.setattr(judge_router, "governed_async_client", _must_not_construct)
 
         score = await judge_router.JudgeRouter().evaluate_dimension("factual", "query", "reply")
 
