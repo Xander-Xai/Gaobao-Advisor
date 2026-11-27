@@ -44,6 +44,7 @@ def test_explicit_config(config):
         ("TRUSTED_PROXIES", "not-a-network"),
         ("TRUSTED_PROXIES", "0.0.0.0/0"),
         ("TRUSTED_PROXIES", "::/0"),
+        ("ADMIN_TRUSTED_PROXIES", "192.0.2.0/24"),
         ("GAOBAO_DATA_APPROVAL_REF", ""),
         ("GAOBAO_ADMISSIONS_YEAR", ""),
         ("GAOBAO_ADMISSIONS_MANIFEST_PATH", ""),
@@ -60,6 +61,11 @@ def test_industrial_rejects_unsafe_configuration(config, name, value):
     config[name] = value
     with pytest.raises(RuntimeError):
         validate_industrial_config(config)
+
+
+def test_legacy_admin_trusted_proxies_must_match_public_proxy_networks(config):
+    config["ADMIN_TRUSTED_PROXIES"] = config["TRUSTED_PROXIES"]
+    validate_industrial_config(config)
 
 
 @pytest.mark.asyncio

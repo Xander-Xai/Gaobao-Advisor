@@ -34,7 +34,19 @@ def validate_industrial_config(env: Mapping[str, str]) -> None:
     for name, value in required.items():
         if env.get(name, "").strip().lower() != value:
             raise RuntimeError(f"Industrial profile requires {name}={value}")
-    trusted_proxy_raw = env.get("ADMIN_TRUSTED_PROXIES", "").strip() or env.get("TRUSTED_PROXIES", "").strip()
+    admin_proxy_raw = env.get("ADMIN_TRUSTED_PROXIES", "").strip()
+    trusted_proxy_raw = env.get("TRUSTED_PROXIES", "").strip()
+    if admin_proxy_raw and trusted_proxy_raw:
+        try:
+            admin_networks = {ipaddress.ip_network(item.strip(), strict=False) for item in admin_proxy_raw.split(",")}
+            public_networks = {
+                ipaddress.ip_network(item.strip(), strict=False) for item in trusted_proxy_raw.split(",")
+            }
+        except ValueError as exc:
+            raise RuntimeError("Industrial profile has an invalid trusted proxy CIDR") from exc
+        if admin_networks != public_networks:
+            raise RuntimeError("Industrial ADMIN_TRUSTED_PROXIES must match TRUSTED_PROXIES")
+    trusted_proxy_raw = admin_proxy_raw or trusted_proxy_raw
     proxy_networks = [item.strip() for item in trusted_proxy_raw.split(",") if item.strip()]
     if not proxy_networks:
         raise RuntimeError("Industrial profile requires explicit trusted proxy CIDRs")
