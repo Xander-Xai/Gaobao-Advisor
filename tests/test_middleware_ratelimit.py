@@ -127,7 +127,7 @@ def test_industrial_middleware_fails_closed_without_local_fallback(monkeypatch):
     monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
     monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")
     monkeypatch.setenv("SESSION_SECRET", "test-secret")
-    decisions = iter([1, 0])
+    decisions = iter([[1, 0], [0, 1]])
 
     class FakeRedis:
         def eval(self, *args):
@@ -156,3 +156,67 @@ def test_industrial_middleware_fails_closed_without_local_fallback(monkeypatch):
         assert client.get("/ping").status_code == 429
         assert client.get("/ping").status_code == 503
         assert client.get("/api/v1/health/live").status_code == 200
+
+
+def test_industrial_middleware_uses_redis_retry_after(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.middleware.ratelimit import RateLimitMiddleware
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")
+    monkeypatch.setenv("SESSION_SECRET", "test-secret")
+    decisions = iter([[1, 0], [0, 2]])
+
+    class FakeRedis:
+        def eval(self, *args):
+            return next(decisions)
+
+    fake_module = SimpleNamespace(Redis=SimpleNamespace(from_url=lambda *a, **kw: FakeRedis()))
+    monkeypatch.setitem(sys.modules, "redis", fake_module)
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware, rate=1, capacity=1)
+
+    @app.get("/ping")
+    def ping():
+        return {"ok": True}
+
+    with TestClient(app, client=("198.51.100.1", 12001)) as client:
+        assert client.get("/ping").status_code == 200
+        blocked = client.get("/ping")
+        assert blocked.status_code == 429
+        assert blocked.headers.get("retry-after") == "2"
+
+
+def test_industrial_middleware_rejects_malformed_redis_decision(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from server.middleware.ratelimit import RateLimitMiddleware
+
+    monkeypatch.setenv("GAOBAO_RUNTIME_PROFILE", "industrial")
+    monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")
+    monkeypatch.setenv("SESSION_SECRET", "test-secret")
+
+    class FakeRedis:
+        def eval(self, *args):
+            return [0, "not-an-integer"]
+
+    fake_module = SimpleNamespace(Redis=SimpleNamespace(from_url=lambda *a, **kw: FakeRedis()))
+    monkeypatch.setitem(sys.modules, "redis", fake_module)
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware, rate=1, capacity=1)
+
+    @app.get("/ping")
+    def ping():
+        return {"ok": True}
+
+    with TestClient(app) as client:
+        assert client.get("/ping").status_code == 503
