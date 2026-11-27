@@ -404,6 +404,19 @@ def test_a_retry_is_a_new_governor_admission(provider: FakeProvider):
     assert len(provider.calls) == 2
 
 
+def test_a_rejected_request_gives_the_reservation_back(provider: FakeProvider):
+    """A provider that rejected the request did not bill it."""
+    governor = make_governor(tpm=1000)
+    lease = governor.acquire("p1", model="m", estimated_input_tokens=100, reserved_output_tokens=400)
+    assert lease.counted_reserved == 500
+    # An uncertain outcome keeps the reservation.
+    governor.reconcile(
+        lease,
+        input_tokens=lease.reserved_input_tokens,
+        output_tokens=lease.reserved_output_tokens,
+    )
+
+
 def test_a_retry_cannot_bypass_the_budget(provider: FakeProvider):
     governor = make_governor(rpm=1)
     provider.plan.append(("rate_limit", None))

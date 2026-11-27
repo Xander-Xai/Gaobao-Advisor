@@ -505,9 +505,22 @@ class _GovernedCall:
         record_governor_tokens(lease.provider, lease.model, reserved=lease.counted_reserved, used=counted)
         self.governor.release(lease)
 
-    def abandon(self, lease: ResourceLease) -> None:
-        """Release a lease whose call failed before it produced any usage."""
-        self.governor.reconcile(lease)
+    def abandon(self, lease: ResourceLease, *, rejected: bool = False) -> None:
+        """Release a lease whose call failed before it produced any usage.
+
+        A provider that rejected the request (429) did not bill it, so the
+        reservation is given back. Any other failure has an unknown billing
+        outcome, so the reservation is kept: the budget is never restored to
+        zero on an uncertain outcome.
+        """
+        if rejected:
+            self.governor.reconcile(lease)
+        else:
+            self.governor.reconcile(
+                lease,
+                input_tokens=lease.reserved_input_tokens,
+                output_tokens=lease.reserved_output_tokens,
+            )
         self.governor.release(lease)
 
 
@@ -602,7 +615,7 @@ class _GovernedCompletions:
                 try:
                     response = client.chat.completions.create(**request_kwargs)
                 except BaseException as exc:  # noqa: BLE001 - re-raised below
-                    call.abandon(lease)
+                    call.abandon(lease, rejected=_status_of(exc) == 429)
                     retryable, delay = call.handle_failure(
                         exc,
                         provider=provider,
@@ -665,7 +678,7 @@ class _GovernedEmbeddings:
                 try:
                     response = client.embeddings.create(**request_kwargs)
                 except BaseException as exc:  # noqa: BLE001 - re-raised below
-                    call.abandon(lease)
+                    call.abandon(lease, rejected=_status_of(exc) == 429)
                     retryable, delay = call.handle_failure(
                         exc,
                         provider=provider,
@@ -849,7 +862,7 @@ class _AsyncGovernedCompletions:
                 try:
                     response = await client.chat.completions.create(**request_kwargs)
                 except BaseException as exc:  # noqa: BLE001 - re-raised below
-                    call.abandon(lease)
+                    call.abandon(lease, rejected=_status_of(exc) == 429)
                     retryable, delay = call.handle_failure(
                         exc,
                         provider=provider,
@@ -912,7 +925,7 @@ class _AsyncGovernedEmbeddings:
                 try:
                     response = await client.embeddings.create(**request_kwargs)
                 except BaseException as exc:  # noqa: BLE001 - re-raised below
-                    call.abandon(lease)
+                    call.abandon(lease, rejected=_status_of(exc) == 429)
                     retryable, delay = call.handle_failure(
                         exc,
                         provider=provider,
