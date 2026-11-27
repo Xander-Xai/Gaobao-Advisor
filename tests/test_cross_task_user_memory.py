@@ -80,9 +80,7 @@ def test_feature_default_off_rejects_create_and_read(tmp_path, monkeypatch):
 
 def test_vault_creation_requires_explicit_consent(client_db):
     client, _ = client_db
-    refused = client.post(
-        "/api/v1/memory/vault", json={"consent": False}, headers={"X-User-Memory-Subject": SUBJECT}
-    )
+    refused = client.post("/api/v1/memory/vault", json={"consent": False}, headers={"X-User-Memory-Subject": SUBJECT})
     assert refused.status_code == 422
     missing = client.post("/api/v1/memory/vault", headers={"X-User-Memory-Subject": SUBJECT})
     assert missing.status_code == 422
@@ -164,9 +162,12 @@ def test_stolen_token_without_matching_subject_is_rejected(client_db):
     # Another subject presenting the stolen token learns nothing.
     assert client.get("/api/v1/memory/entries", headers=headers(token, OTHER_SUBJECT)).status_code == 401
     assert put(client, token, value="越权", subject=OTHER_SUBJECT).status_code == 401
-    assert client.delete(
-        "/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token, OTHER_SUBJECT)
-    ).status_code == 401
+    assert (
+        client.delete(
+            "/api/v1/memory/entries/preferred_regions?expected_version=1", headers=headers(token, OTHER_SUBJECT)
+        ).status_code
+        == 401
+    )
     assert client.get("/api/v1/memory/entries", headers=headers(token)).json()["items"][0]["value"] == "华南"
 
 

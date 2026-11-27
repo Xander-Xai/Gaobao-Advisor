@@ -61,11 +61,7 @@ def test_current_task_is_never_truncated_to_fit_the_budget():
 
 
 def test_summary_admissions_facts_are_quarantined():
-    summary = (
-        "1. 用户目标：找计算机专业。\n"
-        "2. 明确约束：分数线620，位次12000。\n"
-        "3. 未确认事项：需要重新查询。"
-    )
+    summary = "1. 用户目标：找计算机专业。\n2. 明确约束：分数线620，位次12000。\n3. 未确认事项：需要重新查询。"
     clean, redactions = quarantine_summary(summary)
     assert redactions == 1
     assert "620" not in clean

@@ -218,9 +218,7 @@ def _arm_incremental_snapshot(case: dict[str, Any], store, session_id) -> dict[s
 
     policy = "0" * 64
     started = time.perf_counter()
-    context = asyncio.run(
-        _durable(store, session_id, case, summarizer, policy)
-    )
+    context = asyncio.run(_durable(store, session_id, case, summarizer, policy))
     elapsed = (time.perf_counter() - started) * 1000
     return {
         "messages": context.messages,
@@ -356,8 +354,7 @@ def run_evaluation(*, tmp_root: Path | None = None) -> dict[str, Any]:
             "policy behaviour, not model summary quality.",
             f"Synthetic compaction trigger: {SUMMARY_TRIGGER_TOKENS} estimated tokens "
             "(the production trigger is the summary manager default, 2000).",
-            "No provider call was made by this report; no token cost or answer "
-            "quality is claimed.",
+            "No provider call was made by this report; no token cost or answer quality is claimed.",
         ],
     }
 

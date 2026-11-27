@@ -30,12 +30,7 @@ def main() -> int:
         return 2
     db = get_session()
     try:
-        rows = (
-            db.query(UserMemoryEntry)
-            .filter(~UserMemoryEntry.value.startswith("enc:v1:"))
-            .limit(args.limit)
-            .all()
-        )
+        rows = db.query(UserMemoryEntry).filter(~UserMemoryEntry.value.startswith("enc:v1:")).limit(args.limit).all()
         rewritten = 0
         for row in rows:
             stored, key_id = encrypt_value(row.value, vault_id=row.vault_id, memory_key=row.memory_key)

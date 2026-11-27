@@ -4,6 +4,7 @@
 > 定位类历史快照（如 `memory-engineering-positioning-20261124.md`）保留原样，不回改。
 > 状态口径遵循 `docs/PROJECT_STATUS.md`：IMPLEMENTED / INTEGRATED / VERIFIED /
 > MERGED / PRODUCTION_VALIDATED 严格区分，合成测试不等于真实模型效果或生产验收。
+> 本文引用的均为合成演示数据（SYNTHETIC_DEMO）场景，**不代表当前生产验证结果**。
 
 > 实现：[PR #218](https://github.com/Xander-Xai/Gaobao-Advisor/pull/218)；
 > 剩余门禁跟踪：[Issue #219](https://github.com/Xander-Xai/Gaobao-Advisor/issues/219)。

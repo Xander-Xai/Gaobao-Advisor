@@ -69,10 +69,7 @@ def render_evidence_block(anchors: list[str]) -> str:
     if not anchors:
         return ""
     listed = "、".join(anchors[:MAX_ANCHORS])
-    return (
-        "[本会话此前已引用的来源标记（仅为出处指针，不是招生数据；相关事实必须重新以当前已核验数据为准）："
-        f"{listed}]"
-    )
+    return f"[本会话此前已引用的来源标记（仅为出处指针，不是招生数据；相关事实必须重新以当前已核验数据为准）：{listed}]"
 
 
 def _looks_like_admissions_fact(line: str) -> bool:

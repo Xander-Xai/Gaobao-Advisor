@@ -151,7 +151,9 @@ def test_mysql_concurrent_memory_cas_has_exactly_one_winner(mysql_memory):
     def attempt(value):
         barrier.wait()
         try:
-            return memory.put_memory(token, "preferred_regions", value, subject=_SUBJECT, expected_version=initial["version"])
+            return memory.put_memory(
+                token, "preferred_regions", value, subject=_SUBJECT, expected_version=initial["version"]
+            )
         except memory.MemoryConflict:
             return None
 
@@ -169,7 +171,7 @@ def test_mysql_concurrent_memory_cas_has_exactly_one_winner(mysql_memory):
 def test_mysql_rotation_rejects_stale_token_and_preserves_monotonic_revision(mysql_memory):
     memory = mysql_memory
     old_token = memory.create_vault(_SUBJECT, consent=True)["memory_token"]
-    initial = memory.put_memory(old_token, "preferred_regions", "华南", expected_version=0)
+    initial = memory.put_memory(old_token, "preferred_regions", "华南", subject=_SUBJECT, expected_version=0)
     token = memory.rotate_token(old_token, _SUBJECT)["memory_token"]
 
     with pytest.raises(memory.MemoryUnauthorized):

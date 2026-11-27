@@ -6,6 +6,7 @@
 > `server/routes/user_memory.py`、`frontend/src/components/layout/UserMemoryPanel.vue`，
 > 以及相关迁移、隐私治理文档与测试。
 > 口径：仅依据本仓库源码与本地执行结果；不引用外部运行结论，不把合成测试当作真实效果。
+> 文中用例与数据均为合成演示数据（SYNTHETIC_DEMO），**不代表当前生产验证结果**。
 > 实现：[PR #218](https://github.com/Xander-Xai/Gaobao-Advisor/pull/218)；
 > 剩余门禁：[Issue #219](https://github.com/Xander-Xai/Gaobao-Advisor/issues/219)。
 
