@@ -435,13 +435,72 @@ class TestExcludedAssetsAbsent:
         assert schools["total"] >= 1, "synthetic data must answer without any outbound call"
         assert gaokao_data.query_match_schools_v2(600, "示例省·甲", "物理", "稳")
 
+    # ── Tracked-file budget ────────────────────────────────────────────
+    # The count bound keeps the public distribution small. It is deliberately
+    # paired with the type and single-file-size gates below, which are the
+    # stronger controls: they reject a bulk corpus or a large binary payload
+    # no matter how few files it is split across. A count bound alone would
+    # be satisfiable by importing a thousand small corpus files.
+    _MAX_TRACKED_FILES = 860
+    _MAX_TRACKED_BLOB_BYTES = 10 * 1024 * 1024
+    _MAX_SINGLE_FILE_BYTES = 1 * 1024 * 1024
+    # Reviewed exceptions to the single-file cap. Each entry names the file and
+    # the maximum size that file may reach, so a regenerated artefact cannot
+    # silently grow past the audited envelope.
+    _ALLOWED_LARGE_FILES = {
+        "docs/performance/results/queue-recovery-final.json": 4 * 1024 * 1024,
+    }
+    # Tracked files must be reviewable source, documentation or configuration.
+    # Anything else (data dumps, archives, executables) is a redistribution
+    # risk and must be refused at review time, not after publication.
+    _ALLOWED_TRACKED_SUFFIXES = frozenset(
+        {
+            ".conf",
+            ".constraints",
+            ".css",
+            ".example",
+            ".html",
+            ".ini",
+            ".java",
+            ".js",
+            ".json",
+            ".lock",
+            ".mako",
+            ".md",
+            ".png",
+            ".py",
+            ".sandbox",
+            ".sh",
+            ".svg",
+            ".toml",
+            ".ts",
+            ".txt",
+            ".vue",
+            ".xml",
+            ".yaml",
+            ".yml",
+        }
+    )
+    _ALLOWED_TRACKED_FILENAMES = frozenset(
+        {
+            ".dockerignore",
+            ".gitignore",
+            ".gitleaksignore",
+            "Dockerfile",
+            "LICENSE",
+            "Makefile",
+        }
+    )
+
     def test_tracked_file_count_is_bounded(self) -> None:
-        """Bound the public demo by both committed file count and blob bytes."""
+        """Bound the public demo by committed file count, type and size."""
         import subprocess
 
-        # Reviewed baseline: 749 tracked blobs, 8,941,225 bytes.
-        # Allow limited growth for source and tests, not a bulk corpus import.
-        # The path, corpus, attribution and binary-data gates above remain intact.
+        # Reviewed baseline: 814 tracked blobs for the governance integration
+        # (PRs #215, #217, #218 and #221), well under the 10 MiB byte cap.
+        # Growth is allowed for source, tests and governance documents, not
+        # for a bulk corpus import; the type, single-file-size, path, corpus,
+        # attribution and binary-data gates above remain intact.
         result = subprocess.run(
             ["git", "ls-tree", "-r", "-l", "-z", "HEAD"],
             cwd=REPO_ROOT,
@@ -449,14 +508,23 @@ class TestExcludedAssetsAbsent:
             check=True,
         )
         entries = [entry for entry in result.stdout.split(b"\x00") if entry]
-        assert 50 < len(entries) <= 800
+        assert 50 < len(entries) <= self._MAX_TRACKED_FILES
         sizes = []
         for entry in entries:
-            metadata, _ = entry.split(b"\t", 1)
+            metadata, raw_path = entry.split(b"\t", 1)
             mode, kind, _, size = metadata.split()
             assert kind == b"blob" and mode in {b"100644", b"100755"}
-            sizes.append(int(size))
-        assert sum(sizes) <= 10 * 1024 * 1024
+            size = int(size)
+            sizes.append(size)
+            name = raw_path.decode("utf-8")
+            suffix = Path(name).suffix.lower()
+            assert suffix in self._ALLOWED_TRACKED_SUFFIXES or Path(name).name in self._ALLOWED_TRACKED_FILENAMES, (
+                f"tracked file type is not reviewable source, documentation or configuration: {name}"
+            )
+            allowed = self._ALLOWED_LARGE_FILES.get(name)
+            limit = allowed if allowed is not None else self._MAX_SINGLE_FILE_BYTES
+            assert size <= limit, f"{name} is {size} bytes, above the {limit} byte limit"
+        assert sum(sizes) <= self._MAX_TRACKED_BLOB_BYTES
 
 
 # ── 5. Session auth round-trip through the real FastAPI app ──────────────
