@@ -115,6 +115,7 @@ excluded from quality denominators.
 | Full Python suite | 1,940 passed, 46 skipped | Synthetic/unit/integration fixtures; not real-model acceptance |
 | MySQL 8.4 + Redis 7 targeted integration | 40 passed | Isolated local containers |
 | Security/session/Sandbox focused suite | 213 passed | Named regressions only; not sandbox certification |
+| PR #222 exact-head GitHub CI | Passed | Python 3.10/3.11, Lint, MySQL/Redis, full Compose E2E, no-key container, security, secret scan, redistribution and CodeQL |
 | Synthetic deterministic business baseline | 8/8 | Independent SQL oracle over fictional data |
 | Scripted read-only harness | 30/30 | Not an LLM comparison |
 | TaskRun lifecycle / crash recovery | 8/8 / 1/1 | Synthetic/injected-worker outcomes |
@@ -122,7 +123,7 @@ excluded from quality denominators.
 | SQL/RAG serial vs parallel | P95 35.91 / 39.23 ms | Decision `HOLD`; no significance or production gain |
 | Private SQL-oracle/application comparison | 137 checks, 0 mismatches | Internal agreement only; no source correctness claim |
 | Local synthetic SQLite Compose + browser consultation | API, frontend, Nginx health 200; synthetic disclaimer rendered | No real model; response was degraded/no-key |
-| Full Java/MySQL/Redis/Worker Compose | Blocked | Registry TLS timeout resolving Java runtime base image |
+| Local full Java/MySQL/Redis/Worker Compose build | Blocked | Registry TLS timeout resolving Java runtime base image; exact-head CI full Compose E2E passed separately |
 | Locust | Not measured | Local Python namespace conflict prevents `zope.event` import |
 | One-request-per-client synthetic latency diagnostic | 1/5/10/20 clients all HTTP 200 | Not sustained load or SLA; P50/P95 200/200, 208/263, 302/576, 641/1,237 ms |
 
@@ -131,17 +132,18 @@ the one-off cross-check helper source is not retained in the repository. The
 137-check result is recorded evidence, not yet a fully reproducible benchmark
 command.
 
-### Candidate correctness fixes
+### Merged correctness fixes
 
 The default-branch one-score-one-rank lookup omitted `subject_type`; in the
 local snapshot, 23,499/40,645 province/year/score keys (57.82%) occur under
-multiple tracks. The candidate correction now prefers the requested track,
+multiple tracks. PR #222 added requested-track-first lookup,
 uses explicit track aliases when needed, keeps fallback queries track-specific,
-and refuses scores below the available band. A private cross-check changed from
-10 mismatches in 15 probes to 0. Regression tests also verify the fallback
+and refuses scores below the available band. A private cross-check changed
+from 10 mismatches in 15 probes to 0. Regression tests also verify the fallback
 source track. The Deep Agents model-ID allowlist accepts one slash-qualified
-provider model ID such as `Qwen/Qwen3-8B`. These changes are in PR #222 and are
-not yet merged; provider tool-call compatibility has not been verified.
+provider model ID such as `Qwen/Qwen3-8B`. PR #222 merged at
+`830cb23a83f0c76e4b80cb40f68943f5015d6914`; provider tool-call compatibility
+has not been verified.
 
 No real provider call was made, provider usage/cost is `NOT_MEASURED`, the
 human-reviewed gold count is zero, full Compose is blocked, and no business UAT
