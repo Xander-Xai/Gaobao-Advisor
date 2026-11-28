@@ -74,7 +74,7 @@ def _type_signature(value: Any) -> tuple[str, int | None]:
     return name, getattr(value, "length", None)
 
 
-def _table_problems(inspector, table_name: str) -> list[str]:
+def _table_problems(inspector, table_name: str, *, ignore_indexes: frozenset[str] = frozenset()) -> list[str]:
     expected = Base.metadata.tables[table_name]
     problems: list[str] = []
     actual_columns = {column["name"]: column for column in inspector.get_columns(table_name)}
@@ -103,6 +103,8 @@ def _table_problems(inspector, table_name: str) -> list[str]:
 
     actual_indexes = {index["name"]: index for index in inspector.get_indexes(table_name)}
     for index in expected.indexes:
+        if index.name in ignore_indexes:
+            continue
         actual = actual_indexes.get(index.name)
         if actual is None:
             problems.append(f"{table_name}: missing index {index.name}")
@@ -142,12 +144,17 @@ def _table_problems(inspector, table_name: str) -> list[str]:
     return problems
 
 
-def verify_table(bind: Connection | Engine, table_name: str) -> list[str]:
+def verify_table(
+    bind: Connection | Engine,
+    table_name: str,
+    *,
+    ignore_indexes: frozenset[str] = frozenset(),
+) -> list[str]:
     """Return schema mismatches for one table; empty means it matches."""
     inspector = inspect(bind)
     if table_name not in inspector.get_table_names():
         return [f"{table_name}: missing table"]
-    return _table_problems(inspector, table_name)
+    return _table_problems(inspector, table_name, ignore_indexes=ignore_indexes)
 
 
 def verify_tables(

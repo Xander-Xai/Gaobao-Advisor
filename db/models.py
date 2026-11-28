@@ -114,6 +114,7 @@ class AdmissionScore(Base):
         ),
         Index("ix_adm_lookup", "school_id", "province", "year", "subject_type"),
         Index("ix_adm_dedup", "school_id", "province", "year", "batch", "subject_type", "major_id"),
+        Index("ix_adm_history_scope_rank", "province", "year", "subject_type", "major_id", "min_rank"),
         Index("ix_adm_year", "year"),
     )
 

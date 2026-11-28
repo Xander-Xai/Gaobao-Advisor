@@ -323,7 +323,11 @@ def upgrade() -> None:
     problems: list[str] = []
     for table_name in HISTORICAL_TABLES:
         if table_name in existing:
-            problems.extend(verify_table(bind, table_name))
+            # This access-path index was introduced after the historical
+            # baseline; revision 0010 creates it after the legacy schema has
+            # been adopted without treating the old table as structural drift.
+            ignored = frozenset({"ix_adm_history_scope_rank"}) if table_name == "admission_scores" else frozenset()
+            problems.extend(verify_table(bind, table_name, ignore_indexes=ignored))
     if problems:
         raise RuntimeError("existing historical schema does not match the contract: " + "; ".join(problems))
 

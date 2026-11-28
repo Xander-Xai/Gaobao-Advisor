@@ -418,6 +418,7 @@ Python application.
 | [ADR-008](../superpowers/adr/ADR-008-mysql-redis-worker.md) | Optional MySQL/Redis/worker profile |
 | [ADR-009](../superpowers/adr/ADR-009-redis-delivery-selection.md) | Keep Redis List + Outbox as delivery mechanism |
 | [ADR-010](../superpowers/adr/ADR-010-chat-submitted-admissions-research.md) | Chat may submit an explicit scope to the existing operator-approved research lifecycle |
+| [ADR-011](../superpowers/adr/ADR-011-mysql-authoritative-data-boundary.md) | MySQL admissions/business truth, Redis transport and measured history-query index |
 
 ## 11. Boundaries
 
