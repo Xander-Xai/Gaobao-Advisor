@@ -243,7 +243,6 @@ python -m pytest tests/test_chat_research_runs.py -q --no-cov --override-ini add
 - [产品能力与架构边界](docs/architecture/product-capabilities-and-boundaries.md) · [模块责任与工程验收](docs/architecture/module-responsibilities-and-acceptance.md)
 - [私有复杂研究 TaskRun](docs/admissions-research-taskrun.md) · [Chat 请求与报告](docs/admissions-research-private-report-20261125.md)
 - [开发与贡献](CONTRIBUTING.md) · [测试 / Eval 手册](benchmarks/README.md)
-- [本地真实数据审计与工程验证结果（2026-11-28）](docs/audits/real-data-quality-audit-20261128.md) · [本地验收矩阵](docs/audits/local-agent-validation-20261128.md)
 - [数据库结构](docs/database-schema-matrix.md) · [API/OpenAPI](http://localhost/docs)
 - [本地部署与工业候选门禁](docs/architecture/industrial-release-contract.md) · [Java 服务](docs/java-microservices.md)
 - [安全政策](SECURITY.md) · [隐私边界](PRIVACY.md) · [数据许可](DATA_LICENSE.md)
