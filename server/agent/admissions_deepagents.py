@@ -24,7 +24,7 @@ MAX_ROWS = 100
 MAX_ANALYSIS_ATTEMPTS = 2
 NO_HISTORY_REASON = "no_admission_history"
 RECOVERABLE_ANALYSIS_ERRORS = frozenset({"oracle_mismatch", "invalid_analysis_output", "execution_failed"})
-MODEL_RE = re.compile(r"openai:[A-Za-z0-9_.-]{2,100}")
+MODEL_RE = re.compile(r"openai:[A-Za-z0-9][A-Za-z0-9_.-]{1,79}(?:/[A-Za-z0-9][A-Za-z0-9_.-]{0,79})?")
 _SKILL = """---
 name: admissions-research
 description: Research two approved schools and a major using historical admissions and enrollment plans.

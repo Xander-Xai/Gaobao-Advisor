@@ -53,6 +53,27 @@ synthetic demo; the release does not claim real admissions service readiness.
 The exact current head and its checks are always obtained from GitHub. Avoid
 copying a SHA into additional documents as a live pointer.
 
+## Local validation work, 2026-11-28
+
+A local read-only audit found a four-year historical admissions snapshot with
+unverified third-party redistribution rights. It is not authorized evaluation
+data and was not sent to an external provider. The isolated evaluation copy
+omits personal conversation rows. Aggregate quality findings are recorded in
+[the local real-data audit](audits/real-data-quality-audit-20261128.md); the
+private data digest, gold candidates and run receipts remain outside Git.
+
+The application’s one-score-one-rank lookup was found to ignore the requested
+subject track. A candidate correction adds exact-track-first selection and
+labels legacy-track fallback; regression tests and a 137-check independent SQL
+cross-check pass in the local validation worktree. This candidate correction is
+not yet merged, so the current default-branch behavior must not be described as
+fixed. The Deep Agents model-ID validator was also extended to accept one
+slash-qualified provider model ID; no provider request was made. A local SQLite
+synthetic Compose smoke was exercised; the full Java / MySQL / Redis deployment
+candidate was blocked by an image-registry TLS timeout. The performance smoke
+was a one-request-per-client synthetic diagnostic, not an SLA measurement.
+These results do not close E1–E4 or establish production UAT.
+
 ## External acceptance still pending
 
 | Acceptance | Status | Required evidence / owner dependency |

@@ -46,6 +46,8 @@ dated audit records remain historical snapshots and should not be read as live s
 ## Validation and engineering evidence
 
 - [Benchmark and evaluation entry point](../benchmarks/README.md)
+- [Local real-data quality audit, 2026-11-28](audits/real-data-quality-audit-20261128.md)
+- [Local engineering validation results, 2026-11-28](audits/local-agent-validation-20261128.md)
 - [Authorized research evaluation](validation/authorized-research-eval.md)
 - [Harness and business acceptance snapshot, 2026-11-26](validation/harness-business-acceptance-20261126.md)
 - [Context/provider budget evaluation](validation/context-ab-provider-budget.md)

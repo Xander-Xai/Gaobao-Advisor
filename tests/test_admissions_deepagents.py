@@ -13,6 +13,13 @@ from server.agent import admissions_deepagents as research
 SCOPE = research.ResearchScope((1, 2), 3, "广东", "物理", "本科批", 2024, 2024)
 
 
+def test_model_id_accepts_scoped_provider_ids_with_slashes():
+    assert research.MODEL_RE.fullmatch("openai:Qwen/Qwen3-8B")
+    assert not research.MODEL_RE.fullmatch("openai:Qwen/../secret")
+    assert not research.MODEL_RE.fullmatch("openai:Qwen/..")
+    assert not research.MODEL_RE.fullmatch("openai:Qwen/Qwen3-8B;drop")
+
+
 @pytest.fixture
 def sessions():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
