@@ -62,9 +62,13 @@ OS sandbox certification.
 
 Issue [#58](https://github.com/Xander-Xai/Gaobao-Advisor/issues/58) documents a
 historical public Git object containing a removed database. The owner recorded
-an accepted-risk disposition and intentionally did not rewrite public history.
-That disposition is not remediation or a purge. Do not treat the current tree's
-redistribution gate as proof that historical Git objects have been erased.
+an accepted-risk disposition; it did not establish redistribution rights for
+the third-party data. In a live check on 2026-11-28, the previously documented
+commit/blob API paths and raw-content URL returned 404, and the current default
+branch and observed remote branches did not contain the removed database path.
+This is evidence about the checked GitHub refs and URLs only, not proof that all
+external caches or backups were purged. Keep any retained local forensic copy
+private and do not push branches or tags that contain the old history.
 
 ## CI and repository settings
 

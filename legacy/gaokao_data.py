@@ -361,95 +361,105 @@ def query_yi_fen_yi_duan(province, score, subject_type="物理", year=None):
         return None
 
     try:
-        # ── 优先：从 yi_fen_yi_duan 表查询真实数据 ──
+        # ── 优先：按请求选科精确匹配一分一段表 ──
         from db.models import YiFenYiDuan
 
-        yfdd_row = (
-            db.query(YiFenYiDuan)
-            .filter(
+        requested = subject_type
+
+        def _band(track):
+            return db.query(YiFenYiDuan).filter(
                 YiFenYiDuan.province == province,
                 YiFenYiDuan.year == year,
-                YiFenYiDuan.score == score,
+                YiFenYiDuan.subject_type == track,
             )
-            .first()
-        )
 
-        if yfdd_row:
-            return {
-                "rank": yfdd_row.cumulative_count,
-                "score": score,
-                "province": province,
-                "year": year,
-                "source": f"一分一段表真实数据（{province} {year}年，{yfdd_row.subject_type}）",
-                "confidence": "高",
-                "confidence_score": 90,
+        def _track_candidates():
+            priorities = {
+                "物理类": ["理科", "物理", "3+3综合", "综合"],
+                "物理": ["物理类", "理科", "3+3综合", "综合"],
+                "物": ["物理类", "理科", "3+3综合", "综合"],
+                "历史类": ["文科", "历史", "3+3综合", "综合"],
+                "历史": ["历史类", "文科", "3+3综合", "综合"],
+                "史": ["历史类", "文科", "3+3综合", "综合"],
             }
+            candidates = priorities.get(requested, SUBJECT_ALIASES.get(requested, [requested]))
+            return list(dict.fromkeys(track for track in candidates if track != requested))
 
-        # 精确匹配未命中，尝试向下找最接近的分数
-        nearest_below = (
-            db.query(YiFenYiDuan)
-            .filter(
-                YiFenYiDuan.province == province,
-                YiFenYiDuan.year == year,
-                YiFenYiDuan.score <= score,
-            )
-            .order_by(YiFenYiDuan.score.desc())
-            .first()
-        )
+        matched = _band(requested).filter(YiFenYiDuan.score == score).first()
+        if matched is None:
+            for track in _track_candidates():
+                matched = _band(track).filter(YiFenYiDuan.score == score).first()
+                if matched is not None:
+                    break
 
-        if nearest_below:
+        if matched is None:
+            matched = _band(requested).filter(YiFenYiDuan.score <= score).order_by(YiFenYiDuan.score.desc()).first()
+            if matched is None:
+                for track in _track_candidates():
+                    matched = _band(track).filter(YiFenYiDuan.score <= score).order_by(YiFenYiDuan.score.desc()).first()
+                    if matched is not None:
+                        break
+
+        if matched is None:
+            matched = _band(requested).order_by(YiFenYiDuan.score.asc()).first()
+            if matched is None:
+                for track in _track_candidates():
+                    matched = _band(track).order_by(YiFenYiDuan.score.asc()).first()
+                    if matched is not None:
+                        break
+
+        if matched:
+            exact_track = matched.subject_type == requested
+            if matched.score > score:
+                return {
+                    "rank": None,
+                    "score": score,
+                    "range_min_score": matched.score,
+                    "province": province,
+                    "year": year,
+                    "subject_type": matched.subject_type,
+                    "requested_subject_type": requested,
+                    "subject_track_matched": exact_track,
+                    "source": f"一分一段表真实数据（{province} {year}年，{matched.subject_type}）",
+                    "confidence": "无",
+                    "confidence_score": 0,
+                    "message": f"分数低于{province} {year}年{matched.subject_type}一分一段表最低分 {matched.score}，无法可靠给出位次",
+                }
             return {
-                "rank": nearest_below.cumulative_count,
+                "rank": matched.cumulative_count,
                 "score": score,
-                "matched_score": nearest_below.score,
+                "matched_score": matched.score if matched.score != score else None,
                 "province": province,
                 "year": year,
-                "source": f"一分一段表真实数据（{province} {year}年，最近匹配 {nearest_below.score}分）",
-                "confidence": "高",
-                "confidence_score": 90,
-            }
-
-        # 该省份/年份有 yi_fen_yi_duan 数据但分数太低，取最低分
-        lowest = (
-            db.query(YiFenYiDuan)
-            .filter(
-                YiFenYiDuan.province == province,
-                YiFenYiDuan.year == year,
-            )
-            .order_by(YiFenYiDuan.score.asc())
-            .first()
-        )
-
-        if lowest:
-            return {
-                "rank": lowest.cumulative_count,
-                "score": score,
-                "matched_score": lowest.score,
-                "province": province,
-                "year": year,
-                "source": f"一分一段表真实数据（分数低于表中最低分 {lowest.score}，按最低分位次估算）",
-                "confidence": "高",
-                "confidence_score": 90,
+                "subject_type": matched.subject_type,
+                "requested_subject_type": requested,
+                "subject_track_matched": exact_track,
+                "source": f"一分一段表真实数据（{province} {year}年，{matched.subject_type}）",
+                "confidence": "高" if exact_track and matched.score == score else "中",
+                "confidence_score": 90 if exact_track and matched.score == score else 60,
             }
 
         # ── 降级：从 admission_scores 表反推（原有逻辑） ──
 
-        # 智能匹配 subject_type
-        candidates = SUBJECT_ALIASES.get(subject_type, [subject_type])
-
         from db.models import AdmissionScore
 
-        query_results = (
-            db.query(AdmissionScore)
-            .filter(
-                AdmissionScore.province == province,
-                AdmissionScore.year == year,
-                AdmissionScore.subject_type.in_(candidates),
-                AdmissionScore.min_score.isnot(None),
-                AdmissionScore.min_rank.isnot(None),
+        query_results = []
+        selected_track = requested
+        for track in [requested, *_track_candidates()]:
+            query_results = (
+                db.query(AdmissionScore)
+                .filter(
+                    AdmissionScore.province == province,
+                    AdmissionScore.year == year,
+                    AdmissionScore.subject_type == track,
+                    AdmissionScore.min_score.isnot(None),
+                    AdmissionScore.min_rank.isnot(None),
+                )
+                .all()
             )
-            .all()
-        )
+            if query_results:
+                selected_track = track
+                break
 
         if not query_results:
             return {
@@ -475,9 +485,12 @@ def query_yi_fen_yi_duan(province, score, subject_type="物理", year=None):
                 "score": score,
                 "province": province,
                 "year": year,
+                "subject_type": selected_track,
+                "requested_subject_type": requested,
+                "subject_track_matched": selected_track == requested,
                 "source": f"本地数据库（基于 {len(query_results)} 条录取数据反推）",
-                "confidence": "中（仅供参考）",
-                "confidence_score": 40,
+                "confidence": "中（仅供参考）" if selected_track == requested else "低（选科别名回退，仅供参考）",
+                "confidence_score": 40 if selected_track == requested else 25,
             }
 
         # 向下找最接近的分数
@@ -490,21 +503,30 @@ def query_yi_fen_yi_duan(province, score, subject_type="物理", year=None):
                     "matched_score": s,
                     "province": province,
                     "year": year,
+                    "subject_type": selected_track,
+                    "requested_subject_type": requested,
+                    "subject_track_matched": selected_track == requested,
                     "source": f"本地数据库（基于 {len(query_results)} 条录取数据反推，最近匹配 {s}分）",
-                    "confidence": "中-低（仅供参考）",
-                    "confidence_score": 40,
+                    "confidence": "中-低（仅供参考）"
+                    if selected_track == requested
+                    else "低（选科别名回退，仅供参考）",
+                    "confidence_score": 40 if selected_track == requested else 25,
                 }
 
-        # 分数低于所有数据点
+        # 分数低于该选科的全部数据点时拒答，不用最低录取分倒推出位次。
         return {
-            "rank": sorted_desc[-1][1],
+            "rank": None,
             "score": score,
-            "matched_score": sorted_desc[-1][0],
+            "range_min_score": sorted_desc[-1][0],
             "province": province,
             "year": year,
-            "source": f"本地数据库（分数低于所有录取数据，按最低分 {sorted_desc[-1][0]} 对应位次估算）",
-            "confidence": "低",
-            "confidence_score": 30,
+            "subject_type": selected_track,
+            "requested_subject_type": requested,
+            "subject_track_matched": selected_track == requested,
+            "source": f"本地数据库（{selected_track}录取数据）",
+            "confidence": "无",
+            "confidence_score": 0,
+            "message": f"分数低于{province} {year}年{selected_track}录取数据的最低分 {sorted_desc[-1][0]}，无法可靠给出位次",
         }
     except Exception as e:
         log.warning("一分一段查询失败 [%s %s]: %s", province, score, e)

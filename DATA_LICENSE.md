@@ -38,12 +38,15 @@ cannot silently masquerade as demo knowledge.
 
 ## Historical commit caveat
 
-The statements above describe the **current tree only**. A historical database
-object is still reachable through an older public Git commit; it is not
-synthetic and is not covered by the CC0 grant. Issue #58 is closed with an
-accepted-risk disposition; see [`SECURITY.md`](SECURITY.md). Nothing in this
-licence grants rights to that historical object or to any third-party
-admissions data.
+The statements above describe the **current tree only**. Issue #58 records a
+historical public database object and an accepted-risk owner disposition; that
+decision did not grant redistribution rights to the third-party data. During a
+live repository check on 2026-11-28, the previously documented commit and raw
+content URLs returned 404, and the current default branch and observed remote
+branches did not contain the removed database path. This check does not prove
+that every external cache or backup has been purged. Nothing in this licence
+grants rights to the historical object or to any third-party admissions data.
+See [`SECURITY.md`](SECURITY.md) for the current evidence boundary.
 
 ## What is deliberately NOT here
 
